@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام مدرسة جدحفص الثانوية للبنات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#1d3d5c;        /* كحلي المدرسة */
+    --navy-deep:#132a40;
+    --gold:#b98a2f;        /* ذهب الشعار */
+    --sand:#f5f2ec;        /* أرضية دافئة */
+    --white:#ffffff;
+    --ink:#22303c;
+    --line:#dcd5c8;
+    --err:#b3372f;
+    --ok:#2f7d4f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'IBM Plex Sans Arabic',sans-serif;
+    background:var(--sand);
+    color:var(--ink);
+    display:flex;flex-direction:column;min-height:100vh;
+  }
+
+  /* ===== شريط علوي بخيط ذهبي ===== */
+  .topline{height:6px;background:linear-gradient(90deg,var(--gold),#d9b45e 40%,var(--gold))}
+
+  /* ===== بطاقة الدخول ===== */
+  .wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{
+    width:100%;max-width:420px;background:var(--white);
+    border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 18px 40px -24px rgba(19,42,64,.35);
+    overflow:hidden;
+  }
+  .card-head{
+    background:var(--navy);color:var(--white);
+    padding:34px 28px 26px;text-align:center;position:relative;
+  }
+  .card-head::after{ /* قوس زخرفي خفيف يستدعي بانرات المدرسة */
+    content:"";position:absolute;inset-inline:0;bottom:-1px;height:14px;
+    background:radial-gradient(28px 14px at 50% 100%, var(--white) 98%, transparent 100%);
+  }
+  .crest{
+    width:58px;height:58px;margin:0 auto 12px;border-radius:50%;
+    background:var(--gold);color:var(--navy-deep);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Amiri',serif;font-size:30px;font-weight:700;
+  }
+  .card-head h1{font-family:'Amiri',serif;font-size:22px;line-height:1.5;font-weight:700}
+  .card-head p{font-size:12.5px;opacity:.75;margin-top:4px;letter-spacing:.3px}
+
+  .card-body{padding:30px 28px 34px}
+  .field{margin-bottom:18px}
+  .field label{display:block;font-size:13.5px;font-weight:600;color:var(--navy);margin-bottom:7px}
+  .field input{
+    width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:9px;
+    font:inherit;font-size:15px;background:#fbfaf7;color:var(--ink);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(29,61,92,.12);background:var(--white)}
+  .btn{
+    width:100%;padding:13px;border:none;border-radius:9px;cursor:pointer;
+    background:var(--navy);color:var(--white);font:inherit;font-size:15.5px;font-weight:600;
+    transition:background .15s;
+  }
+  .btn:hover{background:var(--navy-deep)}
+  .btn:disabled{opacity:.55;cursor:wait}
+  .msg{margin-top:16px;padding:11px 14px;border-radius:9px;font-size:13.5px;display:none;line-height:1.7}
+  .msg.err{display:block;background:#faeceb;color:var(--err);border:1px solid #ecc9c6}
+  .msg.ok{display:block;background:#eaf4ee;color:var(--ok);border:1px solid #c8e2d2}
+
+  /* ===== لوحة ما بعد الدخول ===== */
+  .app{display:none;flex:1}
+  .appbar{
+    background:var(--navy);color:var(--white);
+    display:flex;align-items:center;gap:14px;padding:14px 20px;
+  }
+  .appbar .crest{width:38px;height:38px;font-size:20px;margin:0}
+  .appbar .t{flex:1}
+  .appbar .t b{display:block;font-size:15px;font-weight:600}
+  .appbar .t span{font-size:11.5px;opacity:.7}
+  .appbar button{
+    background:transparent;border:1px solid rgba(255,255,255,.35);color:var(--white);
+    padding:7px 16px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer;
+  }
+  .appbar button:hover{background:rgba(255,255,255,.1)}
+  .app-main{max-width:760px;margin:0 auto;padding:34px 22px;width:100%}
+  .hello{
+    background:var(--white);border:1px solid var(--line);border-radius:14px;
+    padding:28px;box-shadow:0 14px 30px -22px rgba(19,42,64,.3);
+  }
+  .hello h2{font-family:'Amiri',serif;color:var(--navy);font-size:24px;margin-bottom:6px}
+  .role-chip{
+    display:inline-block;background:var(--gold);color:var(--navy-deep);
+    font-size:12.5px;font-weight:700;padding:4px 14px;border-radius:99px;margin-bottom:16px;
+  }
+  .hello p{font-size:14.5px;line-height:2;color:#4a5763}
+  .next{
+    margin-top:20px;border-top:1px dashed var(--line);padding-top:16px;
+    font-size:13.5px;color:#6b7683;line-height:2;
+  }
+
+  footer{
+    text-align:center;font-size:11.5px;color:#8a93a0;padding:16px;
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .card{animation:rise .5s ease both}
+    @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div class="topline"></div>
+
+<!-- ===== شاشة الدخول ===== -->
+<div class="wrap" id="loginView">
+  <div class="card">
+    <div class="card-head">
+      <div class="crest">ج</div>
+      <h1>مدرسة جدحفص الثانوية للبنات</h1>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label for="email">البريد الإلكتروني</label>
+        <input id="email" type="email" dir="ltr" autocomplete="username" placeholder="name@moe.bh">
+      </div>
+      <div class="field">
+        <label for="password">كلمة المرور</label>
+        <input id="password" type="password" dir="ltr" autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button class="btn" id="loginBtn">تسجيل الدخول</button>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ما بعد الدخول ===== -->
+<div class="app" id="appView">
+  <div class="appbar">
+    <div class="crest">ج</div>
+    <div class="t"><b id="userName">—</b><span>نظام مدرسة جدحفص الثانوية للبنات</span></div>
+    <button id="logoutBtn">خروج</button>
+  </div>
+  <div class="app-main">
+    <div class="hello">
+      <h2 id="helloTitle">أهلاً بك</h2>
+      <span class="role-chip" id="roleChip">—</span>
+      <p>تم تسجيل دخولك بنجاح، والنظام متصل بقاعدة البيانات ويعمل. هذه أول شاشة في المنصة — بنيت للتحقق من اكتمال حلقة الدخول والصلاحيات.</p>
+      <div class="next" id="nextStep"></div>
+    </div>
+  </div>
+</div>
+
+<footer>مدرسة جدحفص الثانوية للبنات — لجنة التخطيط الاستراتيجي</footer>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL = 'https://vvfxcoxnnuubycrpkwzj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_8JhfrwxXY9z3hYfi7E5tRg_eOFGxwv8';
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const roleNames = {
+  admin:'الدعم الفني', leadership:'القيادة العليا', project_lead:'مسؤولة مشروع',
+  committee_head:'رئيسة لجنة', plans_supervisor:'مسؤولة متابعة الخطط',
+  analysis_supervisor:'مسؤولة تحليل الاختبارات'
+};
+const titleNames = { teacher:'معلمة', senior_teacher:'معلمة أولى', leadership:'قيادة عليا', staff:'منتسبة' };
+
+async function showApp(session){
+  // جلب سجل المنتسبة: بالربط أولاً ثم بالإيميل احتياطاً
+  let { data: staff } = await db.from('staff').select('*').eq('auth_user_id', session.user.id).maybeSingle();
+  if(!staff){
+    ({ data: staff } = await db.from('staff').select('*').ilike('email', session.user.email).maybeSingle());
+  }
+  if(!staff){
+    await db.auth.signOut();
+    const m = $('loginMsg'); m.className='msg err';
+    m.textContent = 'حسابك غير مسجل في قائمة المنتسبات. تواصلي مع الدعم الفني.';
+    return;
+  }
+  const { data: roles } = await db.from('staff_roles').select('role').eq('staff_id', staff.id);
+  const roleList = (roles||[]).map(r=>roleNames[r.role]||r.role);
+  const label = roleList.length ? roleList.join(' · ') : (titleNames[staff.title]||'منتسبة');
+
+  $('userName').textContent = staff.full_name;
+  $('helloTitle').textContent = 'أهلاً، ' + staff.full_name;
+  $('roleChip').textContent = label;
+  $('nextStep').innerHTML = (roles||[]).some(r=>r.role==='admin')
+    ? 'الخطوة القادمة في البناء: شاشة الإدارة — رفع ملف الطالبات وملف المنتسبات ومعاينة البيانات.'
+    : 'صفحتك الشخصية (الجدول، الرصد، الدرجات) قيد البناء ضمن المراحل القادمة.';
+  $('loginView').style.display='none';
+  $('appView').style.display='block';
+}
+
+async function login(){
+  const btn=$('loginBtn'), m=$('loginMsg');
+  m.className='msg'; btn.disabled=true; btn.textContent='جارٍ الدخول…';
+  const { data, error } = await db.auth.signInWithPassword({
+    email: $('email').value.trim(), password: $('password').value
+  });
+  btn.disabled=false; btn.textContent='تسجيل الدخول';
+  if(error){
+    m.className='msg err';
+    m.textContent = /credentials/i.test(error.message)
+      ? 'البريد أو كلمة المرور غير صحيحة.'
+      : 'تعذر الدخول: ' + error.message;
+    return;
+  }
+  showApp(data.session);
+}
+
+$('loginBtn').addEventListener('click', login);
+$('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
+$('logoutBtn').addEventListener('click', async ()=>{ await db.auth.signOut(); location.reload(); });
+
+// جلسة محفوظة؟ ادخلي مباشرة
+const { data:{ session } } = await db.auth.getSession();
+if(session) showApp(session);
+</script>
+</body>
+</html>
