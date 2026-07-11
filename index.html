@@ -553,15 +553,16 @@ $('ttRun').addEventListener('click', async ()=>{
     const entId={}; for(const e of allEnt) entId[`${e.section_id}|${e.day_of_week}|${e.period_no}`]=e.id;
     const ids=teacherPlan.map(p=>entId[p.key]).filter(Boolean);
     for(const c of chunk(ids,200)){ const{error}=await db.from('entry_teachers').delete().in('entry_id',c); if(error) throw error; }
-    const links=[]; let unknownT=0;
+    const links=[]; const unknownNames=new Set();
     for(const p of teacherPlan){
       const eid=entId[p.key]; if(!eid) continue;
       p.teachers.forEach((t,i)=>{
         const sid=findTeacher(t);
-        if(!sid){ unknownT++; warns.push(`معلمة غير موجودة بالنظام: «${t}» — راجعي الاسم أو استخدمي الرقم الشخصي.`); return; }
+        if(!sid){ unknownNames.add(t); return; }
         links.push({entry_id:eid, staff_id:sid, is_attendance_taker:i===0});
       });
     }
+    const unknownT=unknownNames.size;
     for(const c of chunk(links,400)){ const{error}=await db.from('entry_teachers').insert(c); if(error) throw error; }
 
     prog(90,'توثيق…');
@@ -569,7 +570,7 @@ $('ttRun').addEventListener('click', async ()=>{
       details:{entries:entries.length,links:links.length,unknown_teachers:unknownT}});
     prog(100,'اكتمل');
     R.className='result ok';
-    R.innerHTML=`✅ اكتمل استيراد الجدول:<br>• ${entries.length} حصة<br>• ${links.length} ربط معلمة${unknownT?`<br>⚠️ ${unknownT} اسم معلمة لم يُتعرف عليه — راجعي التنبيهات أعلاه وأعيدي رفع الأسطر المصححة.`:''}`;
+    R.innerHTML=`✅ اكتمل استيراد الجدول:<br>• ${entries.length} حصة<br>• ${links.length} ربط معلمة${unknownT?`<br><br>⚠️ أسماء لم تُربط (${unknownT}) — صححيها في الملف كما وردت في المنتسبات أو استخدمي الرقم الشخصي ثم أعيدي الرفع:<br>${[...unknownNames].map(n=>'• «'+n+'»').join('<br>')}`:''}`;
     showWarns('ttWarns',warns); if(warns.length) $('ttWarns').style.display='block';
     refreshStats();
   }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
