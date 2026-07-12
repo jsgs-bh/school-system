@@ -24,6 +24,22 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="gaPdfAll">⬇ PDF — كل المقررات</button>
     </div>
     <div class="result" id="gaBulkStatus" style="display:none"></div>
+
+    <div class="panel">
+      <h3>تقرير القسم الشامل</h3>
+      <div class="sub">لهذا المقرر (كل شعبه) — اختاري الأجزاء التي تريدينها في تقرير واحد مجمّع.</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
+        <label class="ga-cmp-check"><input type="checkbox" id="brRemedial" checked> استمارة التغذية الراجعة</label>
+        <label class="ga-cmp-check"><input type="checkbox" id="brComp" checked> كفايات الاختبار لكل الصفوف</label>
+        <label class="ga-cmp-check"><input type="checkbox" id="brSheets" checked> كشف الاختبارات لكل الصفوف (تشخيصي/الأول/الثاني)</label>
+        <label class="ga-cmp-check"><input type="checkbox" id="brCompare" checked> مقارنة الاختبارات (إجمالي المقرر)</label>
+      </div>
+      <div class="actions">
+        <button class="btn gold" id="brPdf">⬇ PDF — التقرير الشامل</button>
+        <button class="btn ghost" id="brXls">⬇ إكسل — التقرير الشامل</button>
+      </div>
+      <div class="result" id="brStatus" style="display:none"></div>
+    </div>
     <div class="board-wrap"><table class="board" id="gaTable"></table></div>
   </div>
 
@@ -70,6 +86,7 @@ $('appView').insertAdjacentHTML('beforeend', `
         <div class="actions" style="margin-bottom:14px">
           <button class="btn ghost" id="gaCompareXls">⬇ إكسل — المقارنة</button>
           <button class="btn ghost" id="gaComparePdf">⬇ PDF — المقارنة</button>
+          <button class="btn ghost" id="gaCompareWord">⬇ Word — المقارنة</button>
         </div>
         <div class="board-wrap"><table class="board" id="gaCompareTable"></table></div>
       </div>
@@ -119,10 +136,13 @@ async function initAnalysis(){
   $('gaPdfSubject').addEventListener('click',()=>bulkExport('subject','pdf'));
   $('gaXlsAll').addEventListener('click',()=>bulkExport('all','xlsx'));
   $('gaPdfAll').addEventListener('click',()=>bulkExport('all','pdf'));
+  $('brPdf').addEventListener('click',()=>generateBundle('pdf'));
+  $('brXls').addEventListener('click',()=>generateBundle('xlsx'));
   $('gaCompareGo').addEventListener('click',openCompare);
   $('gaCompareBack').addEventListener('click',()=>{ $('gaCompareView').style.display='none'; $('gaDetailView').style.display='block'; });
   $('gaCompareXls').addEventListener('click',exportCompareXls);
   $('gaComparePdf').addEventListener('click',exportComparePdf);
+  $('gaCompareWord').addEventListener('click',exportCompareWord);
 
   await loadCatsAndThresholds();
   if(S.FLAGS.isSeniorTeacher && !(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isAnalysis)){
@@ -541,6 +561,210 @@ function exportComparePdf(){
       ${notes?`<div style="margin-top:14px;padding:10px;border:1px solid #ccc;border-radius:6px"><b>ملاحظات المقارنة:</b><p style="margin-top:6px;white-space:pre-wrap">${notes}</p></div>`:''}
     </div>`;
   printWithTitle(`مقارنة_${c.secCode}_${c.subjectCode}`);
+}
+
+async function exportCompareWord(){
+  if(!CMP_RESULT){ toast('شغّلي المقارنة أولاً'); return; }
+  const c=CMP_RESULT;
+  const notes=$('gaCompareNotes').value.trim();
+  const { Document, Packer, Paragraph, Table, TableRow, TableCell, HeadingLevel, WidthType, AlignmentType } = docx;
+  const cell = (text,opts={}) => new TableCell({children:[new Paragraph({text:String(text), alignment:AlignmentType.CENTER, bidirectional:true})], ...opts});
+  const headRow = arr => new TableRow({children:arr.map(h=>cell(h))});
+
+  const statsTable = new Table({width:{size:100,type:WidthType.PERCENTAGE}, rows:[
+    headRow(['الاختبار','الدرجة الكلية','عدد المرصودات','متوسط الدرجة','نسبة النجاح','نسبة الإتقان']),
+    ...c.examStats.map(s=>new TableRow({children:[
+      cell(s.name), cell(s.total), cell(s.graded),
+      cell(s.avg!=null?s.avg.toFixed(1):'—'),
+      cell(s.passPct!=null?s.passPct.toFixed(1)+'٪':'—'),
+      cell(s.masteryPct!=null?s.masteryPct.toFixed(1)+'٪':'—'),
+    ]})),
+  ]});
+
+  const studentRows=[headRow(['#','الرقم الأكاديمي','اسم الطالبة',...c.exams.map(e=>e.name),'الفرق (نقاط٪)'])];
+  c.rows.forEach((r,i)=>{
+    const firstPct=r.pcts.find(v=>v!=null), lastPct=[...r.pcts].reverse().find(v=>v!=null);
+    const diff = firstPct!=null&&lastPct!=null ? (lastPct-firstPct).toFixed(1)+'٪' : '—';
+    studentRows.push(new TableRow({children:[
+      cell(i+1), cell(r.academic_number), cell(r.full_name),
+      ...r.scores.map(v=>cell(v??'—')), cell(diff),
+    ]}));
+  });
+  const studentTable=new Table({width:{size:100,type:WidthType.PERCENTAGE}, rows:studentRows});
+
+  const children=[
+    new Paragraph({text:schoolName(), heading:HeadingLevel.TITLE, alignment:AlignmentType.CENTER, bidirectional:true}),
+    new Paragraph({text:`مقارنة الاختبارات — ${c.secCode} — ${c.subjectCode}`, heading:HeadingLevel.HEADING_2, alignment:AlignmentType.CENTER, bidirectional:true}),
+    new Paragraph({text:''}),
+    statsTable,
+    new Paragraph({text:''}),
+    studentTable,
+  ];
+  if(notes){
+    children.push(new Paragraph({text:''}));
+    children.push(new Paragraph({text:'ملاحظات المقارنة:', bold:true, alignment:AlignmentType.RIGHT, bidirectional:true}));
+    children.push(new Paragraph({text:notes, alignment:AlignmentType.RIGHT, bidirectional:true}));
+  }
+
+  try{
+    const doc=new Document({sections:[{children}]});
+    const blob=await Packer.toBlob(doc);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`مقارنة_${c.secCode}_${c.subjectCode}.docx`; a.click();
+    URL.revokeObjectURL(url);
+  }catch(err){ toast('تعذر إنشاء ملف Word: '+(err.message||err)); }
+}
+
+/* ============ تقرير القسم الشامل (مجمّع من عدة مصادر) ============ */
+async function fetchRemedialForBundle(subject){
+  const {data:plans}=await db.from('remedial_plans').select('id,exam_name,goal').eq('subject_id',subject.id);
+  if(!plans?.length) return [];
+  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const sections=Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar')).map(code=>({code,id:secMap[code].section_id}));
+  const {data:th}=await db.from('grade_settings').select('*').eq('id',1).maybeSingle();
+  const THRESH=th||{pass_pct:50,mastery_pct:80};
+  const out=[];
+  for(const plan of plans){
+    const countsBySec={};
+    for(const sec of sections){
+      const {data:ex}=await db.from('exams').select('id,exam_total').eq('subject_id',subject.id).eq('section_id',sec.id).eq('name',plan.exam_name).maybeSingle();
+      if(!ex){ countsBySec[sec.code]={}; continue; }
+      const total=ex.exam_total ?? subject.exam_total;
+      const {data:recs}=await db.from('grade_records').select('score').eq('exam_id',ex.id).not('score','is',null);
+      const counts={pass:0,mastery:0}; for(const c of CATS) counts[c.id]=0;
+      for(const r of recs||[]){
+        const pct=r.score/total*100, cat=categoryOf(pct);
+        if(cat) counts[cat.id]++;
+        if(pct>=THRESH.pass_pct) counts.pass++;
+        if(pct>=THRESH.mastery_pct) counts.mastery++;
+      }
+      countsBySec[sec.code]=counts;
+    }
+    const {data:acts}=await db.from('remedial_plan_actions').select('*').eq('plan_id',plan.id);
+    const actionsBy={}; for(const a of acts||[]) actionsBy[a.row_key]=a;
+    const rows=[...CATS.map(c=>({key:'cat:'+c.id,label:c.name})),{key:'pass',label:'الناجحات'},{key:'mastery',label:'المتقنات'}]
+      .map(r=>({...r, action:actionsBy[r.key]?.action_text||'', status:actionsBy[r.key]?.status||'pending'}));
+    out.push({examName:plan.exam_name, goal:plan.goal, sections, countsBySec, rows});
+  }
+  return out;
+}
+async function fetchCompetencyForBundle(subject){
+  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const out=[];
+  for(const code of Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar'))){
+    const sec=secMap[code];
+    for(const name of EXAM_NAMES){
+      const {data:ex}=await db.from('exams').select('id').eq('subject_id',subject.id).eq('section_id',sec.section_id).eq('name',name).maybeSingle();
+      if(!ex) continue;
+      const {data:comps}=await db.from('exam_competencies').select('id,name,sort_order,competency_items(item_no,mastered_count)').eq('exam_id',ex.id).order('sort_order');
+      if(!comps?.length) continue;
+      const {data:enr}=await db.from('enrollments').select('students(id)').eq('section_id',sec.section_id).is('to_date',null);
+      const enrolled=(enr||[]).length;
+      const list=comps.map(c=>{
+        const items=c.competency_items||[];
+        const sum=items.reduce((a,b)=>a+(b.mastered_count||0),0), max=items.length*enrolled;
+        const pct=max?(sum/max*100):null;
+        return {name:c.name, itemCount:items.length, pct, status: pct!=null && pct>=MASTERY_PCT_BUNDLE};
+      });
+      out.push({secCode:code, examName:name, list});
+    }
+  }
+  return out;
+}
+async function fetchComparisonForBundle(subject){
+  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const secIds=Object.values(secMap||{}).map(s=>s.section_id);
+  if(!secIds.length) return [];
+  const {data:th}=await db.from('grade_settings').select('*').eq('id',1).maybeSingle();
+  const THRESH=th||{pass_pct:50,mastery_pct:80};
+  const out=[];
+  for(const name of EXAM_NAMES){
+    const {data:exams}=await db.from('exams').select('id,exam_total').eq('subject_id',subject.id).eq('name',name).in('section_id',secIds);
+    if(!exams?.length) continue;
+    let allScores=[];
+    for(const ex of exams){
+      const total=ex.exam_total ?? subject.exam_total;
+      const {data:recs}=await db.from('grade_records').select('score').eq('exam_id',ex.id).not('score','is',null);
+      for(const r of recs||[]) allScores.push(r.score/total*100);
+    }
+    if(!allScores.length) continue;
+    const pass=allScores.filter(p=>p>=THRESH.pass_pct).length, mastery=allScores.filter(p=>p>=THRESH.mastery_pct).length;
+    out.push({name, graded:allScores.length, passPct:(pass/allScores.length*100), masteryPct:(mastery/allScores.length*100)});
+  }
+  return out;
+}
+
+let MASTERY_PCT_BUNDLE=80;
+async function generateBundle(kind){
+  if(!CUR_SUBJECT){ toast('اختاري مقرراً'); return; }
+  const {data:gs}=await db.from('grade_settings').select('mastery_pct').eq('id',1).maybeSingle();
+  MASTERY_PCT_BUNDLE=gs?.mastery_pct||80;
+  const btn = kind==='pdf' ? $('brPdf') : $('brXls');
+  btn.disabled=true; $('brStatus').style.display='block'; $('brStatus').className='result';
+  $('brStatus').textContent='جارٍ تجميع التقرير…';
+  try{
+    const parts={};
+    if($('brRemedial').checked) parts.remedial = await fetchRemedialForBundle(CUR_SUBJECT);
+    if($('brComp').checked) parts.comp = await fetchCompetencyForBundle(CUR_SUBJECT);
+    if($('brSheets').checked) parts.sheets = await collectSubjectDetails(CUR_SUBJECT);
+    if($('brCompare').checked) parts.compare = await fetchComparisonForBundle(CUR_SUBJECT);
+
+    if(kind==='pdf'){
+      let html='';
+      if(parts.remedial?.length){
+        for(const p of parts.remedial){
+          const rows=p.rows.map(r=>`<tr><td>${r.label}</td>${p.sections.map(s=>`<td>${(p.countsBySec[s.code]||{})[r.key.startsWith('cat:')?r.key.slice(4):r.key]??0}</td>`).join('')}<td>${r.action||'—'}</td><td>${r.status==='done'?'نُفذ':r.status==='in_progress'?'جاري التنفيذ':'لم يُنفذ'}</td></tr>`).join('');
+          html+=`<div class="ga-page"><div class="ga-head"><h2>استمارة التغذية الراجعة — ${CUR_SUBJECT.code} — ${p.examName}</h2>${p.goal?`<p>الهدف الخاص: ${p.goal}</p>`:''}</div>
+            <table class="ga-tbl"><tr><th>الفئة</th>${p.sections.map(s=>`<th>${s.code}</th>`).join('')}<th>الإجراء</th><th>متابعة التنفيذ</th></tr>${rows}</table></div>`;
+        }
+      }
+      if(parts.comp?.length){
+        for(const c of parts.comp){
+          const rows=c.list.map(l=>`<tr><td>${l.name}</td><td>${l.itemCount}</td><td>${l.pct!=null?l.pct.toFixed(1)+'٪':'—'}</td><td>${l.pct==null?'—':(l.status?'أتقن':'لم يتقن')}</td></tr>`).join('');
+          html+=`<div class="ga-page"><div class="ga-head"><h2>كفايات الاختبار — ${c.secCode} — ${CUR_SUBJECT.code} — ${c.examName}</h2></div>
+            <table class="ga-tbl"><tr><th>الكفاية</th><th>عدد الفقرات</th><th>نسبة الإنجاز</th><th>الحالة</th></tr>${rows}</table></div>`;
+        }
+      }
+      if(parts.sheets?.length){
+        for(const d of parts.sheets) html+=gaPageHtml(d,CUR_SUBJECT.code,d.examTotal);
+      }
+      if(parts.compare?.length){
+        const rows=parts.compare.map(s=>`<tr><td>${s.name}</td><td>${s.graded}</td><td>${s.passPct.toFixed(1)}٪</td><td>${s.masteryPct.toFixed(1)}٪</td></tr>`).join('');
+        html+=`<div class="ga-page"><div class="ga-head"><h2>مقارنة الاختبارات — إجمالي المقرر — ${CUR_SUBJECT.code}</h2></div>
+          <table class="ga-tbl"><tr><th>الاختبار</th><th>عدد المرصودات</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>${rows}</table></div>`;
+      }
+      if(!html){ toast('لا بيانات في العناصر المختارة'); return; }
+      $('printAreaGA').innerHTML=html;
+      printWithTitle(`تقرير_القسم_${CUR_SUBJECT.code}`);
+    }else{
+      const wb=new ExcelJS.Workbook();
+      if(parts.remedial?.length){
+        for(const p of parts.remedial){
+          const ws=wb.addWorksheet(`تغذية-${p.examName}`.slice(0,31),{views:[{rightToLeft:true}]});
+          ws.addRow(['الفئة',...p.sections.map(s=>s.code),'الإجراء','الحالة']).eachCell(c=>{c.font={bold:true};});
+          for(const r of p.rows) ws.addRow([r.label,...p.sections.map(s=>(p.countsBySec[s.code]||{})[r.key.startsWith('cat:')?r.key.slice(4):r.key]??0),r.action,r.status]);
+        }
+      }
+      if(parts.comp?.length){
+        const ws=wb.addWorksheet('كفايات الاختبار',{views:[{rightToLeft:true}]});
+        ws.addRow(['الشعبة','الاختبار','الكفاية','عدد الفقرات','النسبة','الحالة']).eachCell(c=>{c.font={bold:true};});
+        for(const c of parts.comp) for(const l of c.list) ws.addRow([c.secCode,c.examName,l.name,l.itemCount,l.pct!=null?l.pct.toFixed(1)+'٪':'',l.pct==null?'':(l.status?'أتقن':'لم يتقن')]);
+      }
+      if(parts.sheets?.length){ for(const d of parts.sheets) addGaSheet(wb,d,CUR_SUBJECT.code,d.examTotal); }
+      if(parts.compare?.length){
+        const ws=wb.addWorksheet('مقارنة إجمالية',{views:[{rightToLeft:true}]});
+        ws.addRow(['الاختبار','عدد المرصودات','نسبة النجاح','نسبة الإتقان']).eachCell(c=>{c.font={bold:true};});
+        for(const s of parts.compare) ws.addRow([s.name,s.graded,s.passPct.toFixed(1)+'٪',s.masteryPct.toFixed(1)+'٪']);
+      }
+      if(!wb.worksheets.length){ toast('لا بيانات في العناصر المختارة'); return; }
+      const buf=await wb.xlsx.writeBuffer();
+      const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=`تقرير_القسم_${CUR_SUBJECT.code}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+    }
+  }catch(err){ toast('تعذر إنشاء التقرير: '+(err.message||err)); }
+  finally{ btn.disabled=false; $('brStatus').style.display='none'; }
 }
 
 registerTab({id:'gaMain', label:'تحليل الاختبارات', group:'grades', groupLabel:'الدرجات',
