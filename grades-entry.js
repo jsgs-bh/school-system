@@ -48,6 +48,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div class="hint" style="margin-top:10px">أو أدخلي الدرجات مباشرة في الشبكة أدناه، وتقدرين لصق عمود كامل منسوخ من إكسل داخل أي خانة.</div>
     </div>
     <div class="g-grid" id="gGrid"></div>
+    <div class="warnbox" id="gMissingBox" style="display:none"></div>
     <button class="btn gold" id="gSave" style="margin-top:16px">حفظ الدرجات</button>
   </div>
 </div>
@@ -148,8 +149,9 @@ async function openExam(exam){
   const {data:enr,error}=await db.from('enrollments')
     .select('students(id,full_name,academic_number)').eq('section_id',CUR_PAIR.section_id).is('to_date',null);
   if(error){ $('gGrid').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  const numKey = v => parseInt(String(v).replace(/[^\d]/g,''),10) || 0;
   STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean)
-    .sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'en',{numeric:true}));
+    .sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
   const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',exam.id);
   EXISTING={}; for(const r of recs||[]) EXISTING[r.student_id]=r.score;
   renderGrid();
@@ -165,7 +167,7 @@ function renderGrid(){
         class="${EXISTING[s.id]!=null?'g-filled':''}" value="${EXISTING[s.id]??''}"></div>`).join('');
   const inputs=[...$('gGrid').querySelectorAll('input')];
   inputs.forEach((inp,idx)=>{
-    inp.addEventListener('input',()=>{ inp.classList.toggle('g-filled', inp.value!==''); updateCount(); });
+    inp.addEventListener('input',()=>{ inp.classList.toggle('g-filled', inp.value!==''); updateCount(); updateMissing(); });
     inp.addEventListener('paste',e=>{
       const text=(e.clipboardData||window.clipboardData).getData('text');
       if(!text.includes('\n') && !text.includes('\t')) return; // قيمة واحدة، خليها تلصق عادي
@@ -176,15 +178,27 @@ function renderGrid(){
         const target=inputs[idx+i];
         if(target && val!==''){ target.value=val; target.classList.add('g-filled'); }
       });
-      updateCount();
+      updateCount(); updateMissing();
     });
   });
-  updateCount();
+  updateCount(); updateMissing();
 }
 function updateCount(){
   const inputs=[...$('gGrid').querySelectorAll('input')];
   $('gDoneCount').textContent=inputs.filter(i=>i.value!=='').length;
   $('gTotalCount').textContent=inputs.length;
+}
+function updateMissing(){
+  const inputs=[...$('gGrid').querySelectorAll('input')];
+  const missing=inputs.filter(i=>i.value==='').map(i=>{
+    const s=STUDENTS.find(st=>st.id===i.dataset.sid);
+    return s ? `${s.full_name} (${s.academic_number})` : null;
+  }).filter(Boolean);
+  const box=$('gMissingBox');
+  if(!missing.length){ box.style.display='none'; return; }
+  box.style.display='block';
+  box.innerHTML=`⚠️ لم تُرصد درجاتهن بعد — ${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${CUR_EXAM.name} (${missing.length}):<br>`+
+    missing.join('، ');
 }
 
 /* ============ تنزيل قالب الدرجات (بأسماء الطالبات، بترتيب الرقم الأكاديمي) ============ */
@@ -251,7 +265,7 @@ async function handleUpload(file){
     const inp=bySidInput[sid];
     if(inp){ inp.value=score; inp.classList.add('g-filled'); matched++; }
   }
-  updateCount();
+  updateCount(); updateMissing();
   toast(`تم تعبئة ${matched} درجة${skipped?` — تجاهلت ${skipped} رقماً أكاديمياً غير موجود بالشعبة`:''}`);
 }
 
