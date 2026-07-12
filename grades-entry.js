@@ -56,6 +56,10 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="g-grid" id="gGrid"></div>
     <div class="warnbox" id="gMissingBox" style="display:none"></div>
     <button class="btn gold" id="gSave" style="margin-top:16px">حفظ الدرجات</button>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn ghost" id="gClassXls">⬇ إكسل — كشف الدرجات والتصنيف</button>
+      <button class="btn ghost" id="gClassPdf">⬇ PDF — كشف الدرجات والتصنيف</button>
+    </div>
   </div>
 
   <div id="gCompView" style="display:none">
@@ -233,6 +237,8 @@ async function initGradesEntry(){
     $('gNewExamTotal').style.display = $('gNewExamName').value==='اختبار تشخيصي' ? 'block' : 'none';
   });
   $('gSave').addEventListener('click',saveGrades);
+  $('gClassXls').addEventListener('click',exportClassificationXls);
+  $('gClassPdf').addEventListener('click',exportClassificationPdf);
   $('gTemplateXls').addEventListener('click',downloadTemplate);
   $('cAddComp').addEventListener('click',()=>addCompCard());
   $('cSave').addEventListener('click',saveCompetencies);
@@ -505,6 +511,93 @@ async function saveGrades(){
     toast(`تم حفظ ${rows.length} درجة`);
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
   finally{ btn.disabled=false; btn.textContent='حفظ الدرجات'; }
+}
+
+/* ============ كشف الدرجات والتصنيف (مطابق لقالب المدرسة) ============ */
+function computeClassificationRows(){
+  const inputs=[...$('gGrid').querySelectorAll('input')];
+  return STUDENTS.map(s=>{
+    const inp=inputs.find(i=>i.dataset.sid===s.id);
+    const score = inp && inp.value!=='' ? +inp.value : null;
+    const pct = score!=null ? (score/CUR_EXAM_TOTAL*100) : null;
+    const cat = pct!=null ? categoryOf(pct) : null;
+    return {...s, score, pct, cat};
+  });
+}
+function classificationSummary(rows){
+  const perCat={}; for(const c of CATS) perCat[c.id]=0;
+  let mastered=0;
+  for(const r of rows){ if(r.cat) perCat[r.cat.id]++; if(r.pct!=null && r.pct>=MASTERY_PCT) mastered++; }
+  return {perCat, mastered};
+}
+async function exportClassificationXls(){
+  const rows=computeClassificationRows();
+  if(!rows.some(r=>r.score!=null)){ toast('لا درجات مرصودة بعد'); return; }
+  const {perCat,mastered}=classificationSummary(rows);
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('كشف الدرجات والتصنيف',{views:[{rightToLeft:true}]});
+  const addTitle=(text,size,bold,color)=>{
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,4);
+    const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+    cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    row.height=size>=15?32:20;
+  };
+  addTitle('ترتيب الطالبات حسب الفئات في الاختبار',15,true,'FF22303C');
+  ws.addRow([]);
+  const h1=ws.addRow(['الشعبة:',CUR_PAIR.section_code,'المعلمة:',S.ME.full_name]);
+  h1.getCell(1).font={bold:true}; h1.getCell(2).font={bold:true,color:{argb:'FFCC0000'}}; h1.getCell(3).font={bold:true};
+  h1.eachCell(c=>c.alignment={horizontal:'center'});
+  const h2=ws.addRow(['رمز المقرر:',CUR_PAIR.subject_code,'الاختبار:',CUR_EXAM.name]);
+  h2.getCell(1).font={bold:true}; h2.getCell(3).font={bold:true};
+  h2.eachCell(c=>c.alignment={horizontal:'center'});
+  ws.addRow([]);
+  const hdr=ws.addRow(['#','الرقم الأكاديمي','اسم الطالبة','درجة الاختبار']);
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=gBorder; });
+  rows.forEach((r,i)=>{
+    const row=ws.addRow([i+1,r.academic_number,r.full_name,r.score??'']);
+    row.eachCell((c,colNo)=>{ c.border=gBorder; c.alignment={horizontal:colNo===3?'right':'center'}; c.font={size:10.5};
+      if(colNo===2) c.numFmt='@';
+      if(colNo===4 && r.cat) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+r.cat.color.replace('#','')}};
+    });
+  });
+  ws.addRow([]);
+  for(const c of CATS){
+    const row=ws.addRow([perCat[c.id],`عدد طالبات ${c.name}:`]);
+    ws.mergeCells(row.number,2,row.number,4);
+    row.getCell(1).font={bold:true}; row.getCell(1).alignment={horizontal:'center'}; row.getCell(1).border=gBorder;
+    row.getCell(2).font={bold:true}; row.getCell(2).alignment={horizontal:'center'}; row.getCell(2).border=gBorder;
+    row.getCell(2).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+c.color.replace('#','')}};
+  }
+  const mRow=ws.addRow([mastered,'عدد المتقنات:']);
+  ws.mergeCells(mRow.number,2,mRow.number,4);
+  mRow.getCell(1).font={bold:true}; mRow.getCell(1).alignment={horizontal:'center'}; mRow.getCell(1).border=gBorder;
+  mRow.getCell(2).font={bold:true}; mRow.getCell(2).alignment={horizontal:'center'}; mRow.getCell(2).border=gBorder;
+  mRow.getCell(2).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9D9D9'}};
+
+  ws.columns=[{width:6},{width:16},{width:30},{width:16}];
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download=`كشف_الدرجات_والتصنيف_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportClassificationPdf(){
+  const rows=computeClassificationRows();
+  if(!rows.some(r=>r.score!=null)){ toast('لا درجات مرصودة بعد'); return; }
+  const {perCat,mastered}=classificationSummary(rows);
+  const body=rows.map((r,i)=>`<tr style="${r.cat?`background:${r.cat.color}66`:''}"><td>${i+1}</td><td>${r.academic_number}</td><td style="text-align:right">${r.full_name}</td><td>${r.score??'—'}</td></tr>`).join('');
+  const summaryRows=CATS.map(c=>`<tr><td style="background:${c.color}66;font-weight:700">عدد طالبات ${c.name}:</td><td>${perCat[c.id]}</td></tr>`).join('')
+    +`<tr><td style="background:#d9d9d9;font-weight:700">عدد المتقنات:</td><td>${mastered}</td></tr>`;
+  $('printAreaComp').innerHTML=`
+    <div class="cp-head"><h2>ترتيب الطالبات حسب الفئات في الاختبار</h2></div>
+    <table class="cp-hdr">
+      <tr><td>الشعبة</td><td style="color:red;font-weight:700">${CUR_PAIR.section_code}</td><td>المعلمة</td><td>${S.ME.full_name}</td></tr>
+      <tr><td>رمز المقرر</td><td>${CUR_PAIR.subject_code}</td><td>الاختبار</td><td>${CUR_EXAM.name}</td></tr>
+    </table>
+    <table class="cp-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>درجة الاختبار</th></tr>${body}</table>
+    <table class="cp-tbl" style="margin-top:14px;width:60%">${summaryRows}</table>`;
+  printWithTitle(`كشف_الدرجات_والتصنيف_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`);
 }
 
 /* ============ استمارة تحليل الكفايات ============ */
