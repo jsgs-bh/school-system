@@ -57,14 +57,13 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaBuilder, #printAreaBuilder *{visibility:visible}
-    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm 16mm}
+    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
     .bd-head{text-align:center;margin-bottom:12px}
     .bd-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .bd-head p{font-size:11.5px;color:#333}
     .bd-tbl{width:100%;border-collapse:collapse;font-size:10px}
     .bd-tbl th{background:#1d3d5c;color:#fff;padding:5px;border:1px solid #1d3d5c}
     .bd-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
-    .bd-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -210,11 +209,10 @@ function exportPdf(){
   const fields=checkedFields();
   if(!ROWS.length||!fields.length){ toast('ولّدي المعاينة أولاً واختاري أعمدة'); return; }
   const rows=ROWS.map(r=>`<tr>${fields.map(k=>`<td>${r[k]??''}</td>`).join('')}</tr>`).join('');
-  const footer=`<div class="bd-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   $('printAreaBuilder').innerHTML = `
     <div class="bd-head"><h2>${LEVELS[LEVEL].title}</h2>
       <p>من ${$('bFrom').value} إلى ${$('bTo').value} — ${ROWS.length} صف</p></div>
-    <table class="bd-tbl"><tr>${fields.map(k=>`<th>${fieldLabel(k)}</th>`).join('')}</tr>${rows}</table>${footer}`;
+    <table class="bd-tbl"><tr>${fields.map(k=>`<th>${fieldLabel(k)}</th>`).join('')}</tr>${rows}</table>`;
   printWithTitle(`${LEVELS[LEVEL].title}_${$('bFrom').value}_${$('bTo').value}`);
 }
 

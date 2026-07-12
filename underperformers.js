@@ -4,7 +4,7 @@
    المعلمة (طالباتها فقط) — المعلمة الأولى (نطاق إشرافها) —
    رئيسة التحليل/القيادة/الإرشاد الأكاديمي (الكل). حالة المتابعة قابلة
    للتحديث مباشرة، وتصدير إكسل وPDF متاح دائماً. */
-import { db, $, S, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, chunk, toast, printWithTitle, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const REASON_LABEL = {fail:'راسبة', low_performance:'أداء منخفض'};
@@ -23,7 +23,9 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="upXls">⬇ إكسل</button>
       <button class="btn ghost" id="upPdf">⬇ PDF</button>
       <button class="btn ghost" id="upRefresh">↻ تحديث</button>
+      <button class="btn gold" id="upBackfill">🔄 مزامنة كل الدرجات الموجودة</button>
     </div>
+    <div class="result" id="upBackfillStatus" style="display:none"></div>
     <div class="board-wrap"><table class="board" id="upTable"></table></div>
   </div>
 </div>
@@ -39,13 +41,12 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaUP, #printAreaUP *{visibility:visible}
-    #printAreaUP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm 16mm}
+    #printAreaUP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
     .up-head{text-align:center;margin-bottom:12px}
     .up-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .up-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .up-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .up-tbl td{padding:5px;border:1px solid #ccc;text-align:center}
-    .up-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -57,7 +58,50 @@ async function initUP(){
   $('upRefresh').addEventListener('click',load);
   $('upXls').addEventListener('click',exportXls);
   $('upPdf').addEventListener('click',exportPdf);
+  $('upBackfill').addEventListener('click',backfillAlerts);
   await load();
+}
+
+/* مزامنة رجعية: تفحص كل الدرجات المسجَّلة في النظام (حتى القديمة قبل
+   وجود هذا التبويب) وتُنشئ التنبيهات الناقصة. آمنة للتكرار — upsert فقط. */
+async function backfillAlerts(){
+  if(!confirm('سيُعاد فحص كل الدرجات المسجَّلة في النظام لإنشاء أي تنبيهات ناقصة (خصوصاً درجات أُدخلت قبل تفعيل هذه الميزة). قد يستغرق دقيقة حسب حجم البيانات. متابعة؟')) return;
+  const btn=$('upBackfill'); btn.disabled=true; btn.textContent='جارٍ المزامنة…';
+  $('upBackfillStatus').style.display='block'; $('upBackfillStatus').className='result';
+  $('upBackfillStatus').textContent='جارٍ فحص كل الدرجات…';
+  try{
+    const [{data:cats},{data:th},{data:subs}] = await Promise.all([
+      db.from('grade_categories').select('*').order('sort_order'),
+      db.from('grade_settings').select('*').eq('id',1).maybeSingle(),
+      db.from('subjects').select('id,exam_total'),
+    ]);
+    const CATS=cats||[], THRESH=th||{pass_pct:50,mastery_pct:80};
+    if(!CATS.length) throw new Error('لا فئات تصنيف معرَّفة — أضيفيها من الإعدادات أولاً');
+    const lowestCat=CATS.reduce((min,c)=>c.min_pct<min.min_pct?c:min,CATS[0]);
+    const subjTotal={}; for(const s of subs||[]) subjTotal[s.id]=s.exam_total;
+
+    const {data:recs,error}=await db.from('grade_records').select('student_id,exam_id,score,exams(subject_id,exam_total)').not('score','is',null);
+    if(error) throw error;
+
+    const toFlag=[];
+    for(const r of recs||[]){
+      const total = r.exams?.exam_total ?? subjTotal[r.exams?.subject_id];
+      if(!total) continue;
+      const pct=r.score/total*100;
+      const cat=CATS.find(c=>pct>=c.min_pct && pct<=c.max_pct);
+      const isFail=pct<THRESH.pass_pct, isLow=cat && cat.id===lowestCat.id;
+      if(isFail||isLow) toFlag.push({student_id:r.student_id, exam_id:r.exam_id, reason:isFail?'fail':'low_performance', score:r.score, pct});
+    }
+    let done=0;
+    for(const c of chunk(toFlag,300)){
+      const {error:e2}=await db.from('underperformer_alerts').upsert(c,{onConflict:'student_id,exam_id'});
+      if(!e2) done+=c.length;
+    }
+    $('upBackfillStatus').textContent=`تمت المزامنة — ${done} تنبيهاً من أصل ${toFlag.length} حالة مطابقة (من ${(recs||[]).length} درجة مفحوصة)`;
+    toast('تمت المزامنة بنجاح');
+    load();
+  }catch(err){ $('upBackfillStatus').className='result err'; $('upBackfillStatus').textContent='تعذرت المزامنة: '+(err.message||err); }
+  finally{ btn.disabled=false; btn.textContent='🔄 مزامنة كل الدرجات الموجودة'; }
 }
 
 async function getScopeFilter(){
@@ -167,12 +211,11 @@ function exportPdf(){
   const rows=ROWS.map(r=>`<tr><td>${r.students?.full_name||''}</td><td>${r.students?.academic_number||''}</td>
     <td>${r.exams?.sections?.code||''}</td><td>${r.exams?.subjects?.code||''}</td><td>${r.exams?.name||''}</td>
     <td>${REASON_LABEL[r.reason]||r.reason}</td><td>${r.score??''}</td><td>${r.pct!=null?(+r.pct).toFixed(1)+'٪':''}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
-  const footer=`<div class="up-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
   $('printAreaUP').innerHTML=`
     <div class="up-head"><h2>متابعة أداء الطالبات</h2></div>
-    <table class="up-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>${rows}</table>${footer}`;
+    <table class="up-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>${rows}</table>`;
   printWithTitle('متابعة_أداء_الطالبات');
 }
 
 registerTab({id:'upMain', label:'متابعة أداء الطالبات', group:'grades', groupLabel:'الدرجات',
-  show:f=>f.isAdmin||f.isLead||f.isAnalysis||f.isAcademicGuidance||f.isSeniorTeacher||f.isTeacher, init:initUP});
+  show:f=>f.isAdmin||f.isLead||f.isAnalysis||f.isAcademicGuidance||f.isSeniorTeacher, init:initUP});

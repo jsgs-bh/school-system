@@ -31,7 +31,7 @@ if(!document.getElementById('boardExtraStyle')){
       body *{visibility:hidden}
       #printAreaBoard, #printAreaBoard *{visibility:visible}
       #printAreaBoard{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
-      .pb-page{page-break-after:always;padding:14mm 12mm 16mm}
+      .pb-page{page-break-after:always;padding:14mm 12mm}
       .pb-page:last-child{page-break-after:auto}
       .pb-head{text-align:center;margin-bottom:12px}
       .pb-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
@@ -40,7 +40,6 @@ if(!document.getElementById('boardExtraStyle')){
       .pb-tbl th{background:#1d3d5c;color:#fff;padding:5px;border:1px solid #1d3d5c}
       .pb-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
       .pb-tbl td.c{text-align:center}
-      .pb-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
     }`;
   document.head.appendChild(st);
 }
@@ -222,10 +221,9 @@ async function exportDayXls(){
 /* ============ طباعة تفاصيل اليوم — صفحة لكل حصة، بكل غائباتها في كل الشعب ============ */
 function printDay(){
   const perPeriod=collectDayPeriods();
-  const footer=`<div class="pb-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   const periods=Object.keys(perPeriod).map(Number).sort((a,b)=>a-b);
   if(!periods.length){
-    $('printAreaBoard').innerHTML=`<div class="pb-page"><div class="pb-head"><h2>لا غياب مسجل في هذا اليوم 🎉</h2></div></div>${footer}`;
+    $('printAreaBoard').innerHTML=`<div class="pb-page"><div class="pb-head"><h2>لا غياب مسجل في هذا اليوم 🎉</h2></div></div>`;
     printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`); return;
   }
   const pages=periods.map(p=>{
@@ -237,7 +235,7 @@ function printDay(){
       <table class="pb-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الشعبة</th></tr>${rows}</table>
     </div>`;
   }).join('');
-  $('printAreaBoard').innerHTML=pages+footer;
+  $('printAreaBoard').innerHTML=pages;
   printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`);
 }
 

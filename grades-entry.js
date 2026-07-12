@@ -13,6 +13,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div id="gSubjectsView">
     <div class="today-lbl" style="margin-bottom:12px">مقرراتي</div>
     <button class="btn ghost" id="gExtractGo" style="width:auto;padding:9px 18px;margin-bottom:14px">🔍 استخراج حسب الفئة</button>
+    <button class="btn ghost" id="gAlertsGo" style="width:auto;padding:9px 18px;margin-bottom:14px;margin-inline-start:10px">⚠️ متابعة أداء طالباتي</button>
     <div id="gSubjList"></div>
   </div>
 
@@ -67,8 +68,15 @@ $('appView').insertAdjacentHTML('beforeend', `
           <td>عدد فقرات الأسئلة:</td><td><input type="number" id="cQItems" min="1" style="width:80px;padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit"></td></tr>
       </table>
     </div>
+    <div class="warnbox" id="cTemplateBanner" style="display:none"></div>
     <div id="cCompList"></div>
     <button class="btn ghost" id="cAddComp" style="width:auto;padding:10px 22px;margin:6px 0 18px">＋ إضافة كفاية جديدة</button>
+    <div class="field" style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer">
+        <input type="checkbox" id="cUnify" style="width:auto">
+        استخدام هذه الاستمارة كنموذج موحّد لهذا المقرر — تُعرض تلقائياً كنسخة جاهزة لبقية معلمات المقرر عند فتح استمارة فارغة لنفس الاختبار
+      </label>
+    </div>
     <div class="actions">
       <button class="btn gold" id="cSave">حفظ الاستمارة</button>
       <button class="btn ghost" id="cPrint">⬇ طباعة / تنزيل PDF</button>
@@ -95,9 +103,23 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="ePdf">⬇ PDF</button>
     </div>
   </div>
+
+  <div id="gAlertsView" style="display:none">
+    <button class="back" id="gAlertsBack">→ رجوع</button>
+    <div class="stats" id="gAlertsStats"></div>
+    <div class="panel">
+      <div class="actions" style="margin-bottom:14px">
+        <button class="btn ghost" id="gAlertsXls">⬇ إكسل</button>
+        <button class="btn ghost" id="gAlertsPdf">⬇ PDF</button>
+        <button class="btn ghost" id="gAlertsRefresh">↻ تحديث</button>
+      </div>
+      <div class="board-wrap"><table class="board" id="gAlertsTable"></table></div>
+    </div>
+  </div>
 </div>
 <div id="printAreaComp"></div>
 <div id="printAreaExtract"></div>
+<div id="printAreaAlerts"></div>
 <style>
   #gSubjList{display:flex;flex-direction:column;gap:10px}
   .g-subj{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:1px solid var(--line);border-radius:12px;padding:14px 18px;cursor:pointer;transition:.15s}
@@ -134,12 +156,16 @@ $('appView').insertAdjacentHTML('beforeend', `
   .comp-item small{color:#6b7683;font-size:11px}
   .comp-item button{background:none;border:none;color:var(--err);cursor:pointer}
   .comp-foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-  #printAreaComp,#printAreaExtract{display:none}
+  .ga-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .ga-reason{font-size:11px;padding:3px 10px;border-radius:99px;font-weight:700}
+  .ga-reason.fail{background:#fbe7e7;color:var(--err)}
+  .ga-reason.low_performance{background:#fff3cd;color:#8a6100}
+  #printAreaComp,#printAreaExtract,#printAreaAlerts{display:none}
   @media print{
     @page{margin:0}
     body *{visibility:hidden}
-    #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *{visibility:visible}
-    #printAreaComp,#printAreaExtract{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm 16mm}
+    #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *, #printAreaAlerts, #printAreaAlerts *{visibility:visible}
+    #printAreaComp,#printAreaExtract,#printAreaAlerts{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
     .cp-head{text-align:center;margin-bottom:10px}
     .cp-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .cp-hdr{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px}
@@ -148,7 +174,6 @@ $('appView').insertAdjacentHTML('beforeend', `
     .cp-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .cp-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .cp-tbl td{padding:5px;border:1px solid #ccc;text-align:center}
-    .cp-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
     .ga-page{page-break-after:always}
     .ga-page:last-child{page-break-after:auto}
   }
@@ -182,13 +207,18 @@ async function initGradesEntry(){
   $('eGo').addEventListener('click',runExtract);
   $('eXls').addEventListener('click',exportExtractXls);
   $('ePdf').addEventListener('click',exportExtractPdf);
+  $('gAlertsGo').addEventListener('click',openAlerts);
+  $('gAlertsBack').addEventListener('click',()=>show('gSubjectsView'));
+  $('gAlertsRefresh').addEventListener('click',loadAlerts);
+  $('gAlertsXls').addEventListener('click',exportAlertsXls);
+  $('gAlertsPdf').addEventListener('click',exportAlertsPdf);
   bindDrop($('gDrop'),$('gFile'), handleUpload);
   await loadMasteryPct();
   await loadCatsAndThresholds();
   await loadMySubjects();
 }
 function show(id){
-  ['gSubjectsView','gExamsView','gGridView','gCompView','gExtractView'].forEach(v=>{ $(v).style.display = v===id?'block':'none'; });
+  ['gSubjectsView','gExamsView','gGridView','gCompView','gExtractView','gAlertsView'].forEach(v=>{ $(v).style.display = v===id?'block':'none'; });
 }
 
 async function loadMySubjects(){
@@ -443,8 +473,9 @@ async function openCompetency(exam){
   $('cQT').textContent=S.ME.full_name;
   $('cQS').textContent=CUR_PAIR.section_code;
   $('cQE').textContent=exam.name;
-  $('cQN').textContent='…'; $('cQItems').value='';
+  $('cQN').textContent='…'; $('cQItems').value=''; $('cUnify').checked=false;
   $('cCompList').innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
+  $('cTemplateBanner').style.display='none';
 
   const {data:enr}=await db.from('enrollments').select('students(id)').eq('section_id',CUR_PAIR.section_id).is('to_date',null);
   COMP_ENROLLED=(enr||[]).length;
@@ -458,7 +489,24 @@ async function openCompetency(exam){
     .eq('exam_id',exam.id).order('sort_order');
   COMP_COMPS=(comps||[]).map(c=>({id:c.id, name:c.name,
     items:(c.competency_items||[]).slice().sort((a,b)=>a.item_no-b.item_no)}));
-  if(!COMP_COMPS.length) COMP_COMPS=[{name:'',items:[{item_no:1,mastered_count:0}]}];
+
+  if(!COMP_COMPS.length){
+    COMP_COMPS=[{name:'',items:[{item_no:1,mastered_count:0}]}];
+    const {data:tmpl}=await db.from('competency_templates')
+      .select('id,name,sort_order,competency_template_items(item_no)')
+      .eq('subject_id',CUR_PAIR.subject_id).eq('exam_name',exam.name).order('sort_order');
+    if(tmpl?.length){
+      $('cTemplateBanner').style.display='block';
+      $('cTemplateBanner').innerHTML=`📋 يوجد نموذج موحّد محفوظ لهذا المقرر والاختبار (${tmpl.length} كفاية) — <button class="btn ghost" id="cUseTemplate" style="width:auto;padding:6px 16px;font-size:12.5px">استخدامه كنقطة بداية</button>`;
+      $('cUseTemplate').addEventListener('click',()=>{
+        COMP_COMPS=tmpl.map(t=>({name:t.name,
+          items:(t.competency_template_items||[]).map(i=>({item_no:i.item_no,mastered_count:0})).sort((a,b)=>a.item_no-b.item_no)}));
+        $('cTemplateBanner').style.display='none';
+        renderComps();
+        toast('انسخ النموذج — أدخلي أعداد المتقنات لشعبتك');
+      });
+    }
+  }
   renderComps();
 }
 function compStatus(c){
@@ -529,7 +577,22 @@ async function saveCompetencies(){
       const itemRows=c.items.map(it=>({competency_id:data.id, item_no:it.item_no, mastered_count:+it.mastered_count||0}));
       if(itemRows.length){ const {error:e2}=await db.from('competency_items').insert(itemRows); if(e2) throw e2; }
     }
-    toast('تم حفظ استمارة تحليل الكفايات');
+    if($('cUnify').checked){
+      const {data:oldTmpl}=await db.from('competency_templates').select('id').eq('subject_id',CUR_PAIR.subject_id).eq('exam_name',CUR_EXAM.name);
+      if(oldTmpl?.length) await db.from('competency_templates').delete().in('id',oldTmpl.map(t=>t.id)); // يحذف الفقرات تلقائياً (cascade)
+      for(let i=0;i<valid.length;i++){
+        const c=valid[i];
+        const {data:t,error:e1}=await db.from('competency_templates').insert({
+          subject_id:CUR_PAIR.subject_id, exam_name:CUR_EXAM.name, name:c.name.trim(), sort_order:i, created_by:S.ME.id
+        }).select('id').single();
+        if(e1) throw e1;
+        const tItems=c.items.map(it=>({template_id:t.id, item_no:it.item_no}));
+        if(tItems.length){ const {error:e2}=await db.from('competency_template_items').insert(tItems); if(e2) throw e2; }
+      }
+      toast('تم حفظ الاستمارة، ونُشرت كنموذج موحّد للمقرر');
+    }else{
+      toast('تم حفظ استمارة تحليل الكفايات');
+    }
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
   finally{ btn.disabled=false; btn.textContent='حفظ الاستمارة'; }
 }
@@ -548,7 +611,6 @@ function printCompetencies(){
       <tr><td>الحالة</td><td>${pct==null?'—':(status?'أتقن':'لم يتقن')}</td></tr>
     </table>`;
   }).join('');
-  const footer=`<div class="cp-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
   $('printAreaComp').innerHTML=`
     <div class="cp-head"><h2>استمارة تحليل كفايات الاختبار</h2></div>
     <table class="cp-hdr">
@@ -556,7 +618,7 @@ function printCompetencies(){
       <tr><td>الشعبة</td><td>${$('cQS').textContent}</td><td>الاختبار</td><td>${$('cQE').textContent}</td></tr>
       <tr><td>عدد طالبات الشعبة</td><td>${$('cQN').textContent}</td><td>عدد فقرات الأسئلة</td><td>${$('cQItems').value||'—'}</td></tr>
     </table>
-    ${sections}${footer}`;
+    ${sections}`;
   printWithTitle(`تحليل_كفايات_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`);
 }
 
@@ -651,14 +713,91 @@ async function exportExtractXls(){
 function exportExtractPdf(){
   if(!EXTRACT_RESULT){ toast('استخرجي النتائج أولاً'); return; }
   const {subj,cat,examNames,perExam}=EXTRACT_RESULT;
-  const footer=`<div class="cp-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
   const pages=examNames.map(name=>`<div class="ga-page">
     <div class="cp-head"><h2>${subj} — ${cat.name} — ${name}</h2></div>
     <table class="cp-tbl"><tr><th>#</th><th>الشعبة</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الدرجة</th><th>النسبة</th></tr>
       ${perExam[name].map((s,i)=>`<tr><td>${i+1}</td><td>${s.sec}</td><td>${s.academic_number}</td><td style="text-align:right">${s.full_name}</td><td>${s.score}</td><td>${s.pct.toFixed(1)}٪</td></tr>`).join('')}
     </table></div>`).join('');
-  $('printAreaExtract').innerHTML=pages+footer;
+  $('printAreaExtract').innerHTML=pages;
   printWithTitle(`استخراج_${subj}_${cat.name}`);
+}
+
+/* ============ متابعة أداء طالباتي (نطاق المعلمة نفسها فقط) ============ */
+const REASON_LABEL={fail:'راسبة', low_performance:'أداء منخفض'};
+const STATUS_LABEL={pending:'قيد الانتظار', in_progress:'جاري المتابعة', done:'تم'};
+let ALERT_ROWS=[];
+function openAlerts(){ show('gAlertsView'); loadAlerts(); }
+async function loadAlerts(){
+  $('gAlertsTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
+  const pairs=new Set(MY_PAIRS.map(p=>`${p.subject_id}|${p.section_id}`));
+  const {data:alerts,error}=await db.from('underperformer_alerts')
+    .select('id,reason,score,pct,status,students(full_name,academic_number),exams(name,subject_id,section_id,subjects(code),sections(code))')
+    .order('created_at',{ascending:false});
+  if(error){ $('gAlertsTable').innerHTML=`<tr><td style="padding:20px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
+  ALERT_ROWS=(alerts||[]).filter(a=>a.exams && pairs.has(`${a.exams.subject_id}|${a.exams.section_id}`));
+  renderAlerts();
+}
+function renderAlerts(){
+  $('gAlertsStats').innerHTML=`
+    <div class="stat red"><b>${ALERT_ROWS.length}</b><span>إجمالي التنبيهات</span></div>
+    <div class="stat"><b>${ALERT_ROWS.filter(r=>r.status==='pending').length}</b><span>قيد الانتظار</span></div>
+    <div class="stat"><b>${ALERT_ROWS.filter(r=>r.status==='in_progress').length}</b><span>جاري المتابعة</span></div>
+    <div class="stat green"><b>${ALERT_ROWS.filter(r=>r.status==='done').length}</b><span>تم</span></div>`;
+  if(!ALERT_ROWS.length){ $('gAlertsTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
+  $('gAlertsTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>'+
+    ALERT_ROWS.map(r=>`<tr>
+      <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
+      <td class="c">${r.exams?.sections?.code||'—'}</td><td class="c">${r.exams?.subjects?.code||'—'}</td><td class="c">${r.exams?.name||'—'}</td>
+      <td class="c"><span class="ga-reason ${r.reason}">${REASON_LABEL[r.reason]||r.reason}</span></td>
+      <td class="c">${r.score??'—'}</td><td class="c">${r.pct!=null?(+r.pct).toFixed(1)+'٪':'—'}</td>
+      <td><select class="ga-status" data-id="${r.id}">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td></tr>`).join('');
+  $('gAlertsTable').querySelectorAll('.ga-status').forEach(sel=>sel.addEventListener('change', async ()=>{
+    const {error}=await db.from('underperformer_alerts').update({status:sel.value, handled_by:S.ME.id, handled_at:new Date().toISOString()}).eq('id',sel.dataset.id);
+    if(error){ toast('تعذر الحفظ: '+error.message); return; }
+    const row=ALERT_ROWS.find(r=>r.id===sel.dataset.id); if(row) row.status=sel.value;
+    toast('تم تحديث الحالة'); renderAlerts();
+  }));
+}
+async function exportAlertsXls(){
+  if(!ALERT_ROWS.length){ toast('لا بيانات للتصدير'); return; }
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('متابعة الأداء',{views:[{rightToLeft:true}]});
+  const addTitle=(text,size,bold,fill,color)=>{
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,9);
+    const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+    row.height=size>=16?26:20;
+  };
+  addTitle(schoolName(),16,true,'FF1D3D5C','FFFFFFFF');
+  addTitle('متابعة أداء طالباتي',12,true,null,'FF22303C');
+  ws.addRow([]);
+  const hdr=ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','المقرر','الاختبار','السبب','الدرجة','النسبة','الحالة']);
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1D3D5C'}}; c.alignment={horizontal:'center'}; c.border=gBorder; });
+  ALERT_ROWS.forEach((r,i)=>{
+    const row=ws.addRow([r.students?.full_name||'', r.students?.academic_number||'', r.exams?.sections?.code||'',
+      r.exams?.subjects?.code||'', r.exams?.name||'', REASON_LABEL[r.reason]||r.reason, r.score??'',
+      r.pct!=null?(+r.pct).toFixed(1)+'٪':'', STATUS_LABEL[r.status]||r.status]);
+    row.eachCell((c,colNo)=>{ c.border=gBorder; c.alignment={horizontal:colNo===1?'right':'center'}; c.font={size:10.5}; c.numFmt='@';
+      if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+  });
+  ws.columns=[{width:26},{width:16},{width:11},{width:11},{width:16},{width:14},{width:9},{width:9},{width:14}];
+  ws.views=[{rightToLeft:true,state:'frozen',ySplit:3}];
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='متابعة_أداء_طالباتي.xlsx'; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportAlertsPdf(){
+  if(!ALERT_ROWS.length){ toast('لا بيانات للتصدير'); return; }
+  const rows=ALERT_ROWS.map(r=>`<tr><td>${r.students?.full_name||''}</td><td>${r.students?.academic_number||''}</td>
+    <td>${r.exams?.sections?.code||''}</td><td>${r.exams?.subjects?.code||''}</td><td>${r.exams?.name||''}</td>
+    <td>${REASON_LABEL[r.reason]||r.reason}</td><td>${r.score??''}</td><td>${r.pct!=null?(+r.pct).toFixed(1)+'٪':''}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
+  $('printAreaAlerts').innerHTML=`
+    <div class="cp-head"><h2>متابعة أداء طالباتي</h2></div>
+    <table class="cp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>${rows}</table>`;
+  printWithTitle('متابعة_أداء_طالباتي');
 }
 
 registerTab({id:'gradesEntry', label:'رصد الدرجات', group:'teacherArea', groupLabel:'حصصي',

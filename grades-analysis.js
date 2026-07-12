@@ -62,6 +62,11 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div id="gaCompareResults" style="display:none">
       <div class="board-wrap"><table class="board" id="gaCompareStatsTable"></table></div>
       <div class="panel">
+        <h3>ملاحظات المقارنة</h3>
+        <div class="sub">تُضاف لملفي الإكسل وPDF عند التصدير.</div>
+        <textarea id="gaCompareNotes" rows="3" placeholder="اكتبي ملاحظاتك هنا…" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
+      </div>
+      <div class="panel">
         <div class="actions" style="margin-bottom:14px">
           <button class="btn ghost" id="gaCompareXls">⬇ إكسل — المقارنة</button>
           <button class="btn ghost" id="gaComparePdf">⬇ PDF — المقارنة</button>
@@ -88,7 +93,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaGA, #printAreaGA *{visibility:visible}
-    #printAreaGA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm 16mm}
+    #printAreaGA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
     .ga-page{page-break-after:always;padding:6px}
     .ga-page:last-child{page-break-after:auto}
     .ga-head{text-align:center;margin-bottom:12px}
@@ -97,7 +102,6 @@ $('appView').insertAdjacentHTML('beforeend', `
     .ga-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
     .ga-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .ga-tbl td{padding:5px;border:1px solid #ccc;text-align:center}
-    .ga-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -362,8 +366,7 @@ function gaPageHtml(d,subjectCode,examTotal){
 }
 function exportPdf(){
   if(!CUR_DETAIL){ toast('افتحي تحليل اختبار أولاً'); return; }
-  const footer=`<div class="ga-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
-  $('printAreaGA').innerHTML=gaPageHtml(CUR_DETAIL,CUR_SUBJECT.code,CUR_DETAIL.examTotal)+footer;
+  $('printAreaGA').innerHTML=gaPageHtml(CUR_DETAIL,CUR_SUBJECT.code,CUR_DETAIL.examTotal);
   printWithTitle(`كشف_الدرجات_${CUR_DETAIL.secCode}_${CUR_SUBJECT.code}_${CUR_DETAIL.examName}`);
 }
 
@@ -412,8 +415,7 @@ async function bulkExport(scope,kind){
       a.download=(scope==='subject'?`كشوف_${CUR_SUBJECT.code}`:'كشوف_كل_المقررات')+'.xlsx'; a.click();
       URL.revokeObjectURL(url);
     }else{
-      const footer=`<div class="ga-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
-      $('printAreaGA').innerHTML=allDetails.map(d=>gaPageHtml(d,d.subjectCode,d.examTotal)).join('')+footer;
+      $('printAreaGA').innerHTML=allDetails.map(d=>gaPageHtml(d,d.subjectCode,d.examTotal)).join('');
       printWithTitle(scope==='subject'?`كشوف_${CUR_SUBJECT.code}`:'كشوف_كل_المقررات');
     }
   }catch(err){ toast('تعذر التصدير: '+(err.message||err)); }
@@ -428,6 +430,7 @@ async function openCompare(){
   $('gaCompareTitle').textContent=`${CUR_DETAIL.secCode} — ${CUR_SUBJECT.code}`;
   $('gaCompareSub').textContent='اختاري اختبارين أو أكثر للمقارنة';
   $('gaCompareResults').style.display='none';
+  $('gaCompareNotes').value='';
   const {data:exams}=await db.from('exams').select('id,name,exam_total').eq('subject_id',CUR_SUBJECT.id).eq('section_id',CUR_DETAIL.secId);
   const ordered=EXAM_NAMES.map(n=>(exams||[]).find(e=>e.name===n)).filter(Boolean);
   if(ordered.length<2){ $('gaCompareExamPick').innerHTML='<div class="empty-day">تحتاجين اختبارين على الأقل لهذه الشعبة للمقارنة.</div>'; return; }
@@ -505,6 +508,14 @@ async function exportCompareXls(){
   });
   ws.columns=[{width:6},{width:16},{width:28},...c.exams.map(()=>({width:12})),{width:10}];
   ws.views=[{rightToLeft:true,state:'frozen',ySplit:4}];
+  const notes=$('gaCompareNotes').value.trim();
+  if(notes){
+    ws.addRow([]);
+    const nHdr=ws.addRow(['ملاحظات المقارنة']); ws.mergeCells(nHdr.number,1,nHdr.number,cols);
+    nHdr.getCell(1).font={bold:true,color:{argb:WHITE}}; nHdr.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; nHdr.getCell(1).alignment={horizontal:'center'};
+    const nRow=ws.addRow([notes]); ws.mergeCells(nRow.number,1,nRow.number,cols);
+    nRow.getCell(1).alignment={horizontal:'right',wrapText:true}; nRow.height=40;
+  }
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
@@ -514,12 +525,12 @@ async function exportCompareXls(){
 function exportComparePdf(){
   if(!CMP_RESULT){ toast('شغّلي المقارنة أولاً'); return; }
   const c=CMP_RESULT;
+  const notes=$('gaCompareNotes').value.trim();
   const rows=c.rows.map((r,i)=>{
     const firstPct=r.pcts.find(v=>v!=null), lastPct=[...r.pcts].reverse().find(v=>v!=null);
     const diff = firstPct!=null&&lastPct!=null ? (lastPct-firstPct).toFixed(1)+'٪' : '—';
     return `<tr><td>${i+1}</td><td>${r.academic_number}</td><td style="text-align:right">${r.full_name}</td>${r.scores.map(v=>`<td>${v??'—'}</td>`).join('')}<td>${diff}</td></tr>`;
   }).join('');
-  const footer=`<div class="ga-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
   $('printAreaGA').innerHTML=`
     <div class="ga-page">
       <div class="ga-head"><h2>مقارنة الاختبارات — ${c.secCode} — ${c.subjectCode}</h2></div>
@@ -527,7 +538,8 @@ function exportComparePdf(){
         ${c.examStats.map(s=>`<tr><td>${s.name}</td><td>${s.total}</td><td>${s.graded}</td><td>${s.avg!=null?s.avg.toFixed(1):'—'}</td><td>${s.passPct!=null?s.passPct.toFixed(1)+'٪':'—'}</td><td>${s.masteryPct!=null?s.masteryPct.toFixed(1)+'٪':'—'}</td></tr>`).join('')}
       </table>
       <table class="ga-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th>${c.exams.map(e=>`<th>${e.name} (من ${e.total})</th>`).join('')}<th>الفرق (نقاط٪)</th></tr>${rows}</table>
-    </div>${footer}`;
+      ${notes?`<div style="margin-top:14px;padding:10px;border:1px solid #ccc;border-radius:6px"><b>ملاحظات المقارنة:</b><p style="margin-top:6px;white-space:pre-wrap">${notes}</p></div>`:''}
+    </div>`;
   printWithTitle(`مقارنة_${c.secCode}_${c.subjectCode}`);
 }
 

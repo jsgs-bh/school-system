@@ -12,7 +12,7 @@ const numKey = v => parseInt(String(v).replace(/[^\d]/g,''),10) || 0;
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="spMain" style="display:none">
   <div class="panel">
-    <h3>أداء الطالبات</h3>
+    <h3>تتبع الدرجات</h3>
     <div class="sub">اختاري المستوى، ثم حددي فلاتر المقرر والاختبار إن أردت.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
       <select id="spScope" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
@@ -164,7 +164,7 @@ async function runSearch(){
   let query=db.from('grade_records').select(`
     student_id, score,
     students(full_name,academic_number),
-    exams!inner(id,name,exam_total,subject_id,section_id,subjects(code),sections(code))
+    exams!inner(id,name,exam_total,subject_id,section_id,subjects(code,exam_total),sections(code))
   `).not('score','is',null);
 
   if(scope==='student'){
@@ -185,8 +185,10 @@ async function runSearch(){
   const {data,error}=await query;
   if(error){ toast('تعذر التحميل: '+error.message); return; }
 
-  let rows=(data||[]).map(r=>{
-    const ex=r.exams, total=ex.exam_total, pct=r.score/total*100, cat=categoryOf(pct);
+  let rows=(data||[]).filter(r=>r.score!=null).map(r=>{
+    const ex=r.exams;
+    const total=ex.exam_total ?? ex.subjects?.exam_total ?? 25; // احتياطي أخير لو تعذّر إيجاد الدرجة الكلية من أي مصدر
+    const pct=r.score/total*100, cat=categoryOf(pct);
     return {student:r.students?.full_name||'—', acad:r.students?.academic_number||'—',
       sec:ex.sections?.code||'—', subj:ex.subjects?.code||'—', exam:ex.name,
       score:r.score, total, pct, cat, studentId:r.student_id, subjectId:ex.subject_id, sectionId:ex.section_id};
@@ -195,6 +197,23 @@ async function runSearch(){
   rows.sort((a,b)=>a.sec.localeCompare(b.sec,'ar')||numKey(a.acad)-numKey(b.acad)||a.subj.localeCompare(b.subj,'ar')||EXAM_NAMES.indexOf(a.exam)-EXAM_NAMES.indexOf(b.exam));
   ROWS=rows;
   render();
+}
+
+function pivotRows(){
+  const groups={};
+  for(const r of ROWS){
+    const key=`${r.studentId}|${r.subjectId}`;
+    groups[key] ??= {student:r.student, acad:r.acad, sec:r.sec, subj:r.subj, studentId:r.studentId, exams:{}};
+    groups[key].exams[r.exam]=r;
+  }
+  return Object.values(groups).sort((a,b)=>a.sec.localeCompare(b.sec,'ar')||numKey(a.acad)-numKey(b.acad)||a.subj.localeCompare(b.subj,'ar'));
+}
+function presentExamNames(){
+  return EXAM_NAMES.filter(n=>ROWS.some(r=>r.exam===n));
+}
+function examCellHtml(r){
+  if(!r) return '<td class="c">—</td>';
+  return `<td class="c"><b>${r.score}/${r.total}</b><br><small>${r.pct.toFixed(1)}٪${r.cat?` — <span style="color:${r.cat.color}">${r.cat.name}</span>`:''}</small></td>`;
 }
 
 function render(){
@@ -207,11 +226,12 @@ function render(){
     <div class="stat"><b>${ROWS.length}</b><span>سجل درجة</span></div>
     ${CATS.map(c=>`<div class="stat"><b style="color:${c.color}">${perCat[c.id]}</b><span>${c.name}</span></div>`).join('')}`;
   if(!ROWS.length){ $('spTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا نتائج مطابقة</td></tr>'; return; }
-  $('spTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>الدرجة</th><th>النسبة</th><th>الفئة</th></tr>'+
-    ROWS.map(r=>`<tr>
-      <td>${r.student}</td><td class="c">${r.acad}</td><td class="c">${r.sec}</td><td class="c">${r.subj}</td><td class="c">${r.exam}</td>
-      <td class="c">${r.score}/${r.total}</td><td class="c">${r.pct.toFixed(1)}٪</td>
-      <td class="c">${r.cat?`<span class="sp-cat-chip" style="background:${r.cat.color}22;color:${r.cat.color}">${r.cat.name}</span>`:'—'}</td></tr>`).join('');
+
+  const groups=pivotRows(), exams=presentExamNames();
+  $('spTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th>'+exams.map(n=>`<th>${n}</th>`).join('')+'</tr>'+
+    groups.map(g=>`<tr>
+      <td>${g.student}</td><td class="c">${g.acad}</td><td class="c">${g.sec}</td><td class="c">${g.subj}</td>
+      ${exams.map(n=>examCellHtml(g.exams[n])).join('')}</tr>`).join('');
 }
 
 /* ============ تصدير ============ */
@@ -219,42 +239,48 @@ const NAVY='FF1D3D5C', WHITE='FFFFFFFF', LINE='FFDCD5C8';
 const spBorder={top:{style:'thin',color:{argb:LINE}},left:{style:'thin',color:{argb:LINE}},right:{style:'thin',color:{argb:LINE}},bottom:{style:'thin',color:{argb:LINE}}};
 async function exportXls(){
   if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
+  const groups=pivotRows(), exams=presentExamNames();
+  const cols=4+exams.length;
   const wb=new ExcelJS.Workbook();
-  const ws=wb.addWorksheet('أداء الطالبات',{views:[{rightToLeft:true}]});
+  const ws=wb.addWorksheet('تتبع الدرجات',{views:[{rightToLeft:true}]});
   const addTitle=(text,size,bold,fill,color)=>{
-    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,8);
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,cols);
     const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
     cell.alignment={horizontal:'center',vertical:'middle'};
     if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
     row.height=size>=16?26:20;
   };
   addTitle(schoolName(),16,true,NAVY,WHITE);
-  addTitle('أداء الطالبات',12,true,null,'FF22303C');
+  addTitle('تتبع الدرجات',12,true,null,'FF22303C');
   ws.addRow([]);
-  const hdr=ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','المقرر','الاختبار','الدرجة','النسبة','الفئة']);
+  const hdr=ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','المقرر',...exams]);
   hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=spBorder; });
-  ROWS.forEach((r,i)=>{
-    const row=ws.addRow([r.student,r.acad,r.sec,r.subj,r.exam,`${r.score}/${r.total}`,r.pct.toFixed(1)+'٪',r.cat?.name||'']);
+  groups.forEach((g,i)=>{
+    const cells=exams.map(n=>{ const r=g.exams[n]; return r?`${r.score}/${r.total} (${r.pct.toFixed(1)}٪ ${r.cat?.name||''})`:''; });
+    const row=ws.addRow([g.student,g.acad,g.sec,g.subj,...cells]);
     row.eachCell((c,colNo)=>{ c.border=spBorder; c.alignment={horizontal:colNo===1?'right':'center'}; c.font={size:10.5}; c.numFmt='@';
       if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
   });
-  ws.columns=[{width:26},{width:16},{width:11},{width:11},{width:16},{width:12},{width:10},{width:16}];
+  ws.columns=[{width:26},{width:16},{width:11},{width:11},...exams.map(()=>({width:22}))];
   ws.views=[{rightToLeft:true,state:'frozen',ySplit:3}];
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='أداء_الطالبات.xlsx'; a.click();
+  const a=document.createElement('a'); a.href=url; a.download='تتبع_الدرجات.xlsx'; a.click();
   URL.revokeObjectURL(url);
 }
 function exportPdf(){
   if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
-  const rows=ROWS.map(r=>`<tr><td>${r.student}</td><td>${r.acad}</td><td>${r.sec}</td><td>${r.subj}</td><td>${r.exam}</td>
-    <td>${r.score}/${r.total}</td><td>${r.pct.toFixed(1)}٪</td><td>${r.cat?.name||''}</td></tr>`).join('');
+  const groups=pivotRows(), exams=presentExamNames();
+  const rows=groups.map(g=>{
+    const cells=exams.map(n=>{ const r=g.exams[n]; return `<td>${r?`${r.score}/${r.total}<br>${r.pct.toFixed(1)}٪ ${r.cat?.name||''}`:'—'}</td>`; }).join('');
+    return `<tr><td>${g.student}</td><td>${g.acad}</td><td>${g.sec}</td><td>${g.subj}</td>${cells}</tr>`;
+  }).join('');
   $('printAreaSP').innerHTML=`
-    <div class="sp-head"><h2>أداء الطالبات</h2></div>
-    <table class="sp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>الدرجة</th><th>النسبة</th><th>الفئة</th></tr>${rows}</table>`;
-  printWithTitle('أداء_الطالبات');
+    <div class="sp-head"><h2>تتبع الدرجات</h2></div>
+    <table class="sp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th>${exams.map(n=>`<th>${n}</th>`).join('')}</tr>${rows}</table>`;
+  printWithTitle('تتبع_الدرجات');
 }
 
-registerTab({id:'spMain', label:'أداء الطالبات', group:'grades', groupLabel:'الدرجات',
+registerTab({id:'spMain', label:'تتبع الدرجات', group:'grades', groupLabel:'الدرجات',
   show:f=>f.isAdmin||f.isLead||f.isAnalysis||f.isAcademicGuidance||f.isSeniorTeacher, init:initSP});

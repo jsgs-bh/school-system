@@ -85,7 +85,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     body *{visibility:hidden}
     #printAreaPeriod, #printAreaPeriod *{visibility:visible}
     #printAreaPeriod{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
-    .pr-page{page-break-after:always;padding:14mm 12mm 16mm}
+    .pr-page{page-break-after:always;padding:14mm 12mm}
     .pr-page:last-child{page-break-after:auto}
     .pr-head{text-align:center;margin-bottom:12px}
     .pr-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
@@ -95,7 +95,6 @@ $('appView').insertAdjacentHTML('beforeend', `
     .pr-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
     .pr-tbl td.c{text-align:center}
     .pr-sub{font-size:12.5px;color:#1d3d5c;font-weight:700;margin:10px 0 6px}
-    .pr-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -250,13 +249,12 @@ function exportCountPdf(){
   if(!CURRENT_COUNT.length){ toast('لا طالبات في هذه القائمة'); return; }
   const n=$('cntThreshold').value, opLabel=$('cntOp').value==='eq'?'بالضبط':'فأكثر';
   const rows=CURRENT_COUNT.map((s,i)=>`<tr><td class="c">${i+1}</td><td class="c">${s.academic_number}</td><td>${s.full_name}</td><td class="c">${s.absDays}</td></tr>`).join('');
-  const footer=`<div class="pr-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   $('printAreaPeriod').innerHTML = `
     <div class="pr-page">
       <div class="pr-head"><h2>طالبات غِبن ${n} مرة ${opLabel}</h2>
         <p>من ${$('cntFrom').value} إلى ${$('cntTo').value} — العدد: ${CURRENT_COUNT.length}</p></div>
       <table class="pr-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>عدد أيام الغياب</th></tr>${rows}</table>
-    </div>${footer}`;
+    </div>`;
   printWithTitle(`غياب_${n}_مرة_${$('cntFrom').value}_${$('cntTo').value}`);
 }
 
@@ -380,7 +378,6 @@ function exportPdf(){
   if(!SUMMARY){ toast('أنشئي التقرير أولاً'); return; }
   const s=SUMMARY;
   const secRowP=r=>`<tr><td>${r.code}</td><td class="c">${r.absDays}</td><td class="c">${r.rate.toFixed(1)}٪</td></tr>`;
-  const footer=`<div class="pr-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   const summaryPage=`
     <div class="pr-page">
       <div class="pr-head"><h2>تقرير غياب الفترة — ملخص</h2>
@@ -409,7 +406,7 @@ function exportPdf(){
       <table class="pr-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th></tr>${rows||'<tr><td colspan="4" class="c">لا غياب رسمياً</td></tr>'}</table>
     </div>`;
   }).join('');
-  $('printAreaPeriod').innerHTML = summaryPage + dayPages + footer;
+  $('printAreaPeriod').innerHTML = summaryPage + dayPages;
   printWithTitle(`تقرير_فترة_${s.from}_${s.to}`);
 }
 
