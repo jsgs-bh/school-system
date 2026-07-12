@@ -3,7 +3,7 @@
    تريدينها فقط، تعاينين النتيجة، ثم تنزّلينها إكسل (الأولوية) أو PDF.
    يعيد استخدام collectRange من period.js لتفادي ازدواج منطق الاحتساب.
    الملف مكتفٍ بذاته: يضيف تبويبه وتنسيقاته وحاوية طباعته الخاصة. */
-import { db, $, S, AR_DAYS, dstr, chunk, toast, registerTab } from './core.js';
+import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle, registerTab } from './core.js';
 import { collectRange } from './period.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
@@ -58,12 +58,12 @@ $('appView').insertAdjacentHTML('beforeend', `
     #printAreaBuilder, #printAreaBuilder *{visibility:visible}
     #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
     .bd-head{text-align:center;margin-bottom:12px}
-    .bd-head h1{font-family:'Amiri',serif;font-size:19px;color:#1d3d5c;margin-bottom:4px}
     .bd-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .bd-head p{font-size:11.5px;color:#333}
     .bd-tbl{width:100%;border-collapse:collapse;font-size:10px}
     .bd-tbl th{background:#1d3d5c;color:#fff;padding:5px;border:1px solid #1d3d5c}
     .bd-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
+    .bd-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -209,11 +209,12 @@ function exportPdf(){
   const fields=checkedFields();
   if(!ROWS.length||!fields.length){ toast('ولّدي المعاينة أولاً واختاري أعمدة'); return; }
   const rows=ROWS.map(r=>`<tr>${fields.map(k=>`<td>${r[k]??''}</td>`).join('')}</tr>`).join('');
+  const footer=`<div class="bd-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   $('printAreaBuilder').innerHTML = `
-    <div class="bd-head"><h1>${schoolName()}</h1><h2>${LEVELS[LEVEL].title}</h2>
+    <div class="bd-head"><h2>${LEVELS[LEVEL].title}</h2>
       <p>من ${$('bFrom').value} إلى ${$('bTo').value} — ${ROWS.length} صف</p></div>
-    <table class="bd-tbl"><tr>${fields.map(k=>`<th>${fieldLabel(k)}</th>`).join('')}</tr>${rows}</table>`;
-  window.print();
+    <table class="bd-tbl"><tr>${fields.map(k=>`<th>${fieldLabel(k)}</th>`).join('')}</tr>${rows}</table>${footer}`;
+  printWithTitle(`${LEVELS[LEVEL].title}_${$('bFrom').value}_${$('bTo').value}`);
 }
 
 registerTab({id:'builderMain', label:'منشئ التقارير', group:'attendance', groupLabel:'متابعة الغياب',

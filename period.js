@@ -4,7 +4,7 @@
    ٢) تقرير فترة شامل: ملخص (أكثر/أقل الصفوف، تجاوز ٢٥٪) + صفحة PDF لكل يوم.
    كلاهما يستخدمان نفس منطق الاحتساب (collectRange) لكن يُشغَّلان بشكل مستقل.
    الملف مكتفٍ بذاته: يضيف تبويبه وتنسيقاته وحاوية طباعته الخاصة. */
-import { db, $, S, AR_DAYS, dstr, chunk, toast, registerTab } from './core.js';
+import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const HIGH_THRESHOLD = 25; // % — عتبة «تجاوز الغياب» في التقرير الشامل
@@ -25,6 +25,7 @@ $('appView').insertAdjacentHTML('beforeend', `
         <option value="eq">بالضبط</option>
       </select>
       <button class="btn gold" id="cntGo" style="width:auto;padding:11px 26px">عرض القائمة</button>
+      <button class="btn ghost" id="cntXls" style="width:auto;padding:11px 26px">⬇ إكسل</button>
       <button class="btn ghost" id="cntPdf" style="width:auto;padding:11px 26px">⬇ PDF</button>
     </div>
     <div class="result" id="cntStatus" style="display:none;background:var(--sand);color:var(--ink);border:1px solid var(--line)"></div>
@@ -70,6 +71,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div class="board-wrap"><table class="board" id="pDailyTable"></table></div>
     </div>
 
+    <button class="btn ghost" id="perXls" style="width:auto;padding:11px 26px">⬇ تنزيل إكسل (ملخص + تفصيل يومي)</button>
     <button class="btn ghost" id="perPdf" style="width:auto;padding:11px 26px">⬇ تنزيل PDF كامل الفترة (ملخص + صفحة لكل يوم)</button>
   </div>
 </div>
@@ -85,7 +87,6 @@ $('appView').insertAdjacentHTML('beforeend', `
     .pr-page{page-break-after:always;padding:6px}
     .pr-page:last-child{page-break-after:auto}
     .pr-head{text-align:center;margin-bottom:12px}
-    .pr-head h1{font-family:'Amiri',serif;font-size:19px;color:#1d3d5c;margin-bottom:4px}
     .pr-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .pr-head p{font-size:11.5px;color:#333}
     .pr-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:14px}
@@ -93,6 +94,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     .pr-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
     .pr-tbl td.c{text-align:center}
     .pr-sub{font-size:12.5px;color:#1d3d5c;font-weight:700;margin:10px 0 6px}
+    .pr-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -165,6 +167,7 @@ function initCount(){
   $('cntFrom').value=today.slice(0,8)+'01';
   $('cntTo').value=today;
   $('cntGo').addEventListener('click',runCountReport);
+  $('cntXls').addEventListener('click',exportCountXls);
   $('cntPdf').addEventListener('click',exportCountPdf);
 }
 async function runCountReport(){
@@ -195,18 +198,65 @@ function renderCountReport(){
       CURRENT_COUNT.map((s,i)=>`<tr><td class="c">${i+1}</td><td class="c">${s.academic_number}</td><td>${s.full_name}</td><td class="c">${s.absDays}</td></tr>`).join('')
     : `<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا طالبات غِبن ${n} مرة ${opLabel} خلال هذه الفترة 🎉</td></tr>`;
 }
+
+/* ============ إكسل مشترك (ExcelJS — منسّق فعلياً) ============ */
+const NAVY='FF1D3D5C', WHITE='FFFFFFFF', LINE='FFDCD5C8';
+const xlsBorder={top:{style:'thin',color:{argb:LINE}},left:{style:'thin',color:{argb:LINE}},right:{style:'thin',color:{argb:LINE}},bottom:{style:'thin',color:{argb:LINE}}};
+function xlsTitle(ws,text,size,bold,fill,color,cols){
+  const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,cols);
+  const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+  cell.alignment={horizontal:'center',vertical:'middle'};
+  if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+  row.height=size>=16?26:20;
+}
+function xlsHeaderRow(ws,labels){
+  const hdr=ws.addRow(labels);
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=xlsBorder; });
+  return hdr;
+}
+function xlsDataRow(ws,values,i){
+  const row=ws.addRow(values);
+  row.eachCell(c=>{ c.border=xlsBorder; c.alignment={horizontal:'center'}; c.font={size:10.5}; c.numFmt='@';
+    if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+  return row;
+}
+function xlsDownload(wb,filename){
+  return wb.xlsx.writeBuffer().then(buf=>{
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename+'.xlsx'; a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+async function exportCountXls(){
+  if(!CNT_RANGE){ toast('اعرضي القائمة أولاً'); return; }
+  if(!CURRENT_COUNT.length){ toast('لا طالبات في هذه القائمة'); return; }
+  const n=$('cntThreshold').value, opLabel=$('cntOp').value==='eq'?'بالضبط':'فأكثر';
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('القائمة',{views:[{rightToLeft:true}]});
+  xlsTitle(ws,schoolName(),16,true,NAVY,WHITE,4);
+  xlsTitle(ws,`طالبات غِبن ${n} مرة ${opLabel} — من ${$('cntFrom').value} إلى ${$('cntTo').value}`,12,true,null,'FF22303C',4);
+  ws.addRow([]);
+  xlsHeaderRow(ws,['#','الرقم الأكاديمي','اسم الطالبة','عدد أيام الغياب']);
+  CURRENT_COUNT.forEach((s,i)=>xlsDataRow(ws,[i+1,s.academic_number,s.full_name,s.absDays],i));
+  ws.columns=[{width:6},{width:16},{width:28},{width:16}];
+  ws.views=[{rightToLeft:true,state:'frozen',ySplit:3}];
+  await xlsDownload(wb,`غياب_${n}_مرة_${$('cntFrom').value}_${$('cntTo').value}`);
+}
 function exportCountPdf(){
   if(!CNT_RANGE){ toast('اعرضي القائمة أولاً'); return; }
   if(!CURRENT_COUNT.length){ toast('لا طالبات في هذه القائمة'); return; }
   const n=$('cntThreshold').value, opLabel=$('cntOp').value==='eq'?'بالضبط':'فأكثر';
   const rows=CURRENT_COUNT.map((s,i)=>`<tr><td class="c">${i+1}</td><td class="c">${s.academic_number}</td><td>${s.full_name}</td><td class="c">${s.absDays}</td></tr>`).join('');
+  const footer=`<div class="pr-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   $('printAreaPeriod').innerHTML = `
     <div class="pr-page">
-      <div class="pr-head"><h1>${schoolName()}</h1><h2>طالبات غِبن ${n} مرة ${opLabel}</h2>
+      <div class="pr-head"><h2>طالبات غِبن ${n} مرة ${opLabel}</h2>
         <p>من ${$('cntFrom').value} إلى ${$('cntTo').value} — العدد: ${CURRENT_COUNT.length}</p></div>
       <table class="pr-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>عدد أيام الغياب</th></tr>${rows}</table>
-    </div>`;
-  window.print();
+    </div>${footer}`;
+  printWithTitle(`غياب_${n}_مرة_${$('cntFrom').value}_${$('cntTo').value}`);
 }
 
 /* ============ الأداة ٢ — تقرير فترة شامل ============ */
@@ -218,6 +268,7 @@ function initFull(){
   $('perFrom').value=today.slice(0,8)+'01';
   $('perTo').value=today;
   $('perGo').addEventListener('click',generateReport);
+  $('perXls').addEventListener('click',exportXls);
   $('perPdf').addEventListener('click',exportPdf);
 }
 async function generateReport(){
@@ -282,13 +333,56 @@ function renderSummary(){
     .map(([date,c])=>`<tr><td class="sec">${date}</td><td class="c">${c}</td></tr>`).join('');
   $('pDailyTable').innerHTML='<tr><th>التاريخ</th><th>عدد الغياب الرسمي</th></tr>'+dayRows;
 }
+
+async function exportXls(){
+  if(!SUMMARY){ toast('أنشئي التقرير أولاً'); return; }
+  const s=SUMMARY;
+  const wb=new ExcelJS.Workbook();
+
+  const ws1=wb.addWorksheet('الملخص',{views:[{rightToLeft:true}]});
+  xlsTitle(ws1,schoolName(),16,true,NAVY,WHITE,3);
+  xlsTitle(ws1,`تقرير غياب الفترة — ملخص — من ${s.from} إلى ${s.to}`,12,true,null,'FF22303C',3);
+  ws1.addRow([]);
+  ws1.addRow(['يوم دراسي محتسب',s.schoolDaysCount]);
+  ws1.addRow(['إجمالي أيام الغياب',s.totalAbs]);
+  ws1.addRow(['متوسط الغياب اليومي',(s.totalAbs/s.schoolDaysCount).toFixed(1)]);
+  ws1.addRow(['طالبات تجاوزن '+HIGH_THRESHOLD+'٪',s.highStudents.length]);
+  ws1.addRow([]);
+  xlsHeaderRow(ws1,['التاريخ','عدد الغياب الرسمي']);
+  Object.entries(s.perDayAbsCount).sort(([a],[b])=>a.localeCompare(b)).forEach(([d,c],i)=>xlsDataRow(ws1,[d,c],i));
+  ws1.addRow([]);
+  xlsHeaderRow(ws1,['الشعبة (أكثر غياباً)','إجمالي حالات الغياب','نسبة الغياب']);
+  s.topSections.forEach((r,i)=>xlsDataRow(ws1,[r.code,r.absDays,r.rate.toFixed(1)+'٪'],i));
+  ws1.addRow([]);
+  xlsHeaderRow(ws1,['الشعبة (أقل غياباً)','إجمالي حالات الغياب','نسبة الغياب']);
+  s.bottomSections.forEach((r,i)=>xlsDataRow(ws1,[r.code,r.absDays,r.rate.toFixed(1)+'٪'],i));
+  ws1.addRow([]);
+  xlsHeaderRow(ws1,['الرقم الأكاديمي','اسم الطالبة',`تجاوزت ${HIGH_THRESHOLD}٪`]);
+  s.highStudents.forEach((h,i)=>xlsDataRow(ws1,[h.academic_number,h.full_name,h.rate.toFixed(1)+'٪'],i));
+  ws1.columns=[{width:22},{width:18},{width:16}];
+
+  const ws2=wb.addWorksheet('التفصيل اليومي',{views:[{rightToLeft:true}]});
+  xlsHeaderRow(ws2,['التاريخ','اليوم','الشعبة','الرقم الأكاديمي','اسم الطالبة']);
+  let i=0;
+  for(const day of RANGE.DAILY){
+    for(const [sid,sec] of Object.entries(day.bySid)){
+      const st=RANGE.STU_INFO[sid]||{};
+      xlsDataRow(ws2,[day.date, AR_DAYS[day.jsDay]||'', sec, st.academic_number||'', st.full_name||''], i); i++;
+    }
+  }
+  ws2.columns=[{width:13},{width:11},{width:11},{width:16},{width:28}];
+  ws2.views=[{rightToLeft:true,state:'frozen',ySplit:1}];
+
+  await xlsDownload(wb,`تقرير_فترة_${s.from}_${s.to}`);
+}
 function exportPdf(){
   if(!SUMMARY){ toast('أنشئي التقرير أولاً'); return; }
   const s=SUMMARY;
   const secRowP=r=>`<tr><td>${r.code}</td><td class="c">${r.absDays}</td><td class="c">${r.rate.toFixed(1)}٪</td></tr>`;
+  const footer=`<div class="pr-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   const summaryPage=`
     <div class="pr-page">
-      <div class="pr-head"><h1>${schoolName()}</h1><h2>تقرير غياب الفترة — ملخص</h2>
+      <div class="pr-head"><h2>تقرير غياب الفترة — ملخص</h2>
         <p>من ${s.from} إلى ${s.to} — ${s.schoolDaysCount} يوم دراسي محتسب — إجمالي أيام الغياب: ${s.totalAbs} — المتوسط اليومي: ${(s.totalAbs/s.schoolDaysCount).toFixed(1)}</p></div>
       <div class="pr-sub">الغياب اليومي</div>
       <table class="pr-tbl"><tr><th>التاريخ</th><th>عدد الغياب الرسمي</th></tr>
@@ -309,13 +403,13 @@ function exportPdf(){
       return `<tr><td class="c">${i+1}</td><td class="c">${st.academic_number||''}</td><td>${st.full_name||''}</td><td class="c">${sec}</td></tr>`;
     }).join('');
     return `<div class="pr-page">
-      <div class="pr-head"><h1>${schoolName()}</h1><h2>الغائبات رسمياً — ${AR_DAYS[day.jsDay]||''} ${day.date}</h2>
+      <div class="pr-head"><h2>الغائبات رسمياً — ${AR_DAYS[day.jsDay]||''} ${day.date}</h2>
         <p>العدد: ${Object.keys(day.bySid).length}</p></div>
       <table class="pr-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th></tr>${rows||'<tr><td colspan="4" class="c">لا غياب رسمياً</td></tr>'}</table>
     </div>`;
   }).join('');
-  $('printAreaPeriod').innerHTML = summaryPage + dayPages;
-  window.print();
+  $('printAreaPeriod').innerHTML = summaryPage + dayPages + footer;
+  printWithTitle(`تقرير_فترة_${s.from}_${s.to}`);
 }
 
 registerTab({id:'periodMain', label:'تقرير فترة', group:'attendance', groupLabel:'متابعة الغياب',

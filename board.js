@@ -3,7 +3,7 @@
    وزر "طباعة تفاصيل اليوم" يبني تقريراً مطبوعاً بكل الحصص — لكل حصة
    جدول بكل الغائبات في كل الشعب (اسم، رقم أكاديمي، شعبة) — لاستخدام
    مكتب التسجيل عند إعادة رصد كل حصة يدوياً إن احتاج. */
-import { db, $, S, AR_DAYS, dstr, chunk, registerTab } from './core.js';
+import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 
@@ -14,7 +14,8 @@ if(!$('boardDetailPanel')){
       <h3 id="boardDetailTitle">تفاصيل الغياب</h3>
       <div id="boardDetailList"></div>
     </div>
-    <button class="btn ghost" id="boardPrintDay" style="width:auto;padding:11px 26px;margin-top:14px">⬇ طباعة تفاصيل اليوم (كل الحصص)</button>
+    <button class="btn ghost" id="boardXlsDay" style="width:auto;padding:11px 26px;margin-top:14px">⬇ إكسل — تفاصيل اليوم (كل الحصص)</button>
+    <button class="btn ghost" id="boardPrintDay" style="width:auto;padding:11px 26px;margin-top:14px">⬇ PDF — تفاصيل اليوم (كل الحصص)</button>
     <div id="printAreaBoard"></div>
   `);
 }
@@ -32,13 +33,13 @@ if(!document.getElementById('boardExtraStyle')){
       .pb-page{page-break-after:always;padding:6px}
       .pb-page:last-child{page-break-after:auto}
       .pb-head{text-align:center;margin-bottom:12px}
-      .pb-head h1{font-family:'Amiri',serif;font-size:19px;color:#1d3d5c;margin-bottom:4px}
       .pb-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
       .pb-head p{font-size:11.5px;color:#333}
       .pb-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
       .pb-tbl th{background:#1d3d5c;color:#fff;padding:5px;border:1px solid #1d3d5c}
       .pb-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
       .pb-tbl td.c{text-align:center}
+      .pb-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
     }`;
   document.head.appendChild(st);
 }
@@ -52,6 +53,7 @@ function initBoardPick(){
   bp.dataset.ready='1';
   bp.value=dstr(BOARD_DATE); bp.max=dstr(new Date());
   bp.addEventListener('change',()=>{ if(bp.value){ BOARD_DATE=new Date(bp.value+'T12:00:00'); loadBoard(); } });
+  $('boardXlsDay').addEventListener('click',exportDayXls);
   $('boardPrintDay').addEventListener('click',printDay);
 }
 
@@ -164,27 +166,78 @@ function showDetail(sessId){
   $('boardDetailPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-/* ============ طباعة تفاصيل اليوم — صفحة لكل حصة، بكل غائباتها في كل الشعب ============ */
-function printDay(){
+/* ============ تصدير تفاصيل اليوم (يشترك بينه PDF وإكسل) ============ */
+function collectDayPeriods(){
   const perPeriod={};
   for(const [sessId,ids] of Object.entries(ABS_BY_SESS)){
     if(!ids.length) continue;
     const per=PERIOD_OF_SESS[sessId], code=SEC_CODE_OF_SESS[sessId];
     (perPeriod[per] ??= []).push(...ids.map(id=>({...(STU_NAMES[id]||{}), sec:code})));
   }
+  for(const p of Object.keys(perPeriod)){
+    perPeriod[p].sort((a,b)=>(a.sec||'').localeCompare(b.sec||'','ar')||(a.full_name||'').localeCompare(b.full_name||'','ar'));
+  }
+  return perPeriod;
+}
+
+const NAVY='FF1D3D5C', WHITE='FFFFFFFF', LINE='FFDCD5C8';
+const xlsBorder={top:{style:'thin',color:{argb:LINE}},left:{style:'thin',color:{argb:LINE}},right:{style:'thin',color:{argb:LINE}},bottom:{style:'thin',color:{argb:LINE}}};
+async function exportDayXls(){
+  const perPeriod=collectDayPeriods();
   const periods=Object.keys(perPeriod).map(Number).sort((a,b)=>a-b);
-  if(!periods.length){ $('printAreaBoard').innerHTML=`<div class="pb-page"><div class="pb-head"><h1>${schoolName()}</h1><h2>لا غياب مسجل في هذا اليوم 🎉</h2></div></div>`; window.print(); return; }
+  if(!periods.length){ toast('لا غياب مسجل في هذا اليوم'); return; }
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('تفاصيل اليوم',{views:[{rightToLeft:true}]});
+  const addTitle=(text,size,bold,fill,color)=>{
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,4);
+    const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+    row.height=size>=16?26:20;
+  };
+  addTitle(schoolName(),16,true,NAVY,WHITE);
+  addTitle(`تفاصيل الغياب — ${AR_DAYS[BOARD_DATE.getDay()]||''} ${dstr(BOARD_DATE)}`,12,true,null,'FF22303C');
+  ws.addRow([]);
+  const hdr=ws.addRow(['الحصة','الشعبة','الرقم الأكاديمي','اسم الطالبة']);
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=xlsBorder; });
+  let i=0;
+  for(const p of periods){
+    for(const s of perPeriod[p]){
+      const row=ws.addRow([p, s.sec||'', s.academic_number||'', s.full_name||'']);
+      row.eachCell(c=>{ c.border=xlsBorder; c.alignment={horizontal:'center'}; c.font={size:10.5}; c.numFmt='@';
+        if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+      i++;
+    }
+  }
+  ws.columns=[{width:10},{width:12},{width:16},{width:28}];
+  ws.views=[{rightToLeft:true,state:'frozen',ySplit:3}];
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`تفاصيل_الغياب_${dstr(BOARD_DATE)}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ============ طباعة تفاصيل اليوم — صفحة لكل حصة، بكل غائباتها في كل الشعب ============ */
+function printDay(){
+  const perPeriod=collectDayPeriods();
+  const footer=`<div class="pb-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
+  const periods=Object.keys(perPeriod).map(Number).sort((a,b)=>a-b);
+  if(!periods.length){
+    $('printAreaBoard').innerHTML=`<div class="pb-page"><div class="pb-head"><h2>لا غياب مسجل في هذا اليوم 🎉</h2></div></div>${footer}`;
+    printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`); return;
+  }
   const pages=periods.map(p=>{
     const rows=perPeriod[p].sort((a,b)=>(a.sec||'').localeCompare(b.sec||'','ar')||(a.full_name||'').localeCompare(b.full_name||'','ar'))
       .map((s,i)=>`<tr><td class="c">${i+1}</td><td class="c">${s.academic_number||''}</td><td>${s.full_name||''}</td><td class="c">${s.sec||''}</td></tr>`).join('');
     return `<div class="pb-page">
-      <div class="pb-head"><h1>${schoolName()}</h1><h2>غائبات الحصة ${p} — ${AR_DAYS[BOARD_DATE.getDay()]||''} ${dstr(BOARD_DATE)}</h2>
+      <div class="pb-head"><h2>غائبات الحصة ${p} — ${AR_DAYS[BOARD_DATE.getDay()]||''} ${dstr(BOARD_DATE)}</h2>
         <p>العدد: ${perPeriod[p].length}</p></div>
       <table class="pb-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الشعبة</th></tr>${rows}</table>
     </div>`;
   }).join('');
-  $('printAreaBoard').innerHTML=pages;
-  window.print();
+  $('printAreaBoard').innerHTML=pages+footer;
+  printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`);
 }
 
 registerTab({id:'boardMain', label:'متابعة الرصد', group:'attendance', groupLabel:'متابعة الغياب',

@@ -3,7 +3,7 @@
    الشاشة تعرض القائمة، والإرشاد الاجتماعي يعبئ أعمدة المتابعة الأربعة،
    وتصدير إكسل منسّق فعلياً (ExcelJS: ترويسة، حدود، تلوين) + تنزيل PDF (طباعة المتصفح).
    الملف مكتفٍ بذاته: يضيف تبويبه وتنسيقاته بنفسه — لا تعديل على app.css. */
-import { db, $, S, AR_DAYS, dstr, chunk, toast, registerTab } from './core.js';
+import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle, registerTab } from './core.js';
 
 /* قيم القوائم — مبدئية قابلة للكتابة الحرة، وستُستبدل بقوائم الوزارة الرسمية عند وصولها */
 const OPT = {
@@ -56,13 +56,13 @@ $('appView').insertAdjacentHTML('beforeend', `
     #printArea, #printArea *{visibility:visible}
     #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
     .p-head{text-align:center;margin-bottom:14px}
-    .p-head h1{font-family:'Amiri',serif;font-size:20px;color:#1d3d5c;margin-bottom:4px}
     .p-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:8px}
     .p-head p{font-size:12px;color:#333}
     .p-tbl{width:100%;border-collapse:collapse;font-size:11px}
     .p-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .p-tbl td{padding:5px;border:1px solid #ccc;text-align:right}
     .p-tbl td.c{text-align:center}
+    .p-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
@@ -276,6 +276,7 @@ async function exportXls(kind){
 function exportPdf(kind){
   if(!ROWS.length){ toast('لا غائبات في هذا اليوم'); return; }
   const day=AR_DAYS[MIN_DATE.getDay()]||'', date=dstr(MIN_DATE);
+  const footer=`<div class="p-footer">${schoolName()} — طُبع بتاريخ ${dstr(new Date())}</div>`;
   if(kind===1){
     const rowsHtml=ROWS.map((r,i)=>`<tr>
       <td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td>
@@ -283,25 +284,26 @@ function exportPdf(kind){
       <td>${r.fu.absence_status||''}</td><td>${r.fu.action_taken||''}</td><td>${r.fu.response_status||''}</td><td>${r.fu.reason||''}</td>
     </tr>`).join('');
     $('printArea').innerHTML = `
-      <div class="p-head"><h1>${schoolName()}</h1><h2>استمارة بيانات الطلبة المتغيبين</h2>
+      <div class="p-head"><h2>استمارة بيانات الطلبة المتغيبين</h2>
         <p>اليوم: ${day} — التاريخ: ${date} — إجمالي الغائبات: ${ROWS.length}</p></div>
       <table class="p-tbl">
         <tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th><th>تواصل ١</th><th>تواصل ٢</th>
           <th>حالة الغياب</th><th>الإجراء المتخذ</th><th>حالة الاستجابة</th><th>سبب الغياب</th></tr>
         ${rowsHtml}
-      </table>`;
+      </table>${footer}`;
+    printWithTitle(`استمارة_المتغيبات_${date}`);
   }else{
     const perSec={}; for(const r of ROWS) perSec[r.sec]=(perSec[r.sec]||0)+1;
     const rowsHtml=ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td></tr>`).join('');
     const secHtml=Object.keys(perSec).sort((a,b)=>a.localeCompare(b,'ar')).map(s=>`<tr><td>${s}</td><td class="c">${perSec[s]}</td></tr>`).join('');
     $('printArea').innerHTML = `
-      <div class="p-head"><h1>${schoolName()}</h1><h2>أسماء الطالبات المتغيبات وأعدادهن</h2>
+      <div class="p-head"><h2>أسماء الطالبات المتغيبات وأعدادهن</h2>
         <p>اليوم: ${day} — التاريخ: ${date} — العدد الكلي: ${ROWS.length}</p></div>
       <table class="p-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th></tr>${rowsHtml}</table>
       <div class="p-head" style="margin-top:18px"><h2>العدد حسب الصف</h2></div>
-      <table class="p-tbl" style="width:280px"><tr><th>الصف</th><th>العدد</th></tr>${secHtml}</table>`;
+      <table class="p-tbl" style="width:280px"><tr><th>الصف</th><th>العدد</th></tr>${secHtml}</table>${footer}`;
+    printWithTitle(`أسماء_وأعداد_المتغيبات_${date}`);
   }
-  window.print();
 }
 
 registerTab({id:'ministryMain', label:'قائمة الوزارة', group:'attendance', groupLabel:'متابعة الغياب',
