@@ -167,4 +167,5 @@ $('saveAtt').addEventListener('click', async ()=>{
   finally{ btn.disabled=false; btn.textContent='حفظ الرصد'; }
 });
 
-registerTab({id:'teacherMain', label:'حصصي والرصد', show:f=>f.isTeacher, init:initTeacher});
+registerTab({id:'teacherMain', label:'رصد الغياب', group:'teacherArea', groupLabel:'حصصي',
+  show:f=>f.isTeacher, init:initTeacher});
