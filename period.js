@@ -47,6 +47,21 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
 
     <div class="panel">
+      <h3>تقرير حسب عدد مرات الغياب</h3>
+      <div class="sub">اعرضي الطالبات اللواتي بلغ عدد أيام غيابهن الرسمي خلال هذه الفترة حداً معيناً — مثلاً «٤ مرات فأكثر».</div>
+      <div class="row" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <label style="font-size:13px;color:var(--navy);font-weight:600">عدد المرات <input type="number" id="cntThreshold" min="1" value="4" style="width:70px;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></label>
+        <select id="cntOp" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+          <option value="gte">فأكثر</option>
+          <option value="eq">بالضبط</option>
+        </select>
+        <button class="btn gold" id="cntGo" style="width:auto;padding:10px 24px">عرض القائمة</button>
+        <button class="btn ghost" id="cntPdf" style="width:auto;padding:10px 24px">⬇ PDF</button>
+      </div>
+      <div class="board-wrap"><table class="board" id="pCountTable"></table></div>
+    </div>
+
+    <div class="panel">
       <h3>الغياب اليومي خلال الفترة</h3>
       <div class="board-wrap"><table class="board" id="pDailyTable"></table></div>
     </div>
@@ -77,7 +92,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let DAILY=[], EXCLUDED=[], SUMMARY=null, STU_INFO={};
+let DAILY=[], EXCLUDED=[], SUMMARY=null, STU_INFO={}, PER_STUDENT={};
 
 function initPicks(){
   const p=$('perFrom');
@@ -88,6 +103,8 @@ function initPicks(){
   $('perTo').value=today;
   $('perGo').addEventListener('click',generateReport);
   $('perPdf').addEventListener('click',exportPdf);
+  $('cntGo').addEventListener('click',renderCountReport);
+  $('cntPdf').addEventListener('click',exportCountPdf);
 }
 
 async function mapLimit(items, limit, fn){
@@ -176,8 +193,10 @@ async function generateReport(){
       .sort((a,b)=>b.rate-a.rate);
 
     const totalAbs=Object.values(perDayAbsCount).reduce((a,b)=>a+b,0);
+    PER_STUDENT=perStudentAbsDays;
     SUMMARY={from,to,schoolDaysCount,perDayAbsCount,topSections,bottomSections,highStudents,totalAbs};
     renderSummary();
+    renderCountReport();
     $('perResults').style.display='block';
     $('perStatus').style.display='none';
   }catch(err){ $('perStatus').className='result err'; $('perStatus').textContent='تعذر إنشاء التقرير: '+(err.message||err); }
@@ -246,6 +265,37 @@ function exportPdf(){
   }).join('');
 
   $('printAreaPeriod').innerHTML = summaryPage + dayPages;
+  window.print();
+}
+
+let CURRENT_COUNT=[];
+function currentCountList(){
+  const n=Math.max(1,+$('cntThreshold').value||1), op=$('cntOp').value;
+  return Object.keys(PER_STUDENT)
+    .map(sid=>({sid, ...STU_INFO[sid], absDays:PER_STUDENT[sid]}))
+    .filter(s=>s.full_name && (op==='eq' ? s.absDays===n : s.absDays>=n))
+    .sort((a,b)=>b.absDays-a.absDays);
+}
+function renderCountReport(){
+  if(!SUMMARY){ return; }
+  CURRENT_COUNT=currentCountList();
+  const n=$('cntThreshold').value, opLabel=$('cntOp').value==='eq'?'بالضبط':'فأكثر';
+  $('pCountTable').innerHTML = CURRENT_COUNT.length
+    ? `<tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>عدد أيام الغياب</th></tr>`+
+      CURRENT_COUNT.map((s,i)=>`<tr><td class="c">${i+1}</td><td class="c">${s.academic_number}</td><td>${s.full_name}</td><td class="c">${s.absDays}</td></tr>`).join('')
+    : `<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا طالبات غِبن ${n} مرة ${opLabel} خلال هذه الفترة 🎉</td></tr>`;
+}
+function exportCountPdf(){
+  if(!SUMMARY){ toast('أنشئي التقرير أولاً'); return; }
+  if(!CURRENT_COUNT.length){ toast('لا طالبات في هذه القائمة'); return; }
+  const n=$('cntThreshold').value, opLabel=$('cntOp').value==='eq'?'بالضبط':'فأكثر';
+  const rows=CURRENT_COUNT.map((s,i)=>`<tr><td class="c">${i+1}</td><td class="c">${s.academic_number}</td><td>${s.full_name}</td><td class="c">${s.absDays}</td></tr>`).join('');
+  $('printAreaPeriod').innerHTML = `
+    <div class="pr-page">
+      <div class="pr-head"><h1>${schoolName()}</h1><h2>طالبات غِبن ${n} مرة ${opLabel}</h2>
+        <p>من ${SUMMARY.from} إلى ${SUMMARY.to} — العدد: ${CURRENT_COUNT.length}</p></div>
+      <table class="pr-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>عدد أيام الغياب</th></tr>${rows}</table>
+    </div>`;
   window.print();
 }
 
