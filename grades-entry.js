@@ -14,6 +14,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="today-lbl" style="margin-bottom:12px">مقرراتي</div>
     <button class="btn ghost" id="gExtractGo" style="width:auto;padding:9px 18px;margin-bottom:14px">🔍 استخراج حسب الفئة</button>
     <button class="btn ghost" id="gAlertsGo" style="width:auto;padding:9px 18px;margin-bottom:14px;margin-inline-start:10px">⚠️ متابعة أداء طالباتي</button>
+    <button class="btn ghost" id="gRemedialGo" style="width:auto;padding:9px 18px;margin-bottom:14px;margin-inline-start:10px">📋 استمارة التغذية الراجعة</button>
     <div id="gSubjList"></div>
   </div>
 
@@ -116,10 +117,41 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div class="board-wrap"><table class="board" id="gAlertsTable"></table></div>
     </div>
   </div>
+
+  <div id="gRemedialView" style="display:none">
+    <button class="back" id="gRemedialBack">→ رجوع</button>
+    <div class="panel">
+      <h3>استمارة التغذية الراجعة</h3>
+      <div class="sub">خطة علاجية سريعة لدعم فئات الطالبات — مشتركة بين كل معلمات المقرر، بأعداد تُحسب تلقائياً لكل شعبة.</div>
+      <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <select id="rSubject" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:180px"></select>
+        <select id="rExam" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px">
+          <option value="اختبار تشخيصي">اختبار تشخيصي</option>
+          <option value="الاختبار الأول">الاختبار الأول</option>
+          <option value="الاختبار الثاني">الاختبار الثاني</option>
+        </select>
+        <button class="btn gold" id="rGo" style="width:auto;padding:10px 24px">تحميل</button>
+      </div>
+      <div class="field"><label>الهدف الخاص</label>
+        <input type="text" id="rGoal" placeholder="مثال: رفع الأداء العام لجميع فئات الطالبات خلال الفصل الدراسي الأول"></div>
+    </div>
+    <div id="rResults" style="display:none">
+      <div class="warnbox" id="rWarn" style="display:none"></div>
+      <div class="panel">
+        <div class="actions" style="margin-bottom:14px">
+          <button class="btn gold" id="rSave">حفظ الخطة</button>
+          <button class="btn ghost" id="rXls">⬇ إكسل</button>
+          <button class="btn ghost" id="rPdf">⬇ PDF</button>
+        </div>
+        <div class="board-wrap"><table class="board rp-tbl" id="rTable"></table></div>
+      </div>
+    </div>
+  </div>
 </div>
 <div id="printAreaComp"></div>
 <div id="printAreaExtract"></div>
 <div id="printAreaAlerts"></div>
+<div id="printAreaRemedial"></div>
 <style>
   #gSubjList{display:flex;flex-direction:column;gap:10px}
   .g-subj{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:1px solid var(--line);border-radius:12px;padding:14px 18px;cursor:pointer;transition:.15s}
@@ -160,12 +192,15 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ga-reason{font-size:11px;padding:3px 10px;border-radius:99px;font-weight:700}
   .ga-reason.fail{background:#fbe7e7;color:var(--err)}
   .ga-reason.low_performance{background:#fff3cd;color:#8a6100}
-  #printAreaComp,#printAreaExtract,#printAreaAlerts{display:none}
+  .rp-tbl input[type=text]{width:100%;min-width:140px;padding:7px 9px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .rp-tbl select{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .rp-tbl td.cnt{text-align:center;font-weight:700}
+  #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:none}
   @media print{
     @page{margin:0}
     body *{visibility:hidden}
-    #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *, #printAreaAlerts, #printAreaAlerts *{visibility:visible}
-    #printAreaComp,#printAreaExtract,#printAreaAlerts{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *, #printAreaAlerts, #printAreaAlerts *, #printAreaRemedial, #printAreaRemedial *{visibility:visible}
+    #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
     .cp-head{text-align:center;margin-bottom:10px}
     .cp-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .cp-hdr{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px}
@@ -212,13 +247,19 @@ async function initGradesEntry(){
   $('gAlertsRefresh').addEventListener('click',loadAlerts);
   $('gAlertsXls').addEventListener('click',exportAlertsXls);
   $('gAlertsPdf').addEventListener('click',exportAlertsPdf);
+  $('gRemedialGo').addEventListener('click',openRemedial);
+  $('gRemedialBack').addEventListener('click',()=>show('gSubjectsView'));
+  $('rGo').addEventListener('click',loadRemedial);
+  $('rSave').addEventListener('click',saveRemedial);
+  $('rXls').addEventListener('click',exportRemedialXls);
+  $('rPdf').addEventListener('click',exportRemedialPdf);
   bindDrop($('gDrop'),$('gFile'), handleUpload);
   await loadMasteryPct();
   await loadCatsAndThresholds();
   await loadMySubjects();
 }
 function show(id){
-  ['gSubjectsView','gExamsView','gGridView','gCompView','gExtractView','gAlertsView'].forEach(v=>{ $(v).style.display = v===id?'block':'none'; });
+  ['gSubjectsView','gExamsView','gGridView','gCompView','gExtractView','gAlertsView','gRemedialView'].forEach(v=>{ $(v).style.display = v===id?'block':'none'; });
 }
 
 async function loadMySubjects(){
@@ -798,6 +839,156 @@ function exportAlertsPdf(){
     <div class="cp-head"><h2>متابعة أداء طالباتي</h2></div>
     <table class="cp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>${rows}</table>`;
   printWithTitle('متابعة_أداء_طالباتي');
+}
+
+/* ============ استمارة التغذية الراجعة (مشتركة بين معلمات المقرر) ============ */
+const R_STATUS_LABEL={pending:'لم يُنفذ', in_progress:'جاري التنفيذ', done:'نُفذ'};
+let R_SECTIONS=[], R_PLAN=null, R_ACTIONS={};
+
+function openRemedial(){
+  const subjCodes=[...new Set(MY_PAIRS.map(p=>p.subject_code))].sort((a,b)=>a.localeCompare(b,'ar'));
+  $('rSubject').innerHTML=subjCodes.map(c=>{
+    const p=MY_PAIRS.find(x=>x.subject_code===c);
+    return `<option value="${p.subject_id}">${c}</option>`;
+  }).join('');
+  $('rResults').style.display='none';
+  show('gRemedialView');
+}
+
+async function loadRemedial(){
+  const subjId=$('rSubject').value, examName=$('rExam').value;
+  if(!subjId){ toast('اختاري مقرراً'); return; }
+  const pair=MY_PAIRS.find(p=>p.subject_id===subjId);
+
+  const {data:rows,error}=await db.from('entry_teachers')
+    .select('timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code))')
+    .eq('timetable_entries.subject_id',subjId).eq('timetable_entries.academic_year_id',S.YEAR.id);
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  const secMap={};
+  for(const r of rows||[]){ const e=r.timetable_entries; secMap[e.sections?.code||'؟']=e.section_id; }
+  R_SECTIONS=Object.keys(secMap).sort((a,b)=>a.localeCompare(b,'ar')).map(code=>({code,id:secMap[code]}));
+  if(!R_SECTIONS.length){ toast('لا شعب لهذا المقرر في الجدول'); return; }
+
+  const missing=[]; const countsBySec={};
+  for(const sec of R_SECTIONS){
+    const {data:ex}=await db.from('exams').select('id,exam_total').eq('subject_id',subjId).eq('section_id',sec.id).eq('name',examName).maybeSingle();
+    if(!ex){ missing.push(sec.code); countsBySec[sec.code]={}; continue; }
+    const total=ex.exam_total ?? pair.exam_total;
+    const {data:recs}=await db.from('grade_records').select('score').eq('exam_id',ex.id).not('score','is',null);
+    const counts={pass:0,mastery:0}; for(const c of CATS) counts[c.id]=0;
+    for(const r of recs||[]){
+      const pct=r.score/total*100;
+      const cat=CATS.find(c=>pct>=c.min_pct && pct<=c.max_pct);
+      if(cat) counts[cat.id]++;
+      if(pct>=THRESH.pass_pct) counts.pass++;
+      if(pct>=THRESH.mastery_pct) counts.mastery++;
+    }
+    countsBySec[sec.code]=counts;
+  }
+  $('rWarn').style.display = missing.length ? 'block' : 'none';
+  if(missing.length) $('rWarn').innerHTML=`⚠️ لا يوجد اختبار "${examName}" مرصود بعد للشعب: ${missing.join('، ')} — أعمدتها ستظهر فارغة.`;
+
+  const {data:plan}=await db.from('remedial_plans').select('*').eq('subject_id',subjId).eq('exam_name',examName).maybeSingle();
+  R_PLAN=plan||null;
+  $('rGoal').value=plan?.goal||'';
+  R_ACTIONS={};
+  if(plan){ const {data:acts}=await db.from('remedial_plan_actions').select('*').eq('plan_id',plan.id); for(const a of acts||[]) R_ACTIONS[a.row_key]=a; }
+
+  renderRemedialTable(countsBySec);
+  $('rResults').style.display='block';
+}
+function rRowDef(){ return [...CATS.map(c=>({key:'cat:'+c.id,label:c.name,color:c.color})), {key:'pass',label:'الناجحات'}, {key:'mastery',label:'المتقنات'}]; }
+function renderRemedialTable(countsBySec){
+  const rows=rRowDef();
+  let html='<tr><th>الفئة</th>'+R_SECTIONS.map(s=>`<th>${s.code}</th>`).join('')+'<th style="min-width:180px">الإجراء</th><th>متابعة التنفيذ</th></tr>';
+  for(const r of rows){
+    const a=R_ACTIONS[r.key]||{};
+    html+=`<tr data-row="${r.key}"><td class="sec" style="${r.color?`border-inline-start:4px solid ${r.color}`:''}">${r.label}</td>`;
+    for(const s of R_SECTIONS){
+      const c=countsBySec[s.code]||{};
+      const val=r.key.startsWith('cat:')?(c[r.key.slice(4)]??0):(c[r.key]??0);
+      html+=`<td class="cnt">${val}</td>`;
+    }
+    html+=`<td><input type="text" data-row="${r.key}" data-f="action" value="${(a.action_text||'').replace(/"/g,'&quot;')}"></td>
+      <td><select data-row="${r.key}" data-f="status">
+        ${Object.entries(R_STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}
+      </select></td></tr>`;
+  }
+  $('rTable').innerHTML=html;
+}
+async function saveRemedial(){
+  const subjId=$('rSubject').value, examName=$('rExam').value, goal=$('rGoal').value.trim();
+  const btn=$('rSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
+  try{
+    let planId=R_PLAN?.id;
+    if(planId){ await db.from('remedial_plans').update({goal:goal||null, updated_at:new Date().toISOString()}).eq('id',planId); }
+    else{
+      const {data,error}=await db.from('remedial_plans').insert({subject_id:subjId, exam_name:examName, goal:goal||null, created_by:S.ME.id}).select('id').single();
+      if(error) throw error;
+      planId=data.id; R_PLAN={id:planId};
+    }
+    const inputs=[...$('rTable').querySelectorAll('input[data-row],select[data-row]')];
+    const byRow={}; for(const inp of inputs){ byRow[inp.dataset.row] ??= {}; byRow[inp.dataset.row][inp.dataset.f]=inp.value; }
+    for(const [rowKey,vals] of Object.entries(byRow)){
+      const {error}=await db.from('remedial_plan_actions').upsert({
+        plan_id:planId, row_key:rowKey, action_text:vals.action?.trim()||null, status:vals.status||'pending'
+      },{onConflict:'plan_id,row_key'});
+      if(error) throw error;
+    }
+    toast('تم حفظ الخطة — تظهر مباشرة لبقية معلمات المقرر');
+  }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent='حفظ الخطة'; }
+}
+function rCurrentRowsData(){
+  return rRowDef().map(r=>{
+    const tr=$('rTable').querySelector(`tr[data-row="${r.key}"]`);
+    const counts=R_SECTIONS.map((s,i)=>tr?.children[i+1]?.textContent||'0');
+    const action=tr?.querySelector('[data-f="action"]')?.value||'';
+    const status=tr?.querySelector('[data-f="status"]')?.value||'pending';
+    return {...r, counts, action, status};
+  });
+}
+async function exportRemedialXls(){
+  if(!R_SECTIONS.length){ toast('حمّلي البيانات أولاً'); return; }
+  const subjCode=$('rSubject').selectedOptions[0]?.textContent||'', examName=$('rExam').value, goal=$('rGoal').value.trim();
+  const rows=rCurrentRowsData(); const cols=1+R_SECTIONS.length+2;
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('التغذية الراجعة',{views:[{rightToLeft:true}]});
+  const addTitle=(text,size,bold,fill,color)=>{
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,cols);
+    const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+    row.height=size>=16?26:20;
+  };
+  addTitle(schoolName(),16,true,NAVY,WHITE);
+  addTitle(`استمارة التغذية الراجعة — ${subjCode} — ${examName}`,12,true,null,'FF22303C');
+  if(goal) addTitle(`الهدف الخاص: ${goal}`,10,false,null,'FF22303C');
+  ws.addRow([]);
+  const hdr=ws.addRow(['الفئة',...R_SECTIONS.map(s=>s.code),'الإجراء','متابعة التنفيذ']);
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=gBorder; });
+  rows.forEach((r,i)=>{
+    const row=ws.addRow([r.label,...r.counts,r.action,R_STATUS_LABEL[r.status]||r.status]);
+    row.eachCell((c,colNo)=>{ c.border=gBorder; c.alignment={horizontal:colNo===1?'right':'center'}; c.font={size:10.5};
+      if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+  });
+  ws.columns=[{width:16},...R_SECTIONS.map(()=>({width:10})),{width:30},{width:14}];
+  ws.views=[{rightToLeft:true,state:'frozen',ySplit:goal?5:4}];
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`التغذية_الراجعة_${subjCode}_${examName}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportRemedialPdf(){
+  if(!R_SECTIONS.length){ toast('حمّلي البيانات أولاً'); return; }
+  const subjCode=$('rSubject').selectedOptions[0]?.textContent||'', examName=$('rExam').value, goal=$('rGoal').value.trim();
+  const rows=rCurrentRowsData();
+  const trs=rows.map(r=>`<tr><td>${r.label}</td>${r.counts.map(c=>`<td>${c}</td>`).join('')}<td>${r.action||'—'}</td><td>${R_STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
+  $('printAreaRemedial').innerHTML=`
+    <div class="cp-head"><h2>استمارة التغذية الراجعة — ${subjCode} — ${examName}</h2>${goal?`<p>الهدف الخاص: ${goal}</p>`:''}</div>
+    <table class="cp-tbl"><tr><th>الفئة</th>${R_SECTIONS.map(s=>`<th>${s.code}</th>`).join('')}<th>الإجراء</th><th>متابعة التنفيذ</th></tr>${trs}</table>`;
+  printWithTitle(`التغذية_الراجعة_${subjCode}_${examName}`);
 }
 
 registerTab({id:'gradesEntry', label:'رصد الدرجات', group:'teacherArea', groupLabel:'حصصي',

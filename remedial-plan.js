@@ -29,6 +29,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div id="rpResults" style="display:none">
     <div class="warnbox" id="rpWarn" style="display:none"></div>
+    <div class="result" id="rpReadOnlyNotice" style="display:none;background:var(--sand);color:var(--ink);border:1px solid var(--line)">👁️ وضع استعراض فقط — الكتابة والحفظ متاحان للمعلمة الأولى ومعلمات المقرر.</div>
     <div class="panel">
       <div class="actions" style="margin-bottom:14px">
         <button class="btn gold" id="rpSave">حفظ الخطة</button>
@@ -60,7 +61,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let CATS=[], SUPERVISED=null, SECTIONS=[], PLAN=null, ACTIONS={};
+let CATS=[], SUPERVISED=null, SECTIONS=[], PLAN=null, ACTIONS={}, CAN_EDIT=false;
 
 async function initRP(){
   if($('rpGo').dataset.ready) return;
@@ -68,7 +69,11 @@ async function initRP(){
   const {data:cats}=await db.from('grade_categories').select('*').order('sort_order');
   CATS=cats||[];
 
-  if(S.FLAGS.isSeniorTeacher && !(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isAnalysis)){
+  CAN_EDIT = S.FLAGS.isSeniorTeacher; // فقط المعلمة الأولى تكتب هنا — الأدمن/القيادة/رئيسة التحليل استعراض فقط
+  $('rpGoal').disabled = !CAN_EDIT;
+  $('rpSave').style.display = CAN_EDIT ? 'inline-flex' : 'none';
+
+  if(CAN_EDIT){
     SUPERVISED=await getSupervisedTeacherIds();
   }else SUPERVISED=null;
 
@@ -148,6 +153,7 @@ async function loadPlan(){
 
   renderTable(subject, examName, countsBySec);
   $('rpResults').style.display='block';
+  $('rpReadOnlyNotice').style.display = CAN_EDIT ? 'none' : 'block';
 }
 
 function rowDef(){
@@ -158,16 +164,18 @@ function renderTable(subject, examName, countsBySec){
   let html='<tr><th>الفئة</th>'+SECTIONS.map(s=>`<th>${s.code}</th>`).join('')+'<th style="min-width:180px">الإجراء</th><th>متابعة التنفيذ</th></tr>';
   for(const r of rows){
     const a=ACTIONS[r.key]||{};
-    html+=`<tr><td class="sec" style="${r.color?`border-inline-start:4px solid ${r.color}`:''}">${r.label}</td>`;
+    html+=`<tr data-row="${r.key}"><td class="sec" style="${r.color?`border-inline-start:4px solid ${r.color}`:''}">${r.label}</td>`;
     for(const s of SECTIONS){
       const c=countsBySec[s.code]||{};
       const val = r.key.startsWith('cat:') ? (c[r.key.slice(4)]??0) : (c[r.key]??0);
       html+=`<td class="cnt">${val}</td>`;
     }
-    html+=`<td><input type="text" data-row="${r.key}" data-f="action" value="${(a.action_text||'').replace(/"/g,'&quot;')}"></td>
-      <td><select data-row="${r.key}" data-f="status">
-        ${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}
-      </select></td></tr>`;
+    html+= CAN_EDIT
+      ? `<td><input type="text" data-row="${r.key}" data-f="action" value="${(a.action_text||'').replace(/"/g,'&quot;')}"></td>
+         <td><select data-row="${r.key}" data-f="status">
+           ${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}
+         </select></td></tr>`
+      : `<td style="text-align:right">${a.action_text||'—'}</td><td>${STATUS_LABEL[a.status]||STATUS_LABEL.pending}</td></tr>`;
   }
   $('rpTable').innerHTML=html;
 }
@@ -203,11 +211,13 @@ const rpBorder={top:{style:'thin',color:{argb:LINE}},left:{style:'thin',color:{a
 function currentRowsData(){
   const rows=rowDef();
   return rows.map(r=>{
-    const tr=[...$('rpTable').querySelectorAll('tr')].find(t=>t.querySelector(`[data-row="${r.key}"]`));
+    const tr=$('rpTable').querySelector(`tr[data-row="${r.key}"]`);
     const counts=SECTIONS.map((s,i)=>tr?.children[i+1]?.textContent||'0');
-    const action=tr?.querySelector('[data-f="action"]')?.value||'';
-    const status=tr?.querySelector('[data-f="status"]')?.value||'pending';
-    return {...r, counts, action, status};
+    const actionEl=tr?.querySelector('[data-f="action"]');
+    const statusEl=tr?.querySelector('[data-f="status"]');
+    const action = actionEl ? actionEl.value : (tr?.children[SECTIONS.length+1]?.textContent||'');
+    const status = statusEl ? statusEl.value : (Object.keys(STATUS_LABEL).find(k=>STATUS_LABEL[k]===tr?.children[SECTIONS.length+2]?.textContent) || 'pending');
+    return {...r, counts, action: action==='—'?'':action, status};
   });
 }
 async function exportXls(){
