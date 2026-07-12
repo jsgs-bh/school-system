@@ -53,6 +53,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 
     <div class="panel">
       <h3>أكثر الصفوف غياباً</h3>
+      <div class="sub">"إجمالي حالات الغياب" هو مجموع غياب كل طالبات الشعبة عبر كل أيام الفترة مجتمعة (وليس عدد أيام) — لذا رقمه طبيعي أن يتجاوز عدد الأيام الدراسية المحتسبة أعلاه.</div>
       <div class="board-wrap"><table class="board" id="pTopTable"></table></div>
     </div>
     <div class="panel">
@@ -131,7 +132,7 @@ async function processDay(d){
 }
 
 /* يجمع بيانات فترة من/إلى — يُستخدم من الأداتين المستقلتين كلٌ بمدخلاتها الخاصة */
-async function collectRange(from,to){
+export async function collectRange(from,to){
   const days=[];
   for(let d=new Date(from+'T12:00:00'); dstr(d)<=to; d.setDate(d.getDate()+1)) days.push(new Date(d));
   const results=(await mapLimit(days,4,processDay)).filter(Boolean);
@@ -269,8 +270,8 @@ function renderSummary(){
   }else{ $('perExcluded').style.display='none'; }
 
   const secRow=r=>`<tr><td class="sec">${r.code}</td><td class="c">${r.absDays}</td><td class="c">${r.rate.toFixed(1)}٪</td></tr>`;
-  $('pTopTable').innerHTML='<tr><th>الشعبة</th><th>أيام غياب</th><th>نسبة الغياب</th></tr>'+(s.topSections.map(secRow).join('')||'<tr><td colspan="3">لا بيانات</td></tr>');
-  $('pBottomTable').innerHTML='<tr><th>الشعبة</th><th>أيام غياب</th><th>نسبة الغياب</th></tr>'+(s.bottomSections.map(secRow).join('')||'<tr><td colspan="3">لا بيانات</td></tr>');
+  $('pTopTable').innerHTML='<tr><th>الشعبة</th><th>إجمالي حالات الغياب</th><th>نسبة الغياب</th></tr>'+(s.topSections.map(secRow).join('')||'<tr><td colspan="3">لا بيانات</td></tr>');
+  $('pBottomTable').innerHTML='<tr><th>الشعبة</th><th>إجمالي حالات الغياب</th><th>نسبة الغياب</th></tr>'+(s.bottomSections.map(secRow).join('')||'<tr><td colspan="3">لا بيانات</td></tr>');
 
   $('pHighTable').innerHTML = s.highStudents.length
     ? '<tr><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>أيام الغياب</th><th>النسبة</th></tr>'+
@@ -294,9 +295,9 @@ function exportPdf(){
         ${Object.entries(s.perDayAbsCount).sort(([a],[b])=>a.localeCompare(b)).map(([d,c])=>`<tr><td class="c">${d}</td><td class="c">${c}</td></tr>`).join('')}
       </table>
       <div class="pr-sub">أكثر الصفوف غياباً</div>
-      <table class="pr-tbl"><tr><th>الشعبة</th><th>أيام غياب</th><th>نسبة الغياب</th></tr>${s.topSections.map(secRowP).join('')}</table>
+      <table class="pr-tbl"><tr><th>الشعبة</th><th>إجمالي حالات الغياب</th><th>نسبة الغياب</th></tr>${s.topSections.map(secRowP).join('')}</table>
       <div class="pr-sub">أقل الصفوف غياباً</div>
-      <table class="pr-tbl"><tr><th>الشعبة</th><th>أيام غياب</th><th>نسبة الغياب</th></tr>${s.bottomSections.map(secRowP).join('')}</table>
+      <table class="pr-tbl"><tr><th>الشعبة</th><th>إجمالي حالات الغياب</th><th>نسبة الغياب</th></tr>${s.bottomSections.map(secRowP).join('')}</table>
       <div class="pr-sub">طالبات تجاوز غيابهن ${HIGH_THRESHOLD}٪ من أيام الفترة</div>
       <table class="pr-tbl"><tr><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>أيام الغياب</th><th>النسبة</th></tr>
         ${s.highStudents.map(h=>`<tr><td class="c">${h.academic_number}</td><td>${h.full_name}</td><td class="c">${h.absDays}</td><td class="c">${h.rate.toFixed(1)}٪</td></tr>`).join('')||'<tr><td colspan="4" class="c">لا طالبات تجاوزن العتبة</td></tr>'}
