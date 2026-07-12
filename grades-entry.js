@@ -392,7 +392,8 @@ async function loadCatsAndThresholds(){
 function categoryOf(pct){ return CATS.find(c=>pct>=c.min_pct && pct<=c.max_pct) || null; }
 
 async function syncUnderperformerAlerts(scoreRows){
-  if(!CATS.length) return;
+  if(!CATS.length) await loadCatsAndThresholds();
+  if(!CATS.length){ toast('تعذّر تحميل فئات التصنيف — لن تُنشأ تنبيهات المقصّرات لهذا الحفظ'); return; }
   const lowestCat=CATS.reduce((min,c)=>c.min_pct<min.min_pct?c:min, CATS[0]);
   const total=CUR_EXAM_TOTAL;
   const toFlag=[], toClear=[];
@@ -406,8 +407,14 @@ async function syncUnderperformerAlerts(scoreRows){
       toClear.push(r.student_id);
     }
   }
-  if(toFlag.length){ const {error}=await db.from('underperformer_alerts').upsert(toFlag,{onConflict:'student_id,exam_id'}); if(error) console.error(error); }
-  if(toClear.length){ await db.from('underperformer_alerts').delete().eq('exam_id',CUR_EXAM.id).in('student_id',toClear); }
+  if(toFlag.length){
+    const {error}=await db.from('underperformer_alerts').upsert(toFlag,{onConflict:'student_id,exam_id'});
+    if(error) toast('تنبيه: تعذر تسجيل بعض حالات المقصّرات — '+error.message);
+  }
+  if(toClear.length){
+    const {error}=await db.from('underperformer_alerts').delete().eq('exam_id',CUR_EXAM.id).in('student_id',toClear);
+    if(error) console.error(error);
+  }
 }
 
 async function saveGrades(){
