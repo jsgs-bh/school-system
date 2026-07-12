@@ -4,6 +4,8 @@
    شبكة تفاعلية تدعم لصق عمود كامل من إكسل، أو رفع ملف إكسل جاهز. */
 import { db, $, S, toast, chunk, bindDrop, readSheet, registerTab } from './core.js';
 
+const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
+
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="gradesEntry" style="display:none">
   <div id="gSubjectsView">
@@ -18,7 +20,12 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="panel">
       <h3>اختبار جديد</h3>
       <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="gNewExamName" placeholder="اسم الاختبار (مثال: الاختبار الأول)" style="flex:1;min-width:180px;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+        <select id="gNewExamName" style="flex:1;min-width:180px;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+          <option value="">اختاري الاختبار…</option>
+          <option value="اختبار تشخيصي">اختبار تشخيصي</option>
+          <option value="الاختبار الأول">الاختبار الأول</option>
+          <option value="الاختبار الثاني">الاختبار الثاني</option>
+        </select>
         <input type="date" id="gNewExamDate">
         <button class="btn gold" id="gNewExamGo" style="width:auto;padding:10px 22px">إنشاء وفتح</button>
       </div>
@@ -32,9 +39,13 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div class="g-counter">مرصودة: <b id="gDoneCount">0</b> من <span id="gTotalCount">0</span></div>
     </div>
     <div class="g-tools">
-      <div class="hint">الصقي عموداً كاملاً من إكسل داخل أي خانة (تُملأ الصفوف تباعاً)، أو اكتبي الدرجات يدوياً.</div>
-      <div class="dropzone" id="gDrop" style="margin-top:10px"><b>أو ارفعي ملف إكسل: الرقم الأكاديمي + الدرجة</b><p>xlsx / xls — بلا ترويسة معقدة، عمودان فقط</p>
+      <div class="hint">الطريقة الموصى بها: نزّلي القالب بأسماء طالباتك جاهزة، عبّي الدرجات في إكسل، ثم ارفعيه هنا.</div>
+      <div class="actions" style="margin:10px 0">
+        <button class="btn gold" id="gTemplateXls" style="width:auto;padding:10px 22px">⬇ تنزيل قالب الدرجات (بأسماء الطالبات)</button>
+      </div>
+      <div class="dropzone" id="gDrop"><b>ارفعي الملف بعد تعبئته</b><p>xlsx / xls — نفس القالب المنزَّل</p>
         <input type="file" id="gFile" accept=".xlsx,.xls" hidden></div>
+      <div class="hint" style="margin-top:10px">أو أدخلي الدرجات مباشرة في الشبكة أدناه، وتقدرين لصق عمود كامل منسوخ من إكسل داخل أي خانة.</div>
     </div>
     <div class="g-grid" id="gGrid"></div>
     <button class="btn gold" id="gSave" style="margin-top:16px">حفظ الدرجات</button>
@@ -72,6 +83,7 @@ async function initGradesEntry(){
   $('gGridBack').addEventListener('click',()=>{ show('gExamsView'); loadExams(); });
   $('gNewExamGo').addEventListener('click',createExam);
   $('gSave').addEventListener('click',saveGrades);
+  $('gTemplateXls').addEventListener('click',downloadTemplate);
   bindDrop($('gDrop'),$('gFile'), handleUpload);
   await loadMySubjects();
 }
@@ -114,8 +126,8 @@ async function loadExams(){
   $('gExamList').querySelectorAll('.g-exam').forEach(el=>el.addEventListener('click',()=>openExam({id:el.dataset.id,name:el.dataset.name})));
 }
 async function createExam(){
-  const name=$('gNewExamName').value.trim();
-  if(!name){ toast('اكتبي اسم الاختبار'); return; }
+  const name=$('gNewExamName').value;
+  if(!name){ toast('اختاري الاختبار'); return; }
   const btn=$('gNewExamGo'); btn.disabled=true;
   try{
     const {data,error}=await db.from('exams').insert({
@@ -136,7 +148,8 @@ async function openExam(exam){
   const {data:enr,error}=await db.from('enrollments')
     .select('students(id,full_name,academic_number)').eq('section_id',CUR_PAIR.section_id).is('to_date',null);
   if(error){ $('gGrid').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
-  STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+  STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean)
+    .sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'en',{numeric:true}));
   const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',exam.id);
   EXISTING={}; for(const r of recs||[]) EXISTING[r.student_id]=r.score;
   renderGrid();
@@ -174,17 +187,64 @@ function updateCount(){
   $('gTotalCount').textContent=inputs.length;
 }
 
+/* ============ تنزيل قالب الدرجات (بأسماء الطالبات، بترتيب الرقم الأكاديمي) ============ */
+const NAVY='FF1D3D5C', WHITE='FFFFFFFF', LINE='FFDCD5C8';
+const gBorder={top:{style:'thin',color:{argb:LINE}},left:{style:'thin',color:{argb:LINE}},right:{style:'thin',color:{argb:LINE}},bottom:{style:'thin',color:{argb:LINE}}};
+async function downloadTemplate(){
+  if(!STUDENTS.length){ toast('لا طالبات في هذه الشعبة'); return; }
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('الدرجات',{views:[{rightToLeft:true}]});
+  const addTitle=(text,size,bold,fill,color)=>{
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,4);
+    const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+    row.height=size>=16?26:20;
+  };
+  addTitle(schoolName(),16,true,NAVY,WHITE);
+  addTitle(`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${CUR_EXAM.name} — من ${CUR_PAIR.exam_total}`,12,true,null,'FF22303C');
+  ws.addRow([]);
+  const hdr=ws.addRow(['#','الرقم الأكاديمي','اسم الطالبة','الدرجة']);
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=gBorder; });
+  STUDENTS.forEach((s,i)=>{
+    const row=ws.addRow([i+1, s.academic_number, s.full_name, EXISTING[s.id]??'']);
+    row.eachCell((c,colNo)=>{ c.border=gBorder; c.alignment={horizontal: colNo===3?'right':'center'}; c.font={size:10.5};
+      if(colNo===2) c.numFmt='@';
+      if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+  });
+  ws.columns=[{width:6},{width:16},{width:30},{width:12}];
+  ws.views=[{rightToLeft:true,state:'frozen',ySplit:4}];
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download=`قالب_الدرجات_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function findHeaderCols(rows){
+  for(let i=0;i<Math.min(rows.length,8);i++){
+    const r=rows[i].map(v=>String(v??'').trim());
+    const acadIdx=r.findIndex(v=>v.includes('أكاديمي'));
+    const gradeIdx=r.findIndex(v=>v.includes('درجة'));
+    if(acadIdx>=0 && gradeIdx>=0) return {headerRow:i, acadIdx, gradeIdx};
+  }
+  return null;
+}
 async function handleUpload(file){
   const rows=await readSheet(file);
   if(rows.length<1){ toast('الملف فارغ'); return; }
   const bySid={}; for(const s of STUDENTS) bySid[String(s.academic_number)]=s.id;
   const inputs=[...$('gGrid').querySelectorAll('input')];
   const bySidInput={}; for(const inp of inputs) bySidInput[inp.dataset.sid]=inp;
+  const hdr=findHeaderCols(rows);
+  let acadCol=0, gradeCol=1, start=0;
+  if(hdr){ acadCol=hdr.acadIdx; gradeCol=hdr.gradeIdx; start=hdr.headerRow+1; }
+  else{ start = /[أ-ي]/.test(String(rows[0][0]??'')) || isNaN(+rows[0][1]) ? 1 : 0; } // ملف بسيط بعمودين بلا ترويسة معروفة
   let matched=0, skipped=0;
-  const start = /[أ-ي]/.test(String(rows[0][0]??'')) || isNaN(+rows[0][1]) ? 1 : 0; // تجاهل صف الترويسة إن وجد
   for(let i=start;i<rows.length;i++){
     const r=rows[i];
-    const acad=String(r[0]??'').trim(), score=r[1];
+    const acad=String(r[acadCol]??'').trim(), score=r[gradeCol];
     if(!acad || score===''||score===undefined||score===null) continue;
     const sid=bySid[acad];
     if(!sid){ skipped++; continue; }
