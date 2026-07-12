@@ -111,6 +111,7 @@ async function boot(session){
     isAdmin: (roles||[]).some(r=>r.role==='admin'),
     isLead:  (roles||[]).some(r=>r.role==='leadership') || staff.title==='leadership',
     isSocial:/اجتماعي/.test(dept),
+    isAcademicGuidance:/رشاد/.test(dept) && /كاديمي/.test(dept),
     isReg:   /تسجيل/.test(dept),
     isTeacher: staff.title==='teacher'||staff.title==='senior_teacher',
     isAttendanceLead: (roles||[]).some(r=>r.role==='attendance_lead'),
