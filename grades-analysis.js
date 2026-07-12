@@ -179,7 +179,7 @@ async function loadGrid(){
   const codes=Object.keys(secMap).sort((a,b)=>a.localeCompare(b,'ar'));
   if(!codes.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا شعب ضمن نطاقك لهذا المقرر.</td></tr>'; return; }
 
-  const {data:exams}=await db.from('exams').select('id,name,section_id').eq('subject_id',CUR_SUBJECT.id);
+  const {data:exams}=await db.from('exams').select('id,name,section_id,exam_total').eq('subject_id',CUR_SUBJECT.id);
   const {data:enr}=await db.from('enrollments').select('section_id').is('to_date',null);
   const enrolledCount={}; for(const e of enr||[]) enrolledCount[e.section_id]=(enrolledCount[e.section_id]||0)+1;
 
@@ -200,7 +200,7 @@ async function loadGrid(){
       const ex=examBySecName[`${sec.section_id}|${name}`];
       if(!ex){ html+='<td><div class="ga-cell empty">لم يُنشأ</div></td>'; continue; }
       const done=countBy[ex.id]||0, total=enrolledCount[sec.section_id]||0;
-      html+=`<td><div class="ga-cell" data-exam="${ex.id}" data-sec="${code}" data-secid="${sec.section_id}" data-name="${name}">
+      html+=`<td><div class="ga-cell" data-exam="${ex.id}" data-sec="${code}" data-secid="${sec.section_id}" data-name="${name}" data-total="${ex.exam_total ?? CUR_SUBJECT.exam_total}">
         <b>${done}/${total}</b><small>${done>=total&&total>0?'مكتمل ✓':'رصد جزئي'}</small></div></td>`;
     }
     html+='</tr>';
@@ -210,7 +210,7 @@ async function loadGrid(){
 }
 
 /* ============ شاشة التحليل التفصيلي ============ */
-async function buildDetail(secId,secCode,examId,examName){
+async function buildDetail(secId,secCode,examId,examName,examTotal){
   const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
   const students=(enr||[]).map(e=>e.students).filter(Boolean);
   const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',examId);
@@ -219,7 +219,7 @@ async function buildDetail(secId,secCode,examId,examName){
   const generalNote=(notes||[]).find(n=>!n.student_id)||null;
   const noteBy={}; for(const n of notes||[]) if(n.student_id) noteBy[n.student_id]=n;
 
-  const total=CUR_SUBJECT.exam_total;
+  const total=examTotal;
   const rows=students.map(s=>{
     const score=scoreBy[s.id];
     const pct = score!=null ? (score/total*100) : null;
@@ -232,18 +232,19 @@ async function buildDetail(secId,secCode,examId,examName){
   const passCount=graded.filter(r=>r.pct>=THRESH.pass_pct).length;
   const masteryCount=graded.filter(r=>r.pct>=THRESH.mastery_pct).length;
   const failCount=graded.length-passCount;
-  return {secId,secCode,examId,examName,students,rows,graded,passCount,masteryCount,failCount,generalNote};
+  return {secId,secCode,examId,examName,examTotal,students,rows,graded,passCount,masteryCount,failCount,generalNote};
 }
 
 async function openDetail(d){
   $('gaListView').style.display='none'; $('gaDetailView').style.display='block';
   $('gaDetailTitle').textContent=`${d.sec} — ${CUR_SUBJECT.code} — ${d.name}`;
-  $('gaDetailSub').textContent=`الدرجة الكلية: ${CUR_SUBJECT.exam_total}`;
+  const examTotal=+d.total || CUR_SUBJECT.exam_total;
+  $('gaDetailSub').textContent=`الدرجة الكلية: ${examTotal}`;
   $('gaStats').innerHTML=''; $('gaCatTable').innerHTML='';
   $('gaStudentTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
   $('gaGenNote').value=''; $('gaGenAction').value='';
 
-  const det=await buildDetail(d.secid,d.sec,d.exam,d.name);
+  const det=await buildDetail(d.secid,d.sec,d.exam,d.name,examTotal);
   renderDetail(det);
   CUR_DETAIL=det;
 }
@@ -342,7 +343,7 @@ function addGaSheet(wb,d,subjectCode,examTotal){
 async function exportXls(){
   if(!CUR_DETAIL){ toast('افتحي تحليل اختبار أولاً'); return; }
   const wb=new ExcelJS.Workbook();
-  addGaSheet(wb,CUR_DETAIL,CUR_SUBJECT.code,CUR_SUBJECT.exam_total);
+  addGaSheet(wb,CUR_DETAIL,CUR_SUBJECT.code,CUR_DETAIL.examTotal);
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
@@ -362,7 +363,7 @@ function gaPageHtml(d,subjectCode,examTotal){
 function exportPdf(){
   if(!CUR_DETAIL){ toast('افتحي تحليل اختبار أولاً'); return; }
   const footer=`<div class="ga-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
-  $('printAreaGA').innerHTML=gaPageHtml(CUR_DETAIL,CUR_SUBJECT.code,CUR_SUBJECT.exam_total)+footer;
+  $('printAreaGA').innerHTML=gaPageHtml(CUR_DETAIL,CUR_SUBJECT.code,CUR_DETAIL.examTotal)+footer;
   printWithTitle(`كشف_الدرجات_${CUR_DETAIL.secCode}_${CUR_SUBJECT.code}_${CUR_DETAIL.examName}`);
 }
 
@@ -372,13 +373,13 @@ async function collectSubjectDetails(subject){
   const details=[];
   for(const code of Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar'))){
     const sec=secMap[code];
-    const {data:exams}=await db.from('exams').select('id,name').eq('subject_id',subject.id).eq('section_id',sec.section_id);
+    const {data:exams}=await db.from('exams').select('id,name,exam_total').eq('subject_id',subject.id).eq('section_id',sec.section_id);
     for(const name of EXAM_NAMES){
       const ex=(exams||[]).find(e=>e.name===name);
       if(!ex) continue;
       const {data:recs}=await db.from('grade_records').select('id').eq('exam_id',ex.id).not('score','is',null);
       if(!(recs||[]).length) continue; // تجاهل الاختبارات غير المرصودة إطلاقاً
-      const det=await buildDetail(sec.section_id,code,ex.id,name);
+      const det=await buildDetail(sec.section_id,code,ex.id,name, ex.exam_total ?? subject.exam_total);
       details.push(det);
     }
   }
@@ -393,11 +394,11 @@ async function bulkExport(scope,kind){
     let allDetails=[];
     if(scope==='subject'){
       if(!CUR_SUBJECT){ toast('اختاري مقرراً'); return; }
-      allDetails=(await collectSubjectDetails(CUR_SUBJECT)).map(d=>({...d, subjectCode:CUR_SUBJECT.code, examTotal:CUR_SUBJECT.exam_total}));
+      allDetails=(await collectSubjectDetails(CUR_SUBJECT)).map(d=>({...d, subjectCode:CUR_SUBJECT.code}));
     }else{
       for(const subj of SUBJECTS){
         const ds=await collectSubjectDetails(subj);
-        allDetails.push(...ds.map(d=>({...d, subjectCode:subj.code, examTotal:subj.exam_total})));
+        allDetails.push(...ds.map(d=>({...d, subjectCode:subj.code})));
       }
     }
     if(!allDetails.length){ toast('لا اختبارات مرصودة في هذا النطاق'); return; }
@@ -427,21 +428,20 @@ async function openCompare(){
   $('gaCompareTitle').textContent=`${CUR_DETAIL.secCode} — ${CUR_SUBJECT.code}`;
   $('gaCompareSub').textContent='اختاري اختبارين أو أكثر للمقارنة';
   $('gaCompareResults').style.display='none';
-  const {data:exams}=await db.from('exams').select('id,name').eq('subject_id',CUR_SUBJECT.id).eq('section_id',CUR_DETAIL.secId);
+  const {data:exams}=await db.from('exams').select('id,name,exam_total').eq('subject_id',CUR_SUBJECT.id).eq('section_id',CUR_DETAIL.secId);
   const ordered=EXAM_NAMES.map(n=>(exams||[]).find(e=>e.name===n)).filter(Boolean);
   if(ordered.length<2){ $('gaCompareExamPick').innerHTML='<div class="empty-day">تحتاجين اختبارين على الأقل لهذه الشعبة للمقارنة.</div>'; return; }
   $('gaCompareExamPick').innerHTML=ordered.map(e=>`
-    <label class="ga-cmp-check"><input type="checkbox" value="${e.id}" data-name="${e.name}" ${e.id===CUR_DETAIL.examId?'checked':''}> ${e.name}</label>`).join('')+
+    <label class="ga-cmp-check"><input type="checkbox" value="${e.id}" data-name="${e.name}" data-total="${e.exam_total ?? CUR_SUBJECT.exam_total}" ${e.id===CUR_DETAIL.examId?'checked':''}> ${e.name}</label>`).join('')+
     `<button class="btn gold" id="gaCompareRun" style="width:auto;padding:10px 22px;margin-inline-start:10px">قارني</button>`;
   $('gaCompareRun').addEventListener('click',runCompare);
 }
 async function runCompare(){
   const checked=[...$('gaCompareExamPick').querySelectorAll('input:checked')];
   if(checked.length<2){ toast('اختاري اختبارين على الأقل'); return; }
-  const exams=checked.map(c=>({id:c.value,name:c.dataset.name}));
+  const exams=checked.map(c=>({id:c.value,name:c.dataset.name,total:+c.dataset.total}));
   const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',CUR_DETAIL.secId).is('to_date',null);
   const students=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
-  const total=CUR_SUBJECT.exam_total;
   const scoresByExam={};
   for(const ex of exams){
     const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',ex.id);
@@ -449,26 +449,27 @@ async function runCompare(){
   }
   const rows=students.map(s=>{
     const scores=exams.map(ex=>scoresByExam[ex.id][s.id] ?? null);
-    return {...s, scores};
+    const pcts=exams.map((ex,i)=>scores[i]!=null ? (scores[i]/ex.total*100) : null);
+    return {...s, scores, pcts};
   });
   const examStats=exams.map(ex=>{
     const vals=Object.values(scoresByExam[ex.id]);
-    const pcts=vals.map(v=>v/total*100);
+    const pcts=vals.map(v=>v/ex.total*100);
     const pass=pcts.filter(p=>p>=THRESH.pass_pct).length, mastery=pcts.filter(p=>p>=THRESH.mastery_pct).length;
-    return {name:ex.name, graded:vals.length,
+    return {name:ex.name, total:ex.total, graded:vals.length,
       passPct: vals.length?(pass/vals.length*100):null, masteryPct: vals.length?(mastery/vals.length*100):null,
       avg: vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length):null};
   });
 
-  $('gaCompareStatsTable').innerHTML='<tr><th>الاختبار</th><th>عدد المرصودات</th><th>متوسط الدرجة</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>'+
-    examStats.map(s=>`<tr><td class="sec">${s.name}</td><td class="c">${s.graded}</td><td class="c">${s.avg!=null?s.avg.toFixed(1):'—'}</td>
+  $('gaCompareStatsTable').innerHTML='<tr><th>الاختبار</th><th>الدرجة الكلية</th><th>عدد المرصودات</th><th>متوسط الدرجة</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>'+
+    examStats.map(s=>`<tr><td class="sec">${s.name}</td><td class="c">${s.total}</td><td class="c">${s.graded}</td><td class="c">${s.avg!=null?s.avg.toFixed(1):'—'}</td>
       <td class="c">${s.passPct!=null?s.passPct.toFixed(1)+'٪':'—'}</td><td class="c">${s.masteryPct!=null?s.masteryPct.toFixed(1)+'٪':'—'}</td></tr>`).join('');
 
-  $('gaCompareTable').innerHTML='<tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th>'+exams.map(e=>`<th>${e.name}</th>`).join('')+'<th>الفرق (آخر-أول)</th></tr>'+
+  $('gaCompareTable').innerHTML='<tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th>'+exams.map(e=>`<th>${e.name} (من ${e.total})</th>`).join('')+'<th>الفرق (نقاط٪، آخر-أول)</th></tr>'+
     rows.map((r,i)=>{
-      const first=r.scores.find(v=>v!=null), last=[...r.scores].reverse().find(v=>v!=null);
-      const diff = first!=null&&last!=null ? (last-first) : null;
-      const diffTxt = diff==null?'—':(diff>0?`+${diff}`:diff);
+      const firstPct=r.pcts.find(v=>v!=null), lastPct=[...r.pcts].reverse().find(v=>v!=null);
+      const diff = firstPct!=null&&lastPct!=null ? (lastPct-firstPct) : null;
+      const diffTxt = diff==null?'—':(diff>0?`+${diff.toFixed(1)}٪`:diff.toFixed(1)+'٪');
       const diffColor = diff==null?'':(diff>0?'color:var(--ok)':diff<0?'color:var(--err)':'');
       return `<tr><td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td>`+
         r.scores.map(v=>`<td class="c">${v??'—'}</td>`).join('')+
@@ -494,11 +495,11 @@ async function exportCompareXls(){
   addTitle(schoolName(),16,true,NAVY,WHITE);
   addTitle(`مقارنة الاختبارات — ${c.secCode} — ${c.subjectCode}`,12,true,null,'FF22303C');
   ws.addRow([]);
-  const hdr=ws.addRow(['#','الرقم الأكاديمي','اسم الطالبة',...c.exams.map(e=>e.name),'الفرق']);
+  const hdr=ws.addRow(['#','الرقم الأكاديمي','اسم الطالبة',...c.exams.map(e=>`${e.name} (من ${e.total})`),'الفرق (نقاط٪)']);
   hdr.eachCell(cell=>{ cell.font={bold:true,color:{argb:WHITE}}; cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; cell.alignment={horizontal:'center'}; cell.border=gaBorder; });
   c.rows.forEach((r,i)=>{
-    const first=r.scores.find(v=>v!=null), last=[...r.scores].reverse().find(v=>v!=null);
-    const diff = first!=null&&last!=null ? (last-first) : '';
+    const firstPct=r.pcts.find(v=>v!=null), lastPct=[...r.pcts].reverse().find(v=>v!=null);
+    const diff = firstPct!=null&&lastPct!=null ? (lastPct-firstPct).toFixed(1)+'٪' : '';
     const row=ws.addRow([i+1, r.academic_number, r.full_name, ...r.scores.map(v=>v??''), diff]);
     row.eachCell((cell,colNo)=>{ cell.border=gaBorder; cell.alignment={horizontal:colNo===3?'right':'center'}; cell.font={size:10.5}; cell.numFmt='@'; });
   });
@@ -514,18 +515,18 @@ function exportComparePdf(){
   if(!CMP_RESULT){ toast('شغّلي المقارنة أولاً'); return; }
   const c=CMP_RESULT;
   const rows=c.rows.map((r,i)=>{
-    const first=r.scores.find(v=>v!=null), last=[...r.scores].reverse().find(v=>v!=null);
-    const diff = first!=null&&last!=null ? (last-first) : '—';
+    const firstPct=r.pcts.find(v=>v!=null), lastPct=[...r.pcts].reverse().find(v=>v!=null);
+    const diff = firstPct!=null&&lastPct!=null ? (lastPct-firstPct).toFixed(1)+'٪' : '—';
     return `<tr><td>${i+1}</td><td>${r.academic_number}</td><td style="text-align:right">${r.full_name}</td>${r.scores.map(v=>`<td>${v??'—'}</td>`).join('')}<td>${diff}</td></tr>`;
   }).join('');
   const footer=`<div class="ga-footer">${schoolName()} — طُبع بتاريخ ${new Date().toISOString().slice(0,10)}</div>`;
   $('printAreaGA').innerHTML=`
     <div class="ga-page">
       <div class="ga-head"><h2>مقارنة الاختبارات — ${c.secCode} — ${c.subjectCode}</h2></div>
-      <table class="ga-tbl"><tr><th>الاختبار</th><th>عدد المرصودات</th><th>متوسط الدرجة</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>
-        ${c.examStats.map(s=>`<tr><td>${s.name}</td><td>${s.graded}</td><td>${s.avg!=null?s.avg.toFixed(1):'—'}</td><td>${s.passPct!=null?s.passPct.toFixed(1)+'٪':'—'}</td><td>${s.masteryPct!=null?s.masteryPct.toFixed(1)+'٪':'—'}</td></tr>`).join('')}
+      <table class="ga-tbl"><tr><th>الاختبار</th><th>الدرجة الكلية</th><th>عدد المرصودات</th><th>متوسط الدرجة</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>
+        ${c.examStats.map(s=>`<tr><td>${s.name}</td><td>${s.total}</td><td>${s.graded}</td><td>${s.avg!=null?s.avg.toFixed(1):'—'}</td><td>${s.passPct!=null?s.passPct.toFixed(1)+'٪':'—'}</td><td>${s.masteryPct!=null?s.masteryPct.toFixed(1)+'٪':'—'}</td></tr>`).join('')}
       </table>
-      <table class="ga-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th>${c.exams.map(e=>`<th>${e.name}</th>`).join('')}<th>الفرق</th></tr>${rows}</table>
+      <table class="ga-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th>${c.exams.map(e=>`<th>${e.name} (من ${e.total})</th>`).join('')}<th>الفرق (نقاط٪)</th></tr>${rows}</table>
     </div>${footer}`;
   printWithTitle(`مقارنة_${c.secCode}_${c.subjectCode}`);
 }

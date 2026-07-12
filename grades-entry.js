@@ -154,7 +154,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let MY_PAIRS=[], CUR_PAIR=null, CUR_EXAM=null, STUDENTS=[], EXISTING={};
+let MY_PAIRS=[], CUR_PAIR=null, CUR_EXAM=null, CUR_EXAM_TOTAL=25, STUDENTS=[], EXISTING={};
 let COMP_COMPS=[], COMP_ENROLLED=0, MASTERY_PCT=80;
 
 async function loadMasteryPct(){
@@ -169,6 +169,9 @@ async function initGradesEntry(){
   $('gGridBack').addEventListener('click',()=>{ show('gExamsView'); loadExams(); });
   $('gCompBack').addEventListener('click',()=>{ show('gExamsView'); loadExams(); });
   $('gNewExamGo').addEventListener('click',createExam);
+  $('gNewExamName').addEventListener('change',()=>{
+    $('gNewExamTotal').style.display = $('gNewExamName').value==='اختبار تشخيصي' ? 'block' : 'none';
+  });
   $('gSave').addEventListener('click',saveGrades);
   $('gTemplateXls').addEventListener('click',downloadTemplate);
   $('cAddComp').addEventListener('click',()=>addCompCard());
@@ -213,19 +216,19 @@ async function loadMySubjects(){
 async function loadExams(){
   $('gExamsTitle').textContent=`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code}`;
   $('gExamList').innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
-  $('gNewExamName').value=''; $('gNewExamDate').value='';
+  $('gNewExamName').value=''; $('gNewExamDate').value=''; $('gNewExamTotal').value=''; $('gNewExamTotal').style.display='none';
   const {data:exams,error}=await db.from('exams').select('*')
     .eq('section_id',CUR_PAIR.section_id).eq('subject_id',CUR_PAIR.subject_id).order('created_at');
   if(error){ $('gExamList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   $('gExamList').innerHTML=(exams||[]).length
-    ? exams.map(e=>`<div class="g-exam" data-id="${e.id}" data-name="${e.name}">
-        <div><b>${e.name}</b><small>${e.exam_date||''}</small></div>
+    ? exams.map(e=>`<div class="g-exam" data-id="${e.id}" data-name="${e.name}" data-total="${e.exam_total??''}">
+        <div><b>${e.name}</b><small>${e.exam_date||''}${e.exam_total?' · من '+e.exam_total:''}</small></div>
         <button class="btn ghost g-comp-link" data-id="${e.id}" data-name="${e.name}" style="width:auto;padding:8px 16px;font-size:12.5px">📋 استمارة تحليل الكفايات</button>
       </div>`).join('')
     : '<div class="empty-day">لا اختبارات بعد — أنشئي واحداً أدناه.</div>';
   $('gExamList').querySelectorAll('.g-exam').forEach(el=>el.addEventListener('click',(e)=>{
     if(e.target.closest('.g-comp-link')) return;
-    openExam({id:el.dataset.id,name:el.dataset.name});
+    openExam({id:el.dataset.id,name:el.dataset.name,exam_total:el.dataset.total?+el.dataset.total:null});
   }));
   $('gExamList').querySelectorAll('.g-comp-link').forEach(el=>el.addEventListener('click',(e)=>{
     e.stopPropagation(); openCompetency({id:el.dataset.id,name:el.dataset.name});
@@ -234,12 +237,17 @@ async function loadExams(){
 async function createExam(){
   const name=$('gNewExamName').value;
   if(!name){ toast('اختاري الاختبار'); return; }
+  let examTotal=null;
+  if(name==='اختبار تشخيصي'){
+    examTotal=+$('gNewExamTotal').value;
+    if(!examTotal||examTotal<=0){ toast('أدخلي الدرجة الكلية للاختبار التشخيصي'); return; }
+  }
   const btn=$('gNewExamGo'); btn.disabled=true;
   try{
     const {data,error}=await db.from('exams').insert({
       academic_year_id:S.YEAR.id, section_id:CUR_PAIR.section_id, subject_id:CUR_PAIR.subject_id,
-      name, exam_date:$('gNewExamDate').value||null, created_by:S.ME.id
-    }).select('id,name').single();
+      name, exam_date:$('gNewExamDate').value||null, exam_total:examTotal, created_by:S.ME.id
+    }).select('id,name,exam_total').single();
     if(error) throw error;
     openExam(data);
   }catch(err){ toast(/duplicate|unique/i.test(err.message)?'يوجد اختبار بهذا الاسم مسبقاً':'تعذر الإنشاء: '+err.message); }
@@ -247,9 +255,9 @@ async function createExam(){
 }
 
 async function openExam(exam){
-  CUR_EXAM=exam; show('gGridView');
+  CUR_EXAM=exam; CUR_EXAM_TOTAL=exam.exam_total ?? CUR_PAIR.exam_total; show('gGridView');
   $('gGridTitle').textContent=`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${exam.name}`;
-  $('gGridSub').textContent=`الدرجة الكلية: ${CUR_PAIR.exam_total}`;
+  $('gGridSub').textContent=`الدرجة الكلية: ${CUR_EXAM_TOTAL}`;
   $('gGrid').innerHTML='<div class="empty-day">جارٍ تحميل الطالبات…</div>';
   const {data:enr,error}=await db.from('enrollments')
     .select('students(id,full_name,academic_number)').eq('section_id',CUR_PAIR.section_id).is('to_date',null);
@@ -267,7 +275,7 @@ function renderGrid(){
       <div class="gc">${i+1}</div>
       <div class="gc">${s.full_name}</div>
       <div class="gc">${s.academic_number}</div>
-      <div><input type="number" min="0" max="${CUR_PAIR.exam_total}" step="0.5" data-sid="${s.id}"
+      <div><input type="number" min="0" max="${CUR_EXAM_TOTAL}" step="0.5" data-sid="${s.id}"
         class="${EXISTING[s.id]!=null?'g-filled':''}" value="${EXISTING[s.id]??''}"></div>`).join('');
   const inputs=[...$('gGrid').querySelectorAll('input')];
   inputs.forEach((inp,idx)=>{
@@ -320,7 +328,7 @@ async function downloadTemplate(){
     row.height=size>=16?26:20;
   };
   addTitle(schoolName(),16,true,NAVY,WHITE);
-  addTitle(`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${CUR_EXAM.name} — من ${CUR_PAIR.exam_total}`,12,true,null,'FF22303C');
+  addTitle(`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${CUR_EXAM.name} — من ${CUR_EXAM_TOTAL}`,12,true,null,'FF22303C');
   ws.addRow([]);
   const hdr=ws.addRow(['#','الرقم الأكاديمي','اسم الطالبة','الدرجة']);
   hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=gBorder; });
@@ -386,7 +394,7 @@ function categoryOf(pct){ return CATS.find(c=>pct>=c.min_pct && pct<=c.max_pct) 
 async function syncUnderperformerAlerts(scoreRows){
   if(!CATS.length) return;
   const lowestCat=CATS.reduce((min,c)=>c.min_pct<min.min_pct?c:min, CATS[0]);
-  const total=CUR_PAIR.exam_total;
+  const total=CUR_EXAM_TOTAL;
   const toFlag=[], toClear=[];
   for(const r of scoreRows){
     const pct=r.score/total*100;
@@ -572,14 +580,14 @@ async function runExtract(){
   if(!secIds.length||!examNames.length){ toast('اختاري شعبة واحدة وامتحاناً واحداً على الأقل'); return; }
   const cat=CATS.find(c=>c.id===catId);
   const pairs=MY_PAIRS.filter(p=>p.subject_code===subj && secIds.includes(p.section_id));
-  const examTotal=pairs[0]?.exam_total||25;
 
   const perExam={};
   for(const name of examNames){
     perExam[name]=[];
     for(const p of pairs){
-      const {data:ex}=await db.from('exams').select('id').eq('section_id',p.section_id).eq('subject_id',p.subject_id).eq('name',name).maybeSingle();
+      const {data:ex}=await db.from('exams').select('id,exam_total').eq('section_id',p.section_id).eq('subject_id',p.subject_id).eq('name',name).maybeSingle();
       if(!ex) continue;
+      const examTotal=ex.exam_total ?? p.exam_total;
       const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',p.section_id).is('to_date',null);
       const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',ex.id);
       const scoreBy={}; for(const r of recs||[]) if(r.score!=null) scoreBy[r.student_id]=r.score;
