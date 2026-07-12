@@ -13,17 +13,21 @@ $('appView').insertAdjacentHTML('beforeend', `
     <button class="btn gold" id="setSaveName" style="width:auto;padding:11px 26px">حفظ الاسم</button>
   </div>
   <div class="panel">
-    <h3>أوقات الحصص</h3>
-    <div class="sub">تُستخدم لتمييز «الحصة الآن» في شاشة المعلمة، ولا تمنع الرصد خارج وقتها (الرصد مفتوح دائماً).</div>
+    <h3>عدد الحصص وأوقاتها</h3>
+    <div class="sub">اختاري العدد المعتمد للحصص اليومية (٥ / ٦ / ٧) ثم حدّدي وقت كل حصة — تُستخدم لتمييز «الحصة الآن» في شاشة المعلمة، ولا تمنع الرصد خارج وقتها (الرصد مفتوح دائماً).</div>
+    <div class="field" style="max-width:160px">
+      <label>عدد الحصص</label>
+      <select id="setPeriodCount"><option value="5">٥</option><option value="6">٦</option><option value="7">٧</option></select>
+    </div>
     <div id="setPeriods"></div>
-    <button class="btn gold" id="setSavePeriods" style="width:auto;padding:11px 26px;margin-top:6px">حفظ الأوقات</button>
+    <button class="btn gold" id="setSavePeriods" style="width:auto;padding:11px 26px;margin-top:6px">حفظ</button>
   </div>
 </div>
 
 <div class="app-main" id="settingsPerms" style="display:none">
   <div class="panel">
     <h3>منح الصلاحيات</h3>
-    <div class="sub">ابحثي عن منتسبة لعرض صلاحياتها الحالية وإضافة أو سحب دور. الدور «مسؤولة متابعة الغياب» يفتح لأي شخص تبويب «متابعة الغياب» كاملاً بغض النظر عن قسمها.</div>
+    <div class="sub">ابحثي عن منتسبة لعرض صلاحياتها الحالية وإضافة أو سحب دور. الدور «مسؤولة متابعة الغياب» يفتح لأي شخص تبويب «متابعة الغياب» كاملاً بغض النظر عن قسمها. لأدوار «رئيسة لجنة» و«مسؤولة مشروع» أضيفي اسم اللجنة/المشروع — حل مؤقت نصي إلى أن تُبنى وحدة اللجان والمشاريع نفسها.</div>
     <div class="search-row"><input type="text" id="permSearch" placeholder="اسم المنتسبة أو رقمها الشخصي…"></div>
     <div class="sugg" id="permSugg"></div>
     <div class="picked" id="permPicked">
@@ -31,6 +35,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div id="permRoles" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
       <div class="row" style="margin-top:12px">
         <select id="permAdd"></select>
+        <input type="text" id="permScope" placeholder="اسم اللجنة أو المشروع…" style="display:none;flex:1;min-width:160px">
         <button class="btn gold" id="permAddBtn">إضافة الدور</button>
       </div>
     </div>
@@ -61,45 +66,77 @@ function initData(){
   }
   loadPeriods();
 }
-let PATTERN_ID=null;
+let PATTERN_ID=null, PERIOD_VALUES={};
 async function loadPeriods(){
   const {data:pat}=await db.from('timetable_patterns').select('id').eq('is_active',true).maybeSingle();
   PATTERN_ID=pat?.id||null;
   if(!PATTERN_ID){ $('setPeriods').innerHTML='<div class="empty-day">لا يوجد نمط جدول نشط.</div>'; return; }
   const {data:pp}=await db.from('pattern_periods').select('*').eq('pattern_id',PATTERN_ID).order('period_no');
-  $('setPeriods').innerHTML=(pp||[]).map(p=>`
-    <div class="period-row" data-p="${p.period_no}">
-      <b>حصة ${p.period_no}</b>
-      <input type="time" class="pf-start" value="${p.start_time?.slice(0,5)||''}">
+  PERIOD_VALUES={};
+  for(const p of pp||[]) PERIOD_VALUES[p.period_no]={start:p.start_time?.slice(0,5)||'', end:p.end_time?.slice(0,5)||''};
+  const count=(pp||[]).length;
+  $('setPeriodCount').value = [5,6,7].includes(count) ? count : 7;
+  renderPeriodRows(+$('setPeriodCount').value);
+  if(!$('setPeriodCount').dataset.ready){
+    $('setPeriodCount').dataset.ready='1';
+    $('setPeriodCount').addEventListener('change', ()=>{
+      /* نحفظ قيم الصفوف المعروضة حالياً قبل إعادة الرسم بعدد مختلف */
+      [...$('setPeriods').querySelectorAll('.period-row')].forEach(r=>{
+        PERIOD_VALUES[+r.dataset.p]={start:r.querySelector('.pf-start').value, end:r.querySelector('.pf-end').value};
+      });
+      renderPeriodRows(+$('setPeriodCount').value);
+    });
+  }
+}
+function renderPeriodRows(count){
+  $('setPeriods').innerHTML=Array.from({length:count},(_,i)=>i+1).map(n=>{
+    const v=PERIOD_VALUES[n]||{start:'',end:''};
+    return `<div class="period-row" data-p="${n}">
+      <b>حصة ${n}</b>
+      <input type="time" class="pf-start" value="${v.start}">
       —
-      <input type="time" class="pf-end" value="${p.end_time?.slice(0,5)||''}">
-    </div>`).join('');
+      <input type="time" class="pf-end" value="${v.end}">
+    </div>`;
+  }).join('');
 }
 $('setSavePeriods').addEventListener('click', async ()=>{
   if(!PATTERN_ID){ toast('لا يوجد نمط جدول نشط'); return; }
+  const desired=+$('setPeriodCount').value;
+  const rows=[...$('setPeriods').querySelectorAll('.period-row')].map(r=>({
+    period_no:+r.dataset.p, start_time:r.querySelector('.pf-start').value, end_time:r.querySelector('.pf-end').value,
+  }));
+  if(rows.some(r=>!r.start_time||!r.end_time)){ toast('حدّدي وقت كل حصة قبل الحفظ'); return; }
   const btn=$('setSavePeriods'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
   try{
-    const rows=[...$('setPeriods').querySelectorAll('.period-row')].map(r=>({
-      pattern_id:PATTERN_ID, period_no:+r.dataset.p,
-      start_time:r.querySelector('.pf-start').value, end_time:r.querySelector('.pf-end').value,
-    }));
     for(const r of rows){
-      if(!r.start_time||!r.end_time) continue;
-      const {error}=await db.from('pattern_periods').update({start_time:r.start_time, end_time:r.end_time})
-        .eq('pattern_id',r.pattern_id).eq('period_no',r.period_no);
-      if(error) throw error;
+      const {data:upd, error:eU}=await db.from('pattern_periods')
+        .update({start_time:r.start_time, end_time:r.end_time})
+        .eq('pattern_id',PATTERN_ID).eq('period_no',r.period_no).select('period_no');
+      if(eU) throw eU;
+      if(!upd||!upd.length){
+        const {error:eI}=await db.from('pattern_periods')
+          .insert({pattern_id:PATTERN_ID, period_no:r.period_no, start_time:r.start_time, end_time:r.end_time});
+        if(eI) throw eI;
+      }
     }
-    toast('تم حفظ أوقات الحصص — التغيير يظهر عند إعادة تحميل الصفحة');
+    /* حذف أي حصص زائدة عن العدد المعتمد الآن (لو قلّل العدد) */
+    const {error:eDel}=await db.from('pattern_periods').delete()
+      .eq('pattern_id',PATTERN_ID).gt('period_no',desired);
+    if(eDel) throw eDel;
+    toast(`تم حفظ ${desired} حصص — التغيير يظهر عند إعادة تحميل الصفحة`);
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
-  finally{ btn.disabled=false; btn.textContent='حفظ الأوقات'; }
+  finally{ btn.disabled=false; btn.textContent='حفظ'; }
 });
 
 /* ============ الصلاحيات ============ */
+const SCOPE_ROLES = new Set(['committee_head','project_lead']);
 let PERM_STAFF=null;
 function initPerms(){
   if($('permSearch').dataset.ready) return;
   $('permSearch').dataset.ready='1';
   $('permAdd').innerHTML=Object.entries(roleNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+  toggleScope();
+  $('permAdd').addEventListener('change',toggleScope);
   let deb=null;
   $('permSearch').addEventListener('input',()=>{
     clearTimeout(deb);
@@ -118,10 +155,16 @@ function initPerms(){
   $('permAddBtn').addEventListener('click', async ()=>{
     if(!PERM_STAFF) return;
     const role=$('permAdd').value;
-    const {error}=await db.from('staff_roles').insert({staff_id:PERM_STAFF.id, role});
+    const scope = SCOPE_ROLES.has(role) ? clean($('permScope').value) : null;
+    if(SCOPE_ROLES.has(role) && !scope){ toast('اكتبي اسم اللجنة أو المشروع'); return; }
+    const {error}=await db.from('staff_roles').insert({staff_id:PERM_STAFF.id, role, scope});
     if(error){ toast(/duplicate|unique/i.test(error.message)?'الدور موجود مسبقاً لهذه المنتسبة':'تعذر الإضافة: '+error.message); return; }
+    $('permScope').value='';
     toast('تمت إضافة الدور'); refreshRoles();
   });
+}
+function toggleScope(){
+  $('permScope').style.display = SCOPE_ROLES.has($('permAdd').value) ? 'block' : 'none';
 }
 async function pickStaff(s){
   PERM_STAFF=s;
@@ -130,9 +173,9 @@ async function pickStaff(s){
   refreshRoles();
 }
 async function refreshRoles(){
-  const {data:roles}=await db.from('staff_roles').select('id,role').eq('staff_id',PERM_STAFF.id);
+  const {data:roles}=await db.from('staff_roles').select('id,role,scope').eq('staff_id',PERM_STAFF.id);
   $('permRoles').innerHTML=(roles||[]).length
-    ? roles.map(r=>`<span class="perm-badge">${roleNames[r.role]||r.role}<button data-id="${r.id}">✕</button></span>`).join('')
+    ? roles.map(r=>`<span class="perm-badge">${roleNames[r.role]||r.role}${r.scope?' — '+r.scope:''}<button data-id="${r.id}">✕</button></span>`).join('')
     : '<span style="color:#8a93a0;font-size:13px">لا صلاحيات إضافية — منتسبة بمسمّاها الوظيفي فقط.</span>';
   $('permRoles').querySelectorAll('button').forEach(b=>b.addEventListener('click', async ()=>{
     await db.from('staff_roles').delete().eq('id',b.dataset.id);
