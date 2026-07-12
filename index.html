@@ -15,7 +15,7 @@
 
 <div class="wrap" id="loginView">
   <div class="card">
-    <div class="card-head"><div class="crest">ج</div><h1>مدرسة جدحفص الثانوية للبنات</h1></div>
+    <div class="card-head"><div class="crest">ج</div><h1 id="schoolNameLogin">مدرسة جدحفص الثانوية للبنات</h1></div>
     <div class="card-body">
       <div class="field"><label for="email">البريد الإلكتروني</label>
         <input id="email" type="email" dir="ltr" autocomplete="username" placeholder="name@moe.bh"></div>
@@ -196,7 +196,7 @@
 </div>
 
 <div class="toast" id="toast"><div id="toastMsg">تم</div></div>
-<footer>مدرسة جدحفص الثانوية للبنات — لجنة التخطيط الاستراتيجي</footer>
+<footer><span id="footerSchoolName">مدرسة جدحفص الثانوية للبنات</span> — لجنة التخطيط الاستراتيجي</footer>
 
 <script type="module">
   import './admin.js';
@@ -204,6 +204,8 @@
   import './board.js';
   import './social.js';
   import './ministry.js';
+  import './period.js';
+  import './settings.js';
   import { start } from './core.js';
   start();
 </script>

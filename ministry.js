@@ -11,7 +11,7 @@ const OPT = {
   action:   ['الاتصال بمتولي الأمر','إرسال رسالة نصية','استدعاء متولي الأمر','تحويل للإرشاد الاجتماعي'],
   response: ['تم الرد','لم يتم الرد','تعهد بالحضور','لا استجابة'],
 };
-const SCHOOL='مدرسة جدحفص الثانوية للبنات';
+const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 
 /* ============ حقن الواجهة والتنسيقات ============ */
 $('appView').insertAdjacentHTML('beforeend', `
@@ -31,7 +31,8 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn gold" id="minSave">حفظ المتابعة</button>
       <button class="btn ghost" id="minXls1">⬇ إكسل — بيانات المتغيبات</button>
       <button class="btn ghost" id="minXls2">⬇ إكسل — الأسماء والأعداد</button>
-      <button class="btn ghost" id="minPdf">⬇ PDF — بيانات المتغيبات</button>
+      <button class="btn ghost" id="minPdf1">⬇ PDF — بيانات المتغيبات</button>
+      <button class="btn ghost" id="minPdf2">⬇ PDF — الأسماء والأعداد</button>
     </div>
     <div class="board-wrap"><table class="board min-tbl" id="minTable"></table></div>
   </div>
@@ -76,7 +77,8 @@ function initPick(){
   $('minSave').addEventListener('click',saveFollowup);
   $('minXls1').addEventListener('click',()=>exportXls(1));
   $('minXls2').addEventListener('click',()=>exportXls(2));
-  $('minPdf').addEventListener('click',exportPdf);
+  $('minPdf1').addEventListener('click',()=>exportPdf(1));
+  $('minPdf2').addEventListener('click',()=>exportPdf(2));
 }
 
 async function loadMinistry(){
@@ -219,7 +221,7 @@ async function exportXls(kind){
     dataRows=ROWS.map((r,i)=>[i+1,r.academic_number,r.full_name,r.sec]);
   }
 
-  addTitleRow(SCHOOL,16,true,NAVY,WHITE,cols);
+  addTitleRow(schoolName(),16,true,NAVY,WHITE,cols);
   addTitleRow(kind===1?'استمارة بيانات الطلبة المتغيبين':'أسماء الطالبات المتغيبات وأعدادهن',13,true,GOLD,NAVY,cols);
   addTitleRow(`اليوم: ${day}   —   التاريخ: ${date}`,11,false,null,'FF22303C',cols);
   ws.addRow([]);
@@ -271,27 +273,36 @@ async function exportXls(kind){
 }
 
 /* ============ تنزيل PDF (طباعة المتصفح — تدعم العربية والاتجاه تلقائياً) ============ */
-function exportPdf(){
+function exportPdf(kind){
   if(!ROWS.length){ toast('لا غائبات في هذا اليوم'); return; }
   const day=AR_DAYS[MIN_DATE.getDay()]||'', date=dstr(MIN_DATE);
-  const rowsHtml=ROWS.map((r,i)=>`<tr>
-    <td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td>
-    <td class="c" dir="ltr">${fmtPhone(r.contact1)}</td><td class="c" dir="ltr">${fmtPhone(r.contact2)}</td>
-    <td>${r.fu.absence_status||''}</td><td>${r.fu.action_taken||''}</td><td>${r.fu.response_status||''}</td><td>${r.fu.reason||''}</td>
-  </tr>`).join('');
-  $('printArea').innerHTML = `
-    <div class="p-head">
-      <h1>${SCHOOL}</h1>
-      <h2>استمارة بيانات الطلبة المتغيبين</h2>
-      <p>اليوم: ${day} — التاريخ: ${date} — إجمالي الغائبات: ${ROWS.length}</p>
-    </div>
-    <table class="p-tbl">
-      <tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th><th>تواصل ١</th><th>تواصل ٢</th>
-        <th>حالة الغياب</th><th>الإجراء المتخذ</th><th>حالة الاستجابة</th><th>سبب الغياب</th></tr>
-      ${rowsHtml}
-    </table>`;
+  if(kind===1){
+    const rowsHtml=ROWS.map((r,i)=>`<tr>
+      <td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td>
+      <td class="c" dir="ltr">${fmtPhone(r.contact1)}</td><td class="c" dir="ltr">${fmtPhone(r.contact2)}</td>
+      <td>${r.fu.absence_status||''}</td><td>${r.fu.action_taken||''}</td><td>${r.fu.response_status||''}</td><td>${r.fu.reason||''}</td>
+    </tr>`).join('');
+    $('printArea').innerHTML = `
+      <div class="p-head"><h1>${schoolName()}</h1><h2>استمارة بيانات الطلبة المتغيبين</h2>
+        <p>اليوم: ${day} — التاريخ: ${date} — إجمالي الغائبات: ${ROWS.length}</p></div>
+      <table class="p-tbl">
+        <tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th><th>تواصل ١</th><th>تواصل ٢</th>
+          <th>حالة الغياب</th><th>الإجراء المتخذ</th><th>حالة الاستجابة</th><th>سبب الغياب</th></tr>
+        ${rowsHtml}
+      </table>`;
+  }else{
+    const perSec={}; for(const r of ROWS) perSec[r.sec]=(perSec[r.sec]||0)+1;
+    const rowsHtml=ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td></tr>`).join('');
+    const secHtml=Object.keys(perSec).sort((a,b)=>a.localeCompare(b,'ar')).map(s=>`<tr><td>${s}</td><td class="c">${perSec[s]}</td></tr>`).join('');
+    $('printArea').innerHTML = `
+      <div class="p-head"><h1>${schoolName()}</h1><h2>أسماء الطالبات المتغيبات وأعدادهن</h2>
+        <p>اليوم: ${day} — التاريخ: ${date} — العدد الكلي: ${ROWS.length}</p></div>
+      <table class="p-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th></tr>${rowsHtml}</table>
+      <div class="p-head" style="margin-top:18px"><h2>العدد حسب الصف</h2></div>
+      <table class="p-tbl" style="width:280px"><tr><th>الصف</th><th>العدد</th></tr>${secHtml}</table>`;
+  }
   window.print();
 }
 
 registerTab({id:'ministryMain', label:'قائمة الوزارة', group:'attendance', groupLabel:'متابعة الغياب',
-  show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead, onOpen:loadMinistry});
+  show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead||f.isAttendanceLead, onOpen:loadMinistry});

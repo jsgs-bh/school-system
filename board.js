@@ -85,4 +85,4 @@ async function loadBoard(){
 }
 
 registerTab({id:'boardMain', label:'متابعة الرصد', group:'attendance', groupLabel:'متابعة الغياب',
-  show:f=>f.isAdmin||f.isLead||f.isSocial||f.isReg, onOpen:loadBoard});
+  show:f=>f.isAdmin||f.isLead||f.isSocial||f.isReg||f.isAttendanceLead, onOpen:loadBoard});

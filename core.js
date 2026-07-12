@@ -5,10 +5,11 @@ export const db = createClient('https://vvfxcoxnnuubycrpkwzj.supabase.co','sb_pu
 export const $ = id => document.getElementById(id);
 
 /* الحالة المشتركة بين الشاشات */
-export const S = { ME:null, YEAR:null, PERIODS:[], FLAGS:{} };
+export const S = { ME:null, YEAR:null, PERIODS:[], FLAGS:{}, SETTINGS:{school_name:'المدرسة'} };
 
 export const roleNames = {admin:'الدعم الفني',leadership:'القيادة العليا',project_lead:'مسؤولة مشروع',
-  committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات'};
+  committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات',
+  attendance_lead:'مسؤولة متابعة الغياب'};
 export const titleNames = {teacher:'معلمة',senior_teacher:'معلمة أولى',leadership:'قيادة عليا',staff:'منتسبة'};
 export const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 export const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
@@ -72,6 +73,19 @@ export function openTab(tid){
 }
 
 
+/* ============ إعدادات النظام (اسم المدرسة وغيرها) ============ */
+export async function loadSettings(){
+  const { data } = await db.from('app_settings').select('*').eq('id',1).maybeSingle();
+  if(data) S.SETTINGS = data;
+  applySettingsToDom();
+}
+export function applySettingsToDom(){
+  const name = S.SETTINGS.school_name || 'المدرسة';
+  document.title = 'نظام ' + name;
+  const login=$('schoolNameLogin'); if(login) login.textContent = name;
+  const foot=$('footerSchoolName'); if(foot) foot.textContent = name;
+}
+
 /* ============ الجلسة ============ */
 async function boot(session){
   let { data: staff } = await db.from('staff').select('*, departments(name)').eq('auth_user_id', session.user.id).maybeSingle();
@@ -90,6 +104,7 @@ async function boot(session){
     isSocial:/اجتماعي/.test(dept),
     isReg:   /تسجيل/.test(dept),
     isTeacher: staff.title==='teacher'||staff.title==='senior_teacher',
+    isAttendanceLead: (roles||[]).some(r=>r.role==='attendance_lead'),
   };
   $('userName').textContent = staff.full_name;
   $('userRole').textContent = (roles||[]).map(r=>roleNames[r.role]).join(' · ') || titleNames[staff.title] || 'منتسبة';
@@ -133,6 +148,7 @@ async function login(){
   boot(data.session);
 }
 export async function start(){
+  await loadSettings();
   $('loginBtn').addEventListener('click',login);
   $('password').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
   $('logoutBtn').addEventListener('click',async()=>{await db.auth.signOut();location.reload();});
