@@ -38,6 +38,9 @@
   .tabs{display:flex;gap:6px;width:100%;padding-top:4px;flex-wrap:wrap}
   .tabs button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#dfe6ee;padding:8px 16px;border-radius:9px 9px 0 0;font:inherit;font-size:13px;cursor:pointer}
   .tabs button.on{background:var(--sand);color:var(--navy);font-weight:700;border-color:var(--sand)}
+  .subtabs{display:none;gap:6px;width:100%;flex-wrap:wrap;padding:8px 0 2px;border-top:1px solid rgba(255,255,255,.15);margin-top:4px}
+  .subtabs button{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.16);color:#c8d2dc;padding:6px 14px;border-radius:7px;font:inherit;font-size:12.5px;cursor:pointer}
+  .subtabs button.on{background:var(--gold);color:var(--navy-deep);font-weight:700;border-color:var(--gold)}
   .app-main{max-width:960px;margin:0 auto;padding:22px 16px 40px;width:100%}
 
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:22px}

@@ -37,14 +37,40 @@ export function showWarns(id,warns){
   w.innerHTML = warns.slice(0,40).map(x=>'• '+x).join('<br>') + (warns.length>40?`<br>… و${warns.length-40} تنبيهاً آخر`:'');
 }
 
-/* ============ سجل التبويبات — كل شاشة تسجّل نفسها ============ */
-const TABS=[];
-export function registerTab(t){ TABS.push(t); }
-export function openTab(tid){
-  for(const t of TABS){ const el=$(t.id); if(el) el.style.display = t.id===tid?'block':'none'; }
-  document.querySelectorAll('#tabsNav button').forEach(b=>b.classList.toggle('on', b.dataset.t===tid));
-  const t=TABS.find(x=>x.id===tid); if(t?.onOpen) t.onOpen();
+/* ============ سجل التبويبات — تبويبات مستقلة + مجموعات فرعية ============ */
+const TOP=[];        // تبويبات مستقلة (لا تنتمي لمجموعة)
+const GROUPS={};     // groupId -> {label, tabs:[]}
+
+export function registerTab(t){
+  if(t.group){
+    GROUPS[t.group] ??= {label:t.groupLabel||t.group, tabs:[]};
+    GROUPS[t.group].tabs.push(t);
+  }else{
+    TOP.push(t);
+  }
 }
+const allTabs = () => [...TOP, ...Object.values(GROUPS).flatMap(g=>g.tabs)];
+function groupOf(tid){
+  for(const [gid,g] of Object.entries(GROUPS)) if(g.tabs.some(t=>t.id===tid)) return gid;
+  return null;
+}
+function renderSubNav(gid, activeId){
+  const box=$('subTabsNav'); if(!box) return;
+  if(!gid){ box.style.display='none'; box.innerHTML=''; return; }
+  const vis=GROUPS[gid].tabs.filter(t=>t.show(S.FLAGS));
+  box.style.display='flex';
+  box.innerHTML=vis.map(t=>`<button data-t="${t.id}" class="${t.id===activeId?'on':''}">${t.label}</button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.t)));
+}
+export function openTab(tid){
+  for(const t of allTabs()){ const el=$(t.id); if(el) el.style.display = t.id===tid?'block':'none'; }
+  const gid=groupOf(tid);
+  document.querySelectorAll('#tabsNav button[data-t]').forEach(b=>b.classList.toggle('on', b.dataset.t===tid));
+  document.querySelectorAll('#tabsNav button[data-g]').forEach(b=>b.classList.toggle('on', b.dataset.g===gid));
+  renderSubNav(gid, tid);
+  const t=allTabs().find(x=>x.id===tid); if(t?.onOpen) t.onOpen();
+}
+
 
 /* ============ الجلسة ============ */
 async function boot(session){
@@ -76,14 +102,26 @@ async function boot(session){
     const { data: pp } = await db.from('pattern_periods').select('*').eq('pattern_id',pat.id).order('period_no');
     S.PERIODS = pp||[];
   }
-  const visible = TABS.filter(t=>t.show(S.FLAGS));
-  if(visible.length>1){
+  const topVisible = TOP.filter(t=>t.show(S.FLAGS));
+  const groupItems = Object.entries(GROUPS)
+    .map(([gid,g])=>({gid, label:g.label, tabs:g.tabs.filter(t=>t.show(S.FLAGS))}))
+    .filter(g=>g.tabs.length);
+  const navCount = topVisible.length + groupItems.length;
+  if(navCount>1){
     $('tabsNav').style.display='flex';
-    $('tabsNav').innerHTML = visible.map(t=>`<button data-t="${t.id}">${t.label}</button>`).join('');
-    $('tabsNav').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.t)));
+    $('tabsNav').innerHTML =
+      topVisible.map(t=>`<button data-t="${t.id}">${t.label}</button>`).join('') +
+      groupItems.map(g=>`<button data-g="${g.gid}">${g.label}</button>`).join('');
+    $('tabsNav').querySelectorAll('button[data-t]').forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.t)));
+    $('tabsNav').querySelectorAll('button[data-g]').forEach(b=>b.addEventListener('click',()=>{
+      const g=groupItems.find(x=>x.gid===b.dataset.g);
+      if(g?.tabs.length) openTab(g.tabs[0].id);
+    }));
   }
-  for(const t of visible) if(t.init) t.init();
-  openTab(visible[0]?.id || 'teacherMain');
+  for(const t of topVisible) if(t.init) t.init();
+  for(const g of groupItems) for(const t of g.tabs) if(t.init) t.init();
+  const firstId = topVisible[0]?.id || groupItems[0]?.tabs[0]?.id || 'teacherMain';
+  openTab(firstId);
 }
 async function login(){
   const btn=$('loginBtn'), m=$('loginMsg');

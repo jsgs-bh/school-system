@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام مدرسة جدحفص الثانوية للبنات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --navy:#1d3d5c; --navy-deep:#132a40; --gold:#b98a2f; --gold-soft:#f3e8cf;
+    --sand:#f5f2ec; --white:#fff; --ink:#22303c; --line:#dcd5c8;
+    --err:#b3372f; --err-soft:#faeceb; --ok:#2f7d4f; --ok-soft:#eaf4ee; --warn:#9a6b1f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--sand);color:var(--ink);display:flex;flex-direction:column;min-height:100vh}
+  .topline{height:6px;background:linear-gradient(90deg,var(--gold),#d9b45e 40%,var(--gold))}
+
+  .wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:100%;max-width:420px;background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px -24px rgba(19,42,64,.35);overflow:hidden}
+  .card-head{background:var(--navy);color:var(--white);padding:34px 28px 26px;text-align:center;position:relative}
+  .card-head::after{content:"";position:absolute;inset-inline:0;bottom:-1px;height:14px;background:radial-gradient(28px 14px at 50% 100%,var(--white) 98%,transparent 100%)}
+  .crest{width:58px;height:58px;margin:0 auto 12px;border-radius:50%;background:var(--gold);color:var(--navy-deep);display:flex;align-items:center;justify-content:center;font-family:'Amiri',serif;font-size:30px;font-weight:700}
+  .card-head h1{font-family:'Amiri',serif;font-size:22px;line-height:1.5;font-weight:700}
+  .card-body{padding:30px 28px 34px}
+  .field{margin-bottom:18px}
+  .field label{display:block;font-size:13.5px;font-weight:600;color:var(--navy);margin-bottom:7px}
+  .field input,.field select{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:9px;font:inherit;font-size:15px;background:#fbfaf7;color:var(--ink)}
+  .field input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(29,61,92,.12);background:var(--white)}
+  .btn{width:100%;padding:13px;border:none;border-radius:9px;cursor:pointer;background:var(--navy);color:var(--white);font:inherit;font-size:15.5px;font-weight:600;transition:background .15s}
+  .btn:hover{background:var(--navy-deep)}
+  .btn:disabled{opacity:.55;cursor:wait}
+  .btn.gold{background:var(--gold);color:var(--navy-deep)}
+  .btn.ghost{background:transparent;color:var(--navy);border:1.5px solid var(--line)}
+  .msg{margin-top:16px;padding:11px 14px;border-radius:9px;font-size:13.5px;display:none;line-height:1.7}
+  .msg.err{display:block;background:var(--err-soft);color:var(--err);border:1px solid #ecc9c6}
+
+  .app{display:none;flex:1;flex-direction:column}
+  .appbar{background:var(--navy);color:var(--white);display:flex;align-items:center;gap:14px;padding:12px 20px;flex-wrap:wrap}
+  .appbar .crest{width:38px;height:38px;font-size:20px;margin:0}
+  .appbar .t{flex:1;min-width:140px}
+  .appbar .t b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .appbar .t span{font-size:11.5px;opacity:.7}
+  .appbar button.out{background:transparent;border:1px solid rgba(255,255,255,.35);color:var(--white);padding:7px 16px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+  .tabs{display:flex;gap:6px;width:100%;padding-top:4px;flex-wrap:wrap}
+  .tabs button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#dfe6ee;padding:8px 16px;border-radius:9px 9px 0 0;font:inherit;font-size:13px;cursor:pointer}
+  .tabs button.on{background:var(--sand);color:var(--navy);font-weight:700;border-color:var(--sand)}
+  .app-main{max-width:960px;margin:0 auto;padding:22px 16px 40px;width:100%}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:22px}
+  .stat{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-align:center}
+  .stat b{display:block;font-size:24px;color:var(--navy);font-weight:700}
+  .stat span{font-size:12px;color:#6b7683}
+  .stat.red b{color:var(--err)}
+  .stat.green b{color:var(--ok)}
+
+  .panel{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px;box-shadow:0 14px 30px -24px rgba(19,42,64,.25)}
+  .panel h3{font-family:'Amiri',serif;color:var(--navy);font-size:20px;margin-bottom:4px}
+  .panel .sub{font-size:13px;color:#6b7683;margin-bottom:16px;line-height:1.8}
+
+  .dropzone{border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;cursor:pointer;background:#fbfaf7}
+  .dropzone:hover{border-color:var(--gold);background:var(--gold-soft)}
+  .dropzone b{color:var(--navy);font-size:14.5px}
+  .dropzone p{font-size:12.5px;color:#8a93a0;margin-top:4px}
+  .preview{display:none;margin-top:18px}
+  .pv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px}
+  .pv{background:var(--sand);border-radius:10px;padding:10px 12px;text-align:center}
+  .pv b{display:block;font-size:20px;color:var(--navy)}
+  .pv span{font-size:11.5px;color:#6b7683}
+  .warnbox{background:#fdf6e7;border:1px solid #ecd9ab;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--warn);line-height:1.9;margin-bottom:14px;max-height:170px;overflow:auto;display:none}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .actions .btn{width:auto;padding:11px 26px;font-size:14px}
+  .chkline{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--warn);background:var(--gold-soft);border:1px solid #ecd9ab;border-radius:9px;padding:10px 13px;margin-bottom:12px;line-height:1.8}
+  .chkline input{width:16px;height:16px;margin-top:3px;flex-shrink:0}
+  .tpl-btn{margin-bottom:14px}
+  .tpl-btn .btn{width:auto;padding:9px 20px;font-size:13px}
+  .progress{display:none;margin-top:16px}
+  .bar{height:10px;background:var(--sand);border-radius:99px;overflow:hidden}
+  .bar>div{height:100%;width:0%;background:linear-gradient(90deg,var(--navy),var(--gold));transition:width .3s}
+  .progress p{font-size:12.5px;color:#6b7683;margin-top:8px;text-align:center}
+  .result{display:none;margin-top:16px;padding:16px;border-radius:10px;font-size:14px;line-height:2}
+  .result.ok{display:block;background:var(--ok-soft);color:var(--ok);border:1px solid #c8e2d2}
+  .result.err{display:block;background:var(--err-soft);color:var(--err);border:1px solid #ecc9c6}
+
+  .datebar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  .datebar .today-lbl{font-family:'Amiri',serif;font-size:20px;color:var(--navy);flex:1;min-width:150px}
+  .datebar input[type=date]{padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:var(--white)}
+  .lesson{background:var(--white);border:1px solid var(--line);border-radius:13px;padding:15px 17px;margin-bottom:11px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:box-shadow .15s,border-color .15s}
+  .lesson:hover{border-color:var(--gold)}
+  .lesson.now{border:2px solid var(--gold);background:linear-gradient(0deg,var(--gold-soft),var(--white) 60%)}
+  .lesson .pno{width:46px;height:46px;border-radius:11px;background:var(--navy);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+  .lesson .pno b{font-size:17px;line-height:1}
+  .lesson .pno span{font-size:9px;opacity:.75}
+  .lesson .info{flex:1;min-width:0}
+  .lesson .info b{display:block;font-size:15.5px;color:var(--navy)}
+  .lesson .info span{font-size:12px;color:#6b7683}
+  .lesson .st{font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:99px;white-space:nowrap}
+  .lesson .st.done{background:var(--ok-soft);color:var(--ok)}
+  .lesson .st.pending{background:var(--err-soft);color:var(--err)}
+  .now-chip{display:inline-block;background:var(--gold);color:var(--navy-deep);font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;margin-inline-start:6px;vertical-align:middle}
+  .empty-day{background:var(--white);border:1px dashed var(--line);border-radius:13px;padding:34px;text-align:center;color:#8a93a0;font-size:14px;line-height:2}
+
+  .roster-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .roster-head .back{background:var(--white);border:1.5px solid var(--line);border-radius:9px;padding:8px 14px;cursor:pointer;font:inherit;font-size:13px;color:var(--navy)}
+  .roster-head .ttl{flex:1}
+  .roster-head .ttl b{display:block;font-family:'Amiri',serif;font-size:20px;color:var(--navy)}
+  .roster-head .ttl span{font-size:12px;color:#6b7683}
+  .hint{background:var(--gold-soft);border:1px solid #ecd9ab;border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--warn);line-height:1.9;margin-bottom:12px}
+  .hint b{color:var(--err)}
+  .roster-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .roster-tools button{font:inherit;font-size:12.5px;padding:8px 14px;border-radius:9px;border:1.5px solid var(--line);background:var(--white);cursor:pointer;color:var(--navy)}
+  .counter{margin-inline-start:auto;font-size:13px;color:#6b7683;align-self:center}
+  .counter b{color:var(--err)}
+  .students{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;margin-bottom:16px}
+  .stu{background:var(--white);border:1.5px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;user-select:none;font-size:13px;line-height:1.7}
+  .stu small{display:block;color:#98a1ad;font-size:10.5px}
+  .stu.absent{background:var(--err-soft);border-color:var(--err);color:var(--err);font-weight:600}
+  .stu.special{box-shadow:inset 4px 0 0 var(--gold)}
+  .covers{display:flex;align-items:center;gap:9px;background:var(--gold-soft);border:1px solid #ecd9ab;border-radius:10px;padding:11px 14px;font-size:13px;color:var(--warn);margin-bottom:14px}
+  .covers input{width:17px;height:17px}
+  .recorded-by{background:var(--sand);border-radius:10px;padding:10px 14px;font-size:12.5px;color:#6b7683;margin-bottom:14px}
+  .other-box{display:none;background:var(--white);border:1px solid var(--line);border-radius:13px;padding:18px;margin-top:6px}
+  .other-box .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .other-box select{flex:1;min-width:140px;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:#fbfaf7}
+
+  .board-wrap{overflow-x:auto;background:var(--white);border:1px solid var(--line);border-radius:13px}
+  table.board{border-collapse:collapse;width:100%;min-width:760px;font-size:12.5px}
+  .board th{background:var(--navy);color:#fff;padding:10px 8px;font-weight:600;white-space:nowrap;position:sticky;top:0}
+  .board td{border-top:1px solid var(--line);padding:8px;text-align:center;vertical-align:middle}
+  .board td.sec{font-weight:700;color:var(--navy);background:#fbfaf7;white-space:nowrap;position:sticky;right:0}
+  .cell-ok{color:var(--ok);font-weight:600;line-height:1.5}
+  .cell-ok small{display:block;color:#7ba38c;font-weight:400;font-size:10.5px}
+  .cell-no{background:#fdeeed;color:var(--err);font-weight:700;border-radius:8px;padding:5px 6px;line-height:1.5}
+  .cell-no small{display:block;font-weight:400;font-size:10.5px;color:#c07a74}
+  .cell-dash{color:#c9cfd6}
+
+  .search-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .search-row input[type=text]{flex:1;min-width:200px;padding:11px 14px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:#fbfaf7}
+  .sugg{background:var(--white);border:1px solid var(--line);border-radius:11px;margin-bottom:12px;overflow:hidden;display:none}
+  .sugg div{padding:10px 14px;border-top:1px solid var(--line);cursor:pointer;font-size:13.5px}
+  .sugg div:first-child{border-top:none}
+  .sugg div:hover{background:var(--gold-soft)}
+  .sugg div small{color:#8a93a0;margin-inline-start:8px}
+  .picked{background:var(--gold-soft);border:1px solid #ecd9ab;border-radius:11px;padding:14px;margin-bottom:14px;display:none}
+  .picked b{color:var(--navy)}
+  .picked .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .picked input,.picked select{padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;background:var(--white)}
+  .picked .btn{width:auto;padding:10px 22px;font-size:13.5px}
+  .loglist{margin-top:8px}
+  .logrow{display:flex;align-items:center;gap:12px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:11px 14px;margin-bottom:8px;font-size:13.5px}
+  .logrow .del{margin-inline-start:auto;background:none;border:none;color:var(--err);cursor:pointer;font-size:16px}
+  .logrow small{color:#8a93a0}
+
+  .toast{position:fixed;bottom:22px;inset-inline:0;display:flex;justify-content:center;pointer-events:none;z-index:50}
+  .toast div{background:var(--navy);color:#fff;padding:12px 26px;border-radius:99px;font-size:13.5px;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);opacity:0;transform:translateY(10px);transition:all .3s}
+  .toast.show div{opacity:1;transform:none}
+  footer{text-align:center;font-size:11.5px;color:#8a93a0;padding:16px}
+</style>
+</head>
+<body>
+<div class="topline"></div>
+
+<div class="wrap" id="loginView">
+  <div class="card">
+    <div class="card-head"><div class="crest">ج</div><h1>مدرسة جدحفص الثانوية للبنات</h1></div>
+    <div class="card-body">
+      <div class="field"><label for="email">البريد الإلكتروني</label>
+        <input id="email" type="email" dir="ltr" autocomplete="username" placeholder="name@moe.bh"></div>
+      <div class="field"><label for="password">كلمة المرور</label>
+        <input id="password" type="password" dir="ltr" autocomplete="current-password" placeholder="••••••••"></div>
+      <button class="btn" id="loginBtn">تسجيل الدخول</button>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="appView">
+  <div class="appbar">
+    <div class="crest">ج</div>
+    <div class="t"><b id="userName">—</b><span id="userRole">—</span></div>
+    <button class="out" id="logoutBtn">خروج</button>
+    <div class="tabs" id="tabsNav" style="display:none"></div>
+  </div>
+
+  <!-- ============ تبويب الاستيراد (أدمن) ============ -->
+  <div class="app-main" id="adminMain" style="display:none">
+    <div class="stats">
+      <div class="stat"><b id="stStudents">—</b><span>طالبة</span></div>
+      <div class="stat"><b id="stSections">—</b><span>شعبة</span></div>
+      <div class="stat"><b id="stStaff">—</b><span>منتسبة</span></div>
+      <div class="stat"><b id="stEntries">—</b><span>حصة بالجدول</span></div>
+      <div class="stat"><b id="stYear">—</b><span>العام الدراسي</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>استيراد الطالبات</h3>
+      <div class="sub">«منازل» تُستبعد، الشعب تُنشأ تلقائياً، وإعادة الرفع آمنة (تحديث ونقل بلا تكرار).</div>
+      <div class="dropzone" id="stuDrop"><b>اضغطي لاختيار الملف أو أفلتيه هنا</b><p>xlsx / xls</p>
+        <input type="file" id="stuFile" accept=".xlsx,.xls" hidden></div>
+      <div class="preview" id="stuPreview">
+        <div class="pv-grid">
+          <div class="pv"><b id="stuPv1">0</b><span>طالبة صالحة</span></div>
+          <div class="pv"><b id="stuPv2">0</b><span>شعبة</span></div>
+          <div class="pv"><b id="stuPv3">0</b><span>منازل</span></div>
+          <div class="pv"><b id="stuPv4">0</b><span>متجاهل</span></div>
+        </div>
+        <div class="warnbox" id="stuWarns"></div>
+        <div class="actions"><button class="btn gold" id="stuRun">تنفيذ الاستيراد</button>
+          <button class="btn ghost" id="stuCancel">إلغاء</button></div>
+      </div>
+      <div class="progress" id="stuProg"><div class="bar"><div id="stuBar"></div></div><p id="stuStep">—</p></div>
+      <div class="result" id="stuResult"></div>
+    </div>
+
+    <div class="panel">
+      <h3>استيراد المنتسبات</h3>
+      <div class="sub">الأقسام تُنشأ تلقائياً، و«الإشراف الاجتماعي» يُحوَّل إلى «الإرشاد الاجتماعي».</div>
+      <div class="dropzone" id="stfDrop"><b>اضغطي لاختيار الملف أو أفلتيه هنا</b><p>xlsx / xls</p>
+        <input type="file" id="stfFile" accept=".xlsx,.xls" hidden></div>
+      <div class="preview" id="stfPreview">
+        <div class="pv-grid">
+          <div class="pv"><b id="stfPv1">0</b><span>منتسبة</span></div>
+          <div class="pv"><b id="stfPv2">0</b><span>قسم</span></div>
+          <div class="pv"><b id="stfPv3">0</b><span>معلمة أولى</span></div>
+          <div class="pv"><b id="stfPv4">0</b><span>متجاهل</span></div>
+        </div>
+        <div class="warnbox" id="stfWarns"></div>
+        <div class="actions"><button class="btn gold" id="stfRun">تنفيذ الاستيراد</button>
+          <button class="btn ghost" id="stfCancel">إلغاء</button></div>
+      </div>
+      <div class="progress" id="stfProg"><div class="bar"><div id="stfBar"></div></div><p id="stfStep">—</p></div>
+      <div class="result" id="stfResult"></div>
+    </div>
+
+    <div class="panel">
+      <h3>الجدول الدراسي</h3>
+      <div class="sub">بالقالب الموحد — المعلمة الأولى في السطر هي راصدة الغياب.</div>
+      <div class="tpl-btn"><button class="btn ghost" id="ttTpl">⬇ تنزيل قالب الجدول (إكسل)</button></div>
+      <div class="dropzone" id="ttDrop"><b>اضغطي لاختيار ملف الجدول أو أفلتيه هنا</b><p>xlsx / xls بالقالب الموحد</p>
+        <input type="file" id="ttFile" accept=".xlsx,.xls" hidden></div>
+      <div class="preview" id="ttPreview">
+        <div class="pv-grid">
+          <div class="pv"><b id="ttPv1">0</b><span>حصة صالحة</span></div>
+          <div class="pv"><b id="ttPv2">0</b><span>شعبة</span></div>
+          <div class="pv"><b id="ttPv3">0</b><span>مقرر</span></div>
+          <div class="pv"><b id="ttPv4">0</b><span>متجاهل</span></div>
+        </div>
+        <div class="warnbox" id="ttWarns"></div>
+        <div class="chkline"><input type="checkbox" id="ttReplace">
+          <label for="ttReplace">استبدال كامل: حذف حصص الجدول السابقة <b>غير المرصودة</b> قبل الاستيراد (لتغييرات بداية السنة) — الحصص التي عليها رصد لا تُحذف أبداً.</label></div>
+        <div class="actions"><button class="btn gold" id="ttRun">تنفيذ الاستيراد</button>
+          <button class="btn ghost" id="ttCancel">إلغاء</button></div>
+      </div>
+      <div class="progress" id="ttProg"><div class="bar"><div id="ttBar"></div></div><p id="ttStep">—</p></div>
+      <div class="result" id="ttResult"></div>
+    </div>
+  </div>
+
+  <!-- ============ تبويب المعلمة ============ -->
+  <div class="app-main" id="teacherMain" style="display:none">
+    <div id="dayView">
+      <div class="datebar">
+        <div class="today-lbl" id="dayTitle">حصص اليوم</div>
+        <input type="date" id="dayPick">
+      </div>
+      <div id="lessonList"></div>
+      <div style="margin-top:14px">
+        <button class="btn ghost" id="otherBtn" style="width:auto;padding:10px 22px;font-size:13.5px">＋ رصد حصة أخرى (تغطية / احتياط)</button>
+        <div class="other-box" id="otherBox">
+          <div class="row">
+            <select id="otherSec"><option value="">اختاري الشعبة…</option></select>
+            <select id="otherPer"><option value="">الحصة…</option></select>
+          </div>
+          <button class="btn gold" id="otherGo" style="width:auto;padding:10px 24px;font-size:13.5px">فتح الرصد</button>
+        </div>
+      </div>
+    </div>
+    <div id="rosterView" style="display:none">
+      <div class="roster-head">
+        <button class="back" id="rosterBack">→ رجوع</button>
+        <div class="ttl"><b id="rosterTitle">—</b><span id="rosterSub">—</span></div>
+      </div>
+      <div class="recorded-by" id="recordedBy" style="display:none"></div>
+      <div class="covers" id="coversBox" style="display:none">
+        <input type="checkbox" id="coversChk">
+        <label for="coversChk" id="coversLbl">الرصد يشمل الحصة التالية أيضاً</label>
+      </div>
+      <div class="hint">اضغطي على اسم الطالبة الغائبة — <b>اللون الأحمر يعني أنها غائبة</b>، والضغط مرة أخرى يعيدها حاضرة.</div>
+      <div class="roster-tools">
+        <button id="allAbsent">الكل غائبات</button>
+        <button id="allPresent">الكل حاضرات</button>
+        <div class="counter">الغائبات: <b id="absCount">0</b> من <span id="totCount">0</span></div>
+      </div>
+      <div class="students" id="stuGrid"></div>
+      <button class="btn gold" id="saveAtt">حفظ الرصد</button>
+    </div>
+  </div>
+
+  <!-- ============ تبويب متابعة الرصد ============ -->
+  <div class="app-main" id="boardMain" style="display:none">
+    <div class="datebar">
+      <div class="today-lbl" id="boardTitle">متابعة الرصد</div>
+      <input type="date" id="boardPick">
+    </div>
+    <div class="stats">
+      <div class="stat green"><b id="bPresent">—</b><span>حضور (الحصة ١)</span></div>
+      <div class="stat red"><b id="bAbsent">—</b><span>غياب (الحصة ١)</span></div>
+      <div class="stat"><b id="bRate">—</b><span>نسبة الحضور</span></div>
+      <div class="stat red"><b id="bMissing">—</b><span>شعبة لم تُرصد (ح١)</span></div>
+    </div>
+    <div class="board-wrap"><table class="board" id="boardTable"></table></div>
+  </div>
+
+  <!-- ============ تبويب التأخير والاستئذان ============ -->
+  <div class="app-main" id="socialMain" style="display:none">
+    <div class="datebar">
+      <div class="today-lbl">التأخير والاستئذان</div>
+      <input type="date" id="socPick">
+    </div>
+    <div class="panel">
+      <h3>تسجيل حالة</h3>
+      <div class="sub">ابحثي عن الطالبة بالاسم أو الرقم الأكاديمي — تسجيل وصول المتأخرة يحوّل حالتها في رصد اليوم إلى «حاضرة» تلقائياً، ويبقى تأخرها موثقاً في سجله الدائم.</div>
+      <div class="search-row"><input type="text" id="socSearch" placeholder="اسم الطالبة أو رقمها الأكاديمي…"></div>
+      <div class="sugg" id="socSugg"></div>
+      <div class="picked" id="socPicked">
+        <b id="socName">—</b> <small id="socInfo"></small>
+        <div class="row">
+          <select id="socType"><option value="late">تأخير (وصلت الساعة…)</option><option value="excuse">استئذان (خرجت الساعة…)</option></select>
+          <input type="time" id="socTime">
+          <input type="text" id="socReason" placeholder="السبب (اختياري)" style="flex:1;min-width:140px">
+          <button class="btn gold" id="socSave">تسجيل</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>سجل اليوم</h3>
+      <div class="loglist" id="socList"><div class="empty-day">لا سجلات بعد.</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div id="toastMsg">تم</div></div>
+<footer>مدرسة جدحفص الثانوية للبنات — لجنة التخطيط الاستراتيجي</footer>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const db = createClient('https://vvfxcoxnnuubycrpkwzj.supabase.co','sb_publishable_8JhfrwxXY9z3hYfi7E5tRg_eOFGxwv8');
+const $ = id => document.getElementById(id);
+const roleNames = {admin:'الدعم الفني',leadership:'القيادة العليا',project_lead:'مسؤولة مشروع',
+  committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات'};
+const titleNames = {teacher:'معلمة',senior_teacher:'معلمة أولى',leadership:'قيادة عليا',staff:'منتسبة'};
+const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
+const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
+let ME=null, YEAR=null, PERIODS=[], FLAGS={};
+
+const normDigits = s => String(s??'').replace(/[٠-٩]/g, d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).trim();
+const clean = s => String(s??'').replace(/\s+/g,' ').trim();
+const normName = s => clean(s).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');
+const chunk = (a,n)=>Array.from({length:Math.ceil(a.length/n)},(_,i)=>a.slice(i*n,(i+1)*n));
+const dstr = d => d.toISOString().slice(0,10);
+function toast(t){ $('toastMsg').textContent=t; $('toast').classList.add('show'); setTimeout(()=>$('toast').classList.remove('show'),2400); }
+function bindDrop(zone,input,onFile){
+  zone.addEventListener('click',()=>input.click());
+  input.addEventListener('change',()=>{ if(input.files[0]) onFile(input.files[0]); input.value=''; });
+  zone.addEventListener('dragover',e=>{e.preventDefault();zone.style.borderColor='var(--gold)';});
+  zone.addEventListener('dragleave',()=>zone.style.borderColor='');
+  zone.addEventListener('drop',e=>{e.preventDefault();zone.style.borderColor=''; if(e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);});
+}
+async function readSheet(file){
+  const wb = XLSX.read(await file.arrayBuffer());
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+}
+const mkProg = p => (v,t)=>{ $(p).style.display='block'; $(p.replace('Prog','Bar')).style.width=v+'%'; $(p.replace('Prog','Step')).textContent=t; };
+function showWarns(id,warns){
+  const w=$(id); w.style.display=warns.length?'block':'none';
+  w.innerHTML = warns.slice(0,40).map(x=>'• '+x).join('<br>') + (warns.length>40?`<br>… و${warns.length-40} تنبيهاً آخر`:'');
+}
+
+/* ============ الجلسة والتبويبات ============ */
+const TABS=[
+  {id:'adminMain', label:'الاستيراد',        show:f=>f.isAdmin},
+  {id:'teacherMain',label:'حصصي والرصد',      show:f=>f.isTeacher},
+  {id:'boardMain', label:'متابعة الرصد',      show:f=>f.isAdmin||f.isLead||f.isSocial||f.isReg, onOpen:()=>loadBoard()},
+  {id:'socialMain',label:'التأخير والاستئذان', show:f=>f.isAdmin||f.isSocial, onOpen:()=>loadSocial()},
+];
+function openTab(tid){
+  for(const t of TABS){ const el=$(t.id); if(el) el.style.display = t.id===tid?'block':'none'; }
+  document.querySelectorAll('#tabsNav button').forEach(b=>b.classList.toggle('on', b.dataset.t===tid));
+  const t=TABS.find(x=>x.id===tid); if(t?.onOpen) t.onOpen();
+}
+async function boot(session){
+  let { data: staff } = await db.from('staff').select('*, departments(name)').eq('auth_user_id', session.user.id).maybeSingle();
+  if(!staff) ({ data: staff } = await db.from('staff').select('*, departments(name)').ilike('email', session.user.email).maybeSingle());
+  if(!staff){
+    await db.auth.signOut();
+    const m=$('loginMsg'); m.className='msg err';
+    m.textContent='حسابك غير مسجل في قائمة المنتسبات. تواصلي مع الدعم الفني.'; return;
+  }
+  const { data: roles } = await db.from('staff_roles').select('role').eq('staff_id', staff.id);
+  ME = staff;
+  const dept = staff.departments?.name||'';
+  FLAGS = {
+    isAdmin: (roles||[]).some(r=>r.role==='admin'),
+    isLead:  (roles||[]).some(r=>r.role==='leadership') || staff.title==='leadership',
+    isSocial:/اجتماعي/.test(dept),
+    isReg:   /تسجيل/.test(dept),
+    isTeacher: staff.title==='teacher'||staff.title==='senior_teacher',
+  };
+  $('userName').textContent = staff.full_name;
+  $('userRole').textContent = (roles||[]).map(r=>roleNames[r.role]).join(' · ') || titleNames[staff.title] || 'منتسبة';
+  $('loginView').style.display='none';
+  $('appView').style.display='flex';
+  const { data: yr } = await db.from('academic_years').select('*').eq('is_active',true).maybeSingle();
+  YEAR = yr;
+  const { data: pat } = await db.from('timetable_patterns').select('id').eq('is_active',true).maybeSingle();
+  if(pat){
+    const { data: pp } = await db.from('pattern_periods').select('*').eq('pattern_id',pat.id).order('period_no');
+    PERIODS = pp||[];
+  }
+  const visible = TABS.filter(t=>t.show(FLAGS));
+  if(visible.length>1){
+    $('tabsNav').style.display='flex';
+    $('tabsNav').innerHTML = visible.map(t=>`<button data-t="${t.id}">${t.label}</button>`).join('');
+    $('tabsNav').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.t)));
+  }
+  if(FLAGS.isTeacher) initTeacher();
+  if(FLAGS.isAdmin) refreshStats();
+  openTab(visible[0]?.id || 'teacherMain');
+}
+async function refreshStats(){
+  $('stYear').textContent = YEAR?YEAR.name:'—';
+  const count = async q => (await q).count ?? 0;
+  $('stStudents').textContent = await count(db.from('students').select('id',{count:'exact',head:true}).eq('status','active'));
+  $('stSections').textContent = YEAR? await count(db.from('sections').select('id',{count:'exact',head:true}).eq('academic_year_id',YEAR.id)) : 0;
+  $('stStaff').textContent = await count(db.from('staff').select('id',{count:'exact',head:true}).eq('is_active',true));
+  $('stEntries').textContent = YEAR? await count(db.from('timetable_entries').select('id',{count:'exact',head:true}).eq('academic_year_id',YEAR.id)) : 0;
+}
+async function login(){
+  const btn=$('loginBtn'), m=$('loginMsg');
+  m.className='msg'; btn.disabled=true; btn.textContent='جارٍ الدخول…';
+  const { data, error } = await db.auth.signInWithPassword({ email:$('email').value.trim(), password:$('password').value });
+  btn.disabled=false; btn.textContent='تسجيل الدخول';
+  if(error){ m.className='msg err';
+    m.textContent=/credentials/i.test(error.message)?'البريد أو كلمة المرور غير صحيحة.':'تعذر الدخول: '+error.message; return; }
+  boot(data.session);
+}
+$('loginBtn').addEventListener('click',login);
+$('password').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+$('logoutBtn').addEventListener('click',async()=>{await db.auth.signOut();location.reload();});
+const { data:{ session } } = await db.auth.getSession();
+if(session) boot(session);
+
+/* ============ شاشة المعلمة ============ */
+let CUR_DATE = new Date(), MY_LESSONS=[];
+function currentPeriodNo(){
+  if(dstr(CUR_DATE)!==dstr(new Date())) return null;
+  const now = new Date().toTimeString().slice(0,5);
+  for(const p of PERIODS) if(now>=p.start_time.slice(0,5) && now<p.end_time.slice(0,5)) return p.period_no;
+  return null;
+}
+function initTeacher(){
+  const dp=$('dayPick');
+  dp.value=dstr(CUR_DATE); dp.max=dstr(new Date());
+  dp.addEventListener('change',()=>{ if(dp.value){ CUR_DATE=new Date(dp.value+'T12:00:00'); loadDay(); } });
+  $('otherBtn').addEventListener('click',async ()=>{
+    const box=$('otherBox');
+    box.style.display = box.style.display==='block'?'none':'block';
+    if(box.style.display==='block' && $('otherSec').options.length<=1){
+      const {data:secs}=await db.from('sections').select('id,code').eq('academic_year_id',YEAR.id).order('code');
+      for(const s of secs||[]) $('otherSec').insertAdjacentHTML('beforeend',`<option value="${s.id}">${s.code}</option>`);
+    }
+  });
+  $('otherSec').addEventListener('change', async ()=>{
+    const sel=$('otherPer'); sel.innerHTML='<option value="">الحصة…</option>';
+    const dow=CUR_DATE.getDay()+1;
+    const {data:ents}=await db.from('timetable_entries')
+      .select('id,period_no,subjects(code)').eq('section_id',$('otherSec').value).eq('day_of_week',dow).order('period_no');
+    for(const e of ents||[]) sel.insertAdjacentHTML('beforeend',`<option value="${e.id}">الحصة ${PERIOD_NAMES[e.period_no]} — ${e.subjects?.code||''}</option>`);
+    if(!(ents||[]).length) sel.insertAdjacentHTML('beforeend','<option value="">لا حصص لهذه الشعبة في هذا اليوم</option>');
+  });
+  $('otherGo').addEventListener('click',()=>{
+    const eid=$('otherPer').value;
+    if(!eid){ toast('اختاري الشعبة والحصة'); return; }
+    openRoster({entry_id:eid, section_code:$('otherSec').selectedOptions[0].textContent,
+      subj:'', period_no:null, label:$('otherPer').selectedOptions[0].textContent, isMine:false});
+  });
+  $('rosterBack').addEventListener('click',()=>{ $('rosterView').style.display='none'; $('dayView').style.display='block'; loadDay(); });
+  loadDay();
+}
+async function loadDay(){
+  const list=$('lessonList');
+  const d=CUR_DATE, jsDay=d.getDay();
+  const isToday = dstr(d)===dstr(new Date());
+  $('dayTitle').textContent = (isToday?'حصص اليوم — ':'') + (jsDay<=4?AR_DAYS[jsDay]:'') + ' ' + dstr(d);
+  if(jsDay>4){ list.innerHTML='<div class="empty-day">يوم عطلة — لا حصص.</div>'; return; }
+  const dow=jsDay+1;
+  list.innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
+  const {data:rows,error}=await db.from('entry_teachers')
+    .select('is_attendance_taker, timetable_entries!inner(id,period_no,room,section_id,day_of_week,academic_year_id,sections(code),subjects(code))')
+    .eq('staff_id',ME.id).eq('timetable_entries.day_of_week',dow).eq('timetable_entries.academic_year_id',YEAR.id);
+  if(error){ list.innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  MY_LESSONS=(rows||[]).map(r=>({
+    entry_id:r.timetable_entries.id, period_no:r.timetable_entries.period_no,
+    section_id:r.timetable_entries.section_id, section_code:r.timetable_entries.sections?.code||'—',
+    subj:r.timetable_entries.subjects?.code||'', room:r.timetable_entries.room||'',
+    taker:r.is_attendance_taker
+  })).sort((a,b)=>a.period_no-b.period_no);
+  if(!MY_LESSONS.length){ list.innerHTML='<div class="empty-day">لا حصص لك في هذا اليوم بحسب الجدول.</div>'; return; }
+  const ids=MY_LESSONS.map(l=>l.entry_id);
+  const {data:sess}=await db.from('attendance_sessions')
+    .select('entry_id,recorded_by,recorded_name,staff(full_name)').in('entry_id',ids).eq('date',dstr(d));
+  const sBy={}; for(const s of sess||[]) sBy[s.entry_id]=s;
+  const nowP=currentPeriodNo();
+  list.innerHTML=MY_LESSONS.map(l=>{
+    const s=sBy[l.entry_id];
+    const p=PERIODS.find(x=>x.period_no===l.period_no);
+    const time=p?`${p.start_time.slice(0,5)} – ${p.end_time.slice(0,5)}`:'';
+    const who=s? (s.staff?.full_name||s.recorded_name||'') : '';
+    return `<div class="lesson ${l.period_no===nowP?'now':''}" data-eid="${l.entry_id}">
+      <div class="pno"><b>${l.period_no}</b><span>حصة</span></div>
+      <div class="info"><b>${l.section_code} — ${l.subj}${l.period_no===nowP?'<span class="now-chip">الآن</span>':''}</b>
+      <span>${time}${l.room?' · '+l.room:''}${who&&s.recorded_by!==ME.id?' · رصدتها: '+who:''}</span></div>
+      <div class="st ${s?'done':'pending'}">${s?'مرصودة ✓':'لم تُرصد'}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.lesson').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const l=MY_LESSONS.find(x=>x.entry_id===el.dataset.eid);
+      openRoster({...l, label:'الحصة '+PERIOD_NAMES[l.period_no], isMine:true});
+    });
+  });
+}
+let ROSTER={entry:null,students:[],absent:new Set(),nextEntry:null};
+async function openRoster(lesson){
+  $('dayView').style.display='none'; $('rosterView').style.display='block';
+  $('rosterTitle').textContent=`${lesson.section_code} ${lesson.subj?'— '+lesson.subj:''}`;
+  $('rosterSub').textContent=`${lesson.label} · ${AR_DAYS[CUR_DATE.getDay()]||''} ${dstr(CUR_DATE)}`;
+  $('stuGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;color:#8a93a0;padding:20px">جارٍ تحميل الطالبات…</div>';
+  $('coversBox').style.display='none'; $('recordedBy').style.display='none';
+  ROSTER={entry:lesson,students:[],absent:new Set(),nextEntry:null};
+  const {data:ent}=await db.from('timetable_entries')
+    .select('id,period_no,section_id,sections(code),subjects(code)').eq('id',lesson.entry_id).single();
+  ROSTER.entry={...lesson, period_no:ent.period_no, section_id:ent.section_id,
+    section_code:ent.sections?.code||lesson.section_code, subj:ent.subjects?.code||lesson.subj};
+  $('rosterTitle').textContent=`${ROSTER.entry.section_code} — ${ROSTER.entry.subj}`;
+  if(lesson.isMine){
+    const nxt=MY_LESSONS.find(x=>x.section_id===ent.section_id && x.period_no===ent.period_no+1);
+    if(nxt){ ROSTER.nextEntry=nxt;
+      $('coversLbl').textContent=`الرصد يشمل الحصة ${PERIOD_NAMES[nxt.period_no]} أيضاً (نفس الشعبة)`;
+      $('coversBox').style.display='flex'; $('coversChk').checked=false; }
+  }
+  const {data:enr,error}=await db.from('enrollments')
+    .select('students(id,full_name,academic_number,special_case)')
+    .eq('section_id',ent.section_id).is('to_date',null);
+  if(error){ $('stuGrid').innerHTML=`<div style="grid-column:1/-1;color:var(--err)">تعذر التحميل: ${error.message}</div>`; return; }
+  ROSTER.students=(enr||[]).map(e=>e.students).filter(Boolean)
+    .sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+  const {data:sess}=await db.from('attendance_sessions')
+    .select('id,recorded_by,recorded_name,staff(full_name)')
+    .eq('entry_id',lesson.entry_id).eq('date',dstr(CUR_DATE)).maybeSingle();
+  if(sess){
+    const {data:recs}=await db.from('attendance_records').select('student_id,status').eq('session_id',sess.id);
+    for(const r of recs||[]) if(r.status==='absent') ROSTER.absent.add(r.student_id);
+    const who=sess.staff?.full_name||sess.recorded_name;
+    if(who && sess.recorded_by!==ME.id){
+      $('recordedBy').textContent=`رُصدت سابقاً بواسطة: ${who} — أي تعديل تحفظينه سيُوثق باسمك.`;
+      $('recordedBy').style.display='block';
+    }
+  }
+  renderStudents();
+}
+function renderStudents(){
+  const g=$('stuGrid');
+  g.innerHTML=ROSTER.students.map(s=>`
+    <div class="stu ${ROSTER.absent.has(s.id)?'absent':''} ${s.special_case?'special':''}" data-id="${s.id}">
+      ${s.full_name}<small>${s.academic_number}</small></div>`).join('');
+  g.querySelectorAll('.stu').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const id=el.dataset.id;
+      ROSTER.absent.has(id)?ROSTER.absent.delete(id):ROSTER.absent.add(id);
+      el.classList.toggle('absent'); updateCount();
+    });
+  });
+  updateCount();
+}
+function updateCount(){ $('absCount').textContent=ROSTER.absent.size; $('totCount').textContent=ROSTER.students.length; }
+$('allAbsent').addEventListener('click',()=>{ ROSTER.students.forEach(s=>ROSTER.absent.add(s.id)); renderStudents(); });
+$('allPresent').addEventListener('click',()=>{ ROSTER.absent.clear(); renderStudents(); });
+async function saveSession(entryId, coversNext){
+  const {data:sess,error}=await db.from('attendance_sessions')
+    .upsert({entry_id:entryId, date:dstr(CUR_DATE), recorded_by:ME.id, covers_next:coversNext,
+             via_link:false, updated_at:new Date().toISOString()},{onConflict:'entry_id,date'})
+    .select('id').single();
+  if(error) throw error;
+  const {error:eDel}=await db.from('attendance_records').delete().eq('session_id',sess.id);
+  if(eDel) throw eDel;
+  const recs=[...ROSTER.absent].map(sid=>({session_id:sess.id, student_id:sid, status:'absent'}));
+  for(const c of chunk(recs,300)){ const{error:eIns}=await db.from('attendance_records').insert(c); if(eIns) throw eIns; }
+}
+$('saveAtt').addEventListener('click', async ()=>{
+  const btn=$('saveAtt'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
+  try{
+    const covers=$('coversChk').checked && ROSTER.nextEntry;
+    await saveSession(ROSTER.entry.entry_id, !!covers);
+    if(covers) await saveSession(ROSTER.nextEntry.entry_id, false);
+    await db.from('audit_log').insert({actor_id:ME.id, action:'attendance', entity:'attendance_sessions',
+      details:{section:ROSTER.entry.section_code, period:ROSTER.entry.period_no, date:dstr(CUR_DATE),
+               absent:ROSTER.absent.size, covers_next:!!covers}});
+    toast(`تم حفظ الرصد — ${ROSTER.absent.size} غائبة${covers?' (لحصتين)':''}`);
+    $('rosterView').style.display='none'; $('dayView').style.display='block'; loadDay();
+  }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent='حفظ الرصد'; }
+});
+
+/* ============ جدول الإشراف ============ */
+let BOARD_DATE=new Date();
+function initBoardPick(){
+  const bp=$('boardPick');
+  if(bp.dataset.ready) return;
+  bp.dataset.ready='1';
+  bp.value=dstr(BOARD_DATE); bp.max=dstr(new Date());
+  bp.addEventListener('change',()=>{ if(bp.value){ BOARD_DATE=new Date(bp.value+'T12:00:00'); loadBoard(); } });
+}
+async function loadBoard(){
+  initBoardPick();
+  const d=BOARD_DATE, jsDay=d.getDay();
+  $('boardTitle').textContent='متابعة الرصد — '+(jsDay<=4?AR_DAYS[jsDay]+' ':'')+dstr(d);
+  const tbl=$('boardTable');
+  if(jsDay>4){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">يوم عطلة.</td></tr>';
+    $('bPresent').textContent=$('bAbsent').textContent=$('bRate').textContent=$('bMissing').textContent='—'; return; }
+  tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
+  const dow=jsDay+1;
+  const [{data:ents},{data:sess},{data:enr}] = await Promise.all([
+    db.from('timetable_entries')
+      .select('id,period_no,section_id,sections(code),entry_teachers(is_attendance_taker,staff(full_name))')
+      .eq('academic_year_id',YEAR.id).eq('day_of_week',dow),
+    db.from('attendance_sessions').select('id,entry_id,recorded_by,recorded_name,staff(full_name)').eq('date',dstr(d)),
+    db.from('enrollments').select('section_id').is('to_date',null),
+  ]);
+  const sessBy={}; for(const s of sess||[]) sessBy[s.entry_id]=s;
+  const sessIds=(sess||[]).map(s=>s.id);
+  let absBySess={};
+  if(sessIds.length){
+    const {data:recs}=await db.from('attendance_records').select('session_id,status').in('session_id',sessIds);
+    for(const r of recs||[]) if(r.status==='absent') absBySess[r.session_id]=(absBySess[r.session_id]||0)+1;
+  }
+  const enrolled={}; for(const e of enr||[]) enrolled[e.section_id]=(enrolled[e.section_id]||0)+1;
+  const secMap={};
+  for(const e of ents||[]){
+    const code=e.sections?.code||'؟';
+    secMap[code] ??= {section_id:e.section_id, periods:{}};
+    const takers=(e.entry_teachers||[]).filter(t=>t.is_attendance_taker).map(t=>t.staff?.full_name).filter(Boolean);
+    const all=(e.entry_teachers||[]).map(t=>t.staff?.full_name).filter(Boolean);
+    secMap[code].periods[e.period_no]={expected:(takers.length?takers:all).join(' / ')||'—', session:sessBy[e.id]};
+  }
+  const codes=Object.keys(secMap).sort((a,b)=>a.localeCompare(b,'ar'));
+  if(!codes.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا حصص في هذا اليوم بحسب الجدول.</td></tr>'; return; }
+  let p1Abs=0,p1Enr=0,p1Missing=0;
+  let html='<tr><th>الشعبة</th>'+[1,2,3,4,5,6,7].map(p=>`<th>ح${p}</th>`).join('')+'</tr>';
+  for(const code of codes){
+    const row=secMap[code];
+    html+=`<tr><td class="sec">${code}</td>`;
+    for(let p=1;p<=7;p++){
+      const cell=row.periods[p];
+      if(!cell){ html+='<td><span class="cell-dash">—</span></td>'; continue; }
+      if(cell.session){
+        const who=cell.session.staff?.full_name||cell.session.recorded_name||'✓';
+        const abs=absBySess[cell.session.id]||0;
+        html+=`<td><div class="cell-ok">✓ ${who.split(' ').slice(0,2).join(' ')}<small>غياب: ${abs}</small></div></td>`;
+        if(p===1){ p1Abs+=abs; p1Enr+=enrolled[row.section_id]||0; }
+      }else{
+        html+=`<td><div class="cell-no">لم يُرصد<small>${cell.expected.split(' ').slice(0,3).join(' ')}</small></div></td>`;
+        if(p===1) p1Missing++;
+      }
+    }
+    html+='</tr>';
+  }
+  tbl.innerHTML=html;
+  const present=Math.max(0,p1Enr-p1Abs);
+  $('bPresent').textContent=p1Enr?present:'—';
+  $('bAbsent').textContent=p1Enr?p1Abs:'—';
+  $('bRate').textContent=p1Enr?((present/p1Enr*100).toFixed(1)+'%'):'—';
+  $('bMissing').textContent=p1Missing;
+}
+
+/* ============ التأخير والاستئذان ============ */
+let SOC_DATE=new Date(), SOC_STU=null;
+function initSocPick(){
+  const sp=$('socPick');
+  if(sp.dataset.ready) return;
+  sp.dataset.ready='1';
+  sp.value=dstr(SOC_DATE); sp.max=dstr(new Date());
+  sp.addEventListener('change',()=>{ if(sp.value){ SOC_DATE=new Date(sp.value+'T12:00:00'); loadSocLists(); } });
+  $('socTime').value=new Date().toTimeString().slice(0,5);
+  let deb=null;
+  $('socSearch').addEventListener('input',()=>{
+    clearTimeout(deb);
+    deb=setTimeout(async ()=>{
+      const q=clean($('socSearch').value);
+      const box=$('socSugg');
+      if(q.length<2){ box.style.display='none'; return; }
+      const {data:st}=await db.from('students')
+        .select('id,full_name,academic_number').eq('status','active')
+        .or(`full_name.ilike.%${q}%,academic_number.ilike.%${q}%`).limit(8);
+      if(!(st||[]).length){ box.style.display='none'; return; }
+      box.innerHTML=(st||[]).map(s=>`<div data-id="${s.id}" data-n="${s.full_name}" data-a="${s.academic_number}">${s.full_name}<small>${s.academic_number}</small></div>`).join('');
+      box.style.display='block';
+      box.querySelectorAll('div').forEach(el=>el.addEventListener('click',()=>{
+        SOC_STU={id:el.dataset.id, name:el.dataset.n, acad:el.dataset.a};
+        $('socName').textContent=SOC_STU.name; $('socInfo').textContent=SOC_STU.acad;
+        $('socPicked').style.display='block'; box.style.display='none';
+        $('socSearch').value=''; $('socTime').value=new Date().toTimeString().slice(0,5);
+      }));
+    },300);
+  });
+  $('socSave').addEventListener('click',saveSoc);
+}
+async function saveSoc(){
+  if(!SOC_STU){ toast('اختاري الطالبة أولاً'); return; }
+  const type=$('socType').value, time=$('socTime').value, reason=clean($('socReason').value);
+  if(!time){ toast('حددي الوقت'); return; }
+  const btn=$('socSave'); btn.disabled=true;
+  try{
+    if(type==='late'){
+      const {error}=await db.from('late_log').upsert(
+        {student_id:SOC_STU.id, date:dstr(SOC_DATE), arrival_time:time, recorded_by:ME.id, note:reason||null},
+        {onConflict:'student_id,date'});
+      if(error) throw error;
+    }else{
+      const {error}=await db.from('excuse_log').upsert(
+        {student_id:SOC_STU.id, date:dstr(SOC_DATE), exit_time:time, reason:reason||null, recorded_by:ME.id},
+        {onConflict:'student_id,date'});
+      if(error) throw error;
+    }
+    const {data:recs}=await db.from('attendance_records')
+      .select('id, attendance_sessions!inner(date)')
+      .eq('student_id',SOC_STU.id).eq('status','absent')
+      .eq('attendance_sessions.date',dstr(SOC_DATE));
+    const ids=(recs||[]).map(r=>r.id);
+    if(ids.length){
+      const {error:eU}=await db.from('attendance_records')
+        .update({status: type==='late'?'present_late':'excused'}).in('id',ids);
+      if(eU) throw eU;
+    }
+    await db.from('audit_log').insert({actor_id:ME.id, action:type, entity:type==='late'?'late_log':'excuse_log',
+      details:{student:SOC_STU.name, date:dstr(SOC_DATE), time, flipped:ids.length}});
+    toast(type==='late'
+      ? `سُجل التأخير${ids.length?` وتحولت حالتها إلى حاضرة (${ids.length} حصة)`:''}`
+      : `سُجل الاستئذان${ids.length?` وحُدثت ${ids.length} حصة`:''}`);
+    SOC_STU=null; $('socPicked').style.display='none'; $('socReason').value='';
+    loadSocLists();
+  }catch(err){ toast('تعذر التسجيل: '+(err.message||err)); }
+  finally{ btn.disabled=false; }
+}
+async function loadSocial(){ initSocPick(); loadSocLists(); }
+async function loadSocLists(){
+  const box=$('socList');
+  box.innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
+  const [{data:late},{data:exc}] = await Promise.all([
+    db.from('late_log').select('id,arrival_time,note,students(full_name,academic_number)').eq('date',dstr(SOC_DATE)).order('arrival_time'),
+    db.from('excuse_log').select('id,exit_time,reason,students(full_name,academic_number)').eq('date',dstr(SOC_DATE)).order('exit_time'),
+  ]);
+  const rows=[
+    ...(late||[]).map(l=>({t:'late',id:l.id,time:l.arrival_time?.slice(0,5),name:l.students?.full_name,acad:l.students?.academic_number,extra:l.note})),
+    ...(exc||[]).map(l=>({t:'excuse',id:l.id,time:l.exit_time?.slice(0,5),name:l.students?.full_name,acad:l.students?.academic_number,extra:l.reason})),
+  ];
+  if(!rows.length){ box.innerHTML='<div class="empty-day">لا سجلات في هذا اليوم.</div>'; return; }
+  box.innerHTML=rows.map(r=>`
+    <div class="logrow">
+      <span style="font-size:16px">${r.t==='late'?'⏰':'🚪'}</span>
+      <span><b>${r.name||'—'}</b> <small>${r.acad||''}</small><br>
+      <small>${r.t==='late'?'وصلت':'خرجت'} الساعة ${r.time||''}${r.extra?' · '+r.extra:''}</small></span>
+      <button class="del" data-t="${r.t}" data-id="${r.id}" title="حذف">✕</button>
+    </div>`).join('');
+  box.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
+    if(!confirm('حذف هذا السجل؟ (لن تُعاد حالة الغياب تلقائياً)')) return;
+    await db.from(b.dataset.t==='late'?'late_log':'excuse_log').delete().eq('id',b.dataset.id);
+    loadSocLists();
+  }));
+}
+
+/* ============ استيراد الأدمن ============ */
+const levelNum = v => /ثالث/.test(v)?3:/ثاني/.test(v)?2:/أول|اول/.test(v)?1:null;
+function parseSection(code){
+  const c = normDigits(code).replace(/\s/g,'');
+  const m = c.match(/^(\d)(.+?)(\d+)$/);
+  if(!m) return null;
+  const lead=+m[1]; if(lead<1||lead>6) return null;
+  return { code:c, track:m[2], semester: lead%2===1?1:2, levelFromCode: Math.ceil(lead/2) };
+}
+let STU=null;
+bindDrop($('stuDrop'),$('stuFile'), async file=>{
+  $('stuResult').className='result';
+  const rows=await readSheet(file);
+  if(rows.length<2){ alert('الملف فارغ.'); return; }
+  const H=rows[0].map(clean);
+  const find=(...k)=>H.findIndex(h=>k.every(x=>h.includes(x)));
+  const col={ acad:Math.max(find('اكاديمي'),find('أكاديمي')), name:find('اسم'), pers:find('شخصي'),
+    sec:find('الصف'), lvl:find('المستوى'), mail:Math.max(find('بريد'),H.findIndex(h=>/mail/i.test(h))),
+    c1:Math.max(find('تواصل','1'),find('تواصل','١')), c2:Math.max(find('تواصل','2'),find('تواصل','٢')) };
+  const warns=[];
+  if(col.acad<0||col.name<0||col.sec<0){ alert('الملف لا يحتوي الأعمدة الأساسية.'); return; }
+  if(col.pers<0) warns.push('عمود «الرقم الشخصي» غير موجود.');
+  if(col.mail<0) warns.push('عمود «البريد الإلكتروني» غير موجود.');
+  const students=[],sections=new Map(); let manazel=0,skipped=0;
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i], secRaw=clean(r[col.sec]);
+    if(!clean(r[col.acad])&&!clean(r[col.name])) continue;
+    if(/منازل/.test(secRaw)){ manazel++; continue; }
+    const sec=parseSection(secRaw), acad=normDigits(r[col.acad]), name=clean(r[col.name]);
+    if(!sec||!acad||!name){ skipped++; warns.push(`سطر ${i+1}: بيانات ناقصة أو رمز صف غير مفهوم (${secRaw||'فارغ'}).`); continue; }
+    const level = col.lvl>=0?(levelNum(clean(r[col.lvl]))??sec.levelFromCode):sec.levelFromCode;
+    if(!sections.has(sec.code)) sections.set(sec.code,{code:sec.code,track:sec.track,semester:sec.semester,level});
+    students.push({ academic_number:acad, full_name:name,
+      personal_number: col.pers>=0&&normDigits(r[col.pers])?normDigits(r[col.pers]):null,
+      email: col.mail>=0?clean(r[col.mail])||null:null,
+      contact1: col.c1>=0?normDigits(r[col.c1])||null:null,
+      contact2: col.c2>=0?normDigits(r[col.c2])||null:null,
+      _section:sec.code });
+  }
+  const seen=new Set();
+  for(const s of students){ if(seen.has(s.academic_number)) warns.push(`رقم أكاديمي مكرر: ${s.academic_number}`); seen.add(s.academic_number); }
+  STU={students,sections:[...sections.values()]};
+  $('stuPv1').textContent=students.length; $('stuPv2').textContent=sections.size;
+  $('stuPv3').textContent=manazel; $('stuPv4').textContent=skipped;
+  showWarns('stuWarns',warns); $('stuPreview').style.display='block';
+});
+$('stuCancel').addEventListener('click',()=>{STU=null;$('stuPreview').style.display='none';});
+$('stuRun').addEventListener('click', async ()=>{
+  if(!STU||!YEAR) return;
+  $('stuRun').disabled=true; $('stuPreview').style.display='none';
+  const R=$('stuResult'), prog=mkProg('stuProg');
+  try{
+    prog(10,'حفظ الطالبات…');
+    const stuRows=STU.students.map(({_section,...s})=>s);
+    for(const c of chunk(stuRows,500)){ const{error}=await db.from('students').upsert(c,{onConflict:'academic_number'}); if(error) throw error; }
+    prog(35,'إنشاء الشعب…');
+    const secRows=STU.sections.map(s=>({academic_year_id:YEAR.id,semester:s.semester,code:s.code,level:s.level,track:s.track}));
+    { const{error}=await db.from('sections').upsert(secRows,{onConflict:'academic_year_id,semester,code'}); if(error) throw error; }
+    prog(55,'مطابقة السجلات…');
+    const {data:allStu,error:e1}=await db.from('students').select('id,academic_number'); if(e1) throw e1;
+    const {data:allSec,error:e2}=await db.from('sections').select('id,code').eq('academic_year_id',YEAR.id); if(e2) throw e2;
+    const stuId=Object.fromEntries(allStu.map(s=>[s.academic_number,s.id]));
+    const secId=Object.fromEntries(allSec.map(s=>[s.code,s.id]));
+    prog(70,'قيد الطالبات…');
+    const {data:open,error:e3}=await db.from('enrollments').select('id,student_id,section_id').is('to_date',null); if(e3) throw e3;
+    const openBy=Object.fromEntries((open||[]).map(e=>[e.student_id,e]));
+    const inserts=[],closes=[];
+    for(const s of STU.students){
+      const sid=stuId[s.academic_number], scId=secId[s._section];
+      if(!sid||!scId) continue;
+      const cur=openBy[sid];
+      if(cur&&cur.section_id===scId) continue;
+      if(cur) closes.push(cur.id);
+      inserts.push({student_id:sid,section_id:scId});
+    }
+    for(const c of chunk(closes,300)){ const{error}=await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).in('id',c); if(error) throw error; }
+    for(const c of chunk(inserts,500)){ const{error}=await db.from('enrollments').insert(c); if(error) throw error; }
+    prog(95,'توثيق…');
+    await db.from('audit_log').insert({actor_id:ME.id,action:'import',entity:'students',
+      details:{students:stuRows.length,sections:secRows.length,new_enrollments:inserts.length,moved:closes.length}});
+    prog(100,'اكتمل');
+    R.className='result ok';
+    R.innerHTML=`✅ اكتمل الاستيراد:<br>• ${stuRows.length} طالبة<br>• ${secRows.length} شعبة<br>• ${inserts.length} قيد جديد${closes.length?`<br>• ${closes.length} نقل بين شعب`:''}`;
+    refreshStats();
+  }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
+  finally{ $('stuRun').disabled=false; setTimeout(()=>{$('stuProg').style.display='none';},1500); }
+});
+
+function normDept(name){
+  const n=clean(name);
+  if(/اشراف|إشراف/.test(n)&&/اجتماعي/.test(n)) return 'الإرشاد الاجتماعي';
+  return n;
+}
+const deptKind = n => /مكتب|إرشاد|ارشاد|تسجيل|تمكين|إداري|اداري/.test(n)?'office':'academic';
+let STF=null;
+bindDrop($('stfDrop'),$('stfFile'), async file=>{
+  $('stfResult').className='result';
+  const rows=await readSheet(file);
+  if(rows.length<2){ alert('الملف فارغ.'); return; }
+  const H=rows[0].map(clean);
+  const find=(...k)=>H.findIndex(h=>k.every(x=>h.includes(x)));
+  const col={ name:find('اسم'), pers:find('شخصي'),
+    mail:Math.max(find('بريد'),H.findIndex(h=>/mail/i.test(h))), dept:find('قسم'), title:find('مسمى') };
+  const warns=[];
+  if(col.name<0||col.pers<0){ alert('الملف لا يحتوي عمودي الاسم والرقم الشخصي.'); return; }
+  const staffRows=[],depts=new Map(); let skipped=0,seniors=0;
+  const seen=new Set();
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i], name=clean(r[col.name]), pers=normDigits(r[col.pers]);
+    if(!name&&!pers) continue;
+    if(!name||!pers){ skipped++; warns.push(`سطر ${i+1}: الاسم أو الرقم الشخصي ناقص.`); continue; }
+    if(seen.has(pers)){ warns.push(`رقم شخصي مكرر: ${pers} — أُخذ الأول.`); continue; }
+    seen.add(pers);
+    const dept = col.dept>=0?normDept(r[col.dept]):'';
+    if(dept&&!depts.has(dept)) depts.set(dept,{name:dept,kind:deptKind(dept)});
+    const tRaw = col.title>=0?clean(r[col.title]):'';
+    const title = /أولى|اولى/.test(tRaw)?'senior_teacher':/معلم/.test(tRaw)?'teacher':'staff';
+    if(title==='senior_teacher') seniors++;
+    staffRows.push({ personal_number:pers, full_name:name,
+      email: col.mail>=0?clean(r[col.mail])||null:null, _dept:dept||null, title });
+  }
+  STF={staffRows,depts:[...depts.values()]};
+  $('stfPv1').textContent=staffRows.length; $('stfPv2').textContent=depts.size;
+  $('stfPv3').textContent=seniors; $('stfPv4').textContent=skipped;
+  showWarns('stfWarns',warns); $('stfPreview').style.display='block';
+});
+$('stfCancel').addEventListener('click',()=>{STF=null;$('stfPreview').style.display='none';});
+$('stfRun').addEventListener('click', async ()=>{
+  if(!STF) return;
+  $('stfRun').disabled=true; $('stfPreview').style.display='none';
+  const R=$('stfResult'), prog=mkProg('stfProg');
+  try{
+    prog(15,'إنشاء الأقسام…');
+    if(STF.depts.length){ const{error}=await db.from('departments').upsert(STF.depts,{onConflict:'name'}); if(error) throw error; }
+    const {data:allDep,error:eD}=await db.from('departments').select('id,name'); if(eD) throw eD;
+    const depId=Object.fromEntries(allDep.map(d=>[d.name,d.id]));
+    prog(50,'حفظ المنتسبات…');
+    const rows=STF.staffRows.map(({_dept,...s})=>({...s, department_id:_dept?depId[_dept]??null:null}));
+    for(const c of chunk(rows,300)){ const{error}=await db.from('staff').upsert(c,{onConflict:'personal_number'}); if(error) throw error; }
+    prog(90,'توثيق…');
+    await db.from('audit_log').insert({actor_id:ME.id,action:'import',entity:'staff',
+      details:{staff:rows.length,departments:STF.depts.length}});
+    prog(100,'اكتمل');
+    R.className='result ok';
+    R.innerHTML=`✅ اكتمل الاستيراد:<br>• ${rows.length} منتسبة<br>• ${STF.depts.length} قسم`;
+    refreshStats();
+  }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
+  finally{ $('stfRun').disabled=false; setTimeout(()=>{$('stfProg').style.display='none';},1500); }
+});
+
+const TT_HEAD=['الشعبة','اليوم','الحصة','رمز المقرر','المعلمة (الاسم أو الرقم الشخصي)','معلمة ثانية (اختياري)','القاعة (اختياري)'];
+$('ttTpl').addEventListener('click',()=>{
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([TT_HEAD,
+    ['1وحد1','الأحد',1,'عرب102','نرجس عادل','',''],
+    ['1وحد1','الأحد',2,'تقن108','بشرى المطيع','امينة محمد موسى','مختبر 505']]);
+  ws['!cols']=TT_HEAD.map(()=>({wch:24}));
+  XLSX.utils.book_append_sheet(wb,ws,'الجدول');
+  XLSX.writeFile(wb,'قالب_الجدول_الدراسي.xlsx');
+});
+const dayNum = v=>{
+  const s=clean(v); const d=+normDigits(s);
+  if(d>=1&&d<=5) return d;
+  if(/أحد|احد/.test(s))return 1; if(/اثنين|إثنين/.test(s))return 2;
+  if(/ثلاثاء/.test(s))return 3; if(/أربعاء|اربعاء/.test(s))return 4; if(/خميس/.test(s))return 5;
+  return null;
+};
+let TT=null;
+bindDrop($('ttDrop'),$('ttFile'), async file=>{
+  $('ttResult').className='result';
+  const rows=await readSheet(file);
+  if(rows.length<2){ alert('الملف فارغ.'); return; }
+  const H=rows[0].map(clean);
+  const find=(...k)=>H.findIndex(h=>k.every(x=>h.includes(x)));
+  const col={ sec:Math.max(find('شعبة'),find('الصف')), day:find('اليوم'), per:find('حصة'), subj:find('مقرر'),
+    t1:H.findIndex(h=>h.includes('معلمة')&&!h.includes('ثانية')),
+    t2:H.findIndex(h=>h.includes('ثانية')), room:find('قاعة') };
+  if(col.sec<0||col.day<0||col.per<0||col.subj<0||col.t1<0){ alert('الملف لا يطابق القالب — نزلي القالب واستخدميه.'); return; }
+  const warns=[],slots=new Map(),subjects=new Set(),secs=new Set(); let skipped=0;
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    const secCode=normDigits(r[col.sec]).replace(/\s/g,'');
+    if(!secCode&&!clean(r[col.subj])) continue;
+    const day=dayNum(r[col.day]); const per=+normDigits(r[col.per]);
+    const subj=normDigits(r[col.subj]).replace(/\s/g,'');
+    const t1=clean(r[col.t1]); const t2=col.t2>=0?clean(r[col.t2]):'';
+    if(!secCode||!day||!per||per<1||per>7||!subj||!t1){ skipped++; warns.push(`سطر ${i+1}: بيانات ناقصة أو غير مفهومة.`); continue; }
+    const key=`${secCode}|${day}|${per}`;
+    if(slots.has(key)){
+      const s=slots.get(key);
+      if(s.subj===subj){ if(t1&&!s.teachers.includes(t1)) s.teachers.push(t1); if(t2&&!s.teachers.includes(t2)) s.teachers.push(t2); }
+      else warns.push(`سطر ${i+1}: تعارض في ${secCode} — أُخذ الأول.`);
+      continue;
+    }
+    const teachers=[t1]; if(t2) teachers.push(t2);
+    slots.set(key,{secCode,day,per,subj,teachers,room:col.room>=0?clean(r[col.room])||null:null});
+    subjects.add(subj); secs.add(secCode);
+  }
+  TT={slots:[...slots.values()]};
+  $('ttPv1').textContent=slots.size; $('ttPv2').textContent=secs.size;
+  $('ttPv3').textContent=subjects.size; $('ttPv4').textContent=skipped;
+  showWarns('ttWarns',warns); $('ttPreview').style.display='block';
+});
+$('ttCancel').addEventListener('click',()=>{TT=null;$('ttPreview').style.display='none';});
+$('ttRun').addEventListener('click', async ()=>{
+  if(!TT||!YEAR) return;
+  $('ttRun').disabled=true; $('ttPreview').style.display='none';
+  const R=$('ttResult'), prog=mkProg('ttProg');
+  try{
+    let deleted=0;
+    if($('ttReplace').checked){
+      prog(5,'حذف الحصص السابقة غير المرصودة…');
+      const {data:oldEnts,error:eO}=await db.from('timetable_entries').select('id').eq('academic_year_id',YEAR.id); if(eO) throw eO;
+      const oldIds=(oldEnts||[]).map(e=>e.id);
+      const recorded=new Set();
+      for(const c of chunk(oldIds,200)){
+        const {data:ss}=await db.from('attendance_sessions').select('entry_id').in('entry_id',c);
+        for(const s of ss||[]) recorded.add(s.entry_id);
+      }
+      const delIds=oldIds.filter(id=>!recorded.has(id));
+      for(const c of chunk(delIds,200)){
+        const {error}=await db.from('timetable_entries').delete().in('id',c); if(error) throw error;
+      }
+      deleted=delIds.length;
+    }
+    prog(12,'جلب الشعب والمنتسبات…');
+    const {data:allSec,error:e1}=await db.from('sections').select('id,code,semester').eq('academic_year_id',YEAR.id); if(e1) throw e1;
+    const secBy=Object.fromEntries(allSec.map(s=>[s.code,s]));
+    const {data:allStf,error:e2}=await db.from('staff').select('id,full_name,personal_number'); if(e2) throw e2;
+    const stfByPers=Object.fromEntries(allStf.map(s=>[s.personal_number,s.id]));
+    const stfByName={}; for(const s of allStf) stfByName[normName(s.full_name)]=s.id;
+    const findTeacher = t => stfByPers[normDigits(t)] ?? stfByName[normName(t)] ?? null;
+    prog(25,'إنشاء المقررات…');
+    const subjCodes=[...new Set(TT.slots.map(s=>s.subj))].map(code=>({code}));
+    for(const c of chunk(subjCodes,300)){ const{error}=await db.from('subjects').upsert(c,{onConflict:'code'}); if(error) throw error; }
+    const {data:allSubj,error:e3}=await db.from('subjects').select('id,code'); if(e3) throw e3;
+    const subjId=Object.fromEntries(allSubj.map(s=>[s.code,s.id]));
+    prog(45,'بناء الحصص…');
+    const warns=[],entries=[],teacherPlan=[];
+    for(const s of TT.slots){
+      const sec=secBy[s.secCode];
+      if(!sec){ warns.push(`شعبة غير موجودة بالنظام: ${s.secCode}`); continue; }
+      entries.push({ academic_year_id:YEAR.id, semester:sec.semester, section_id:sec.id,
+        subject_id:subjId[s.subj]??null, day_of_week:s.day, period_no:s.per, room:s.room });
+      teacherPlan.push({key:`${sec.id}|${s.day}|${s.per}`, teachers:s.teachers});
+    }
+    for(const c of chunk(entries,300)){ const{error}=await db.from('timetable_entries').upsert(c,{onConflict:'section_id,day_of_week,period_no'}); if(error) throw error; }
+    prog(65,'ربط المعلمات…');
+    const {data:allEnt,error:e4}=await db.from('timetable_entries')
+      .select('id,section_id,day_of_week,period_no').eq('academic_year_id',YEAR.id); if(e4) throw e4;
+    const entId={}; for(const e of allEnt) entId[`${e.section_id}|${e.day_of_week}|${e.period_no}`]=e.id;
+    const ids=teacherPlan.map(p=>entId[p.key]).filter(Boolean);
+    for(const c of chunk(ids,200)){ const{error}=await db.from('entry_teachers').delete().in('entry_id',c); if(error) throw error; }
+    const links=[]; const unknownNames=new Set();
+    for(const p of teacherPlan){
+      const eid=entId[p.key]; if(!eid) continue;
+      p.teachers.forEach((t,i)=>{
+        const sid=findTeacher(t);
+        if(!sid){ unknownNames.add(t); return; }
+        links.push({entry_id:eid, staff_id:sid, is_attendance_taker:i===0});
+      });
+    }
+    const unknownT=unknownNames.size;
+    for(const c of chunk(links,400)){ const{error}=await db.from('entry_teachers').insert(c); if(error) throw error; }
+    prog(90,'توثيق…');
+    await db.from('audit_log').insert({actor_id:ME.id,action:'import',entity:'timetable',
+      details:{entries:entries.length,links:links.length,unknown_teachers:unknownT,deleted_old:deleted}});
+    prog(100,'اكتمل');
+    R.className='result ok';
+    R.innerHTML=`✅ اكتمل استيراد الجدول:<br>• ${entries.length} حصة<br>• ${links.length} ربط معلمة${deleted?`<br>• حُذفت ${deleted} حصة قديمة غير مرصودة`:''}${unknownT?`<br><br>⚠️ أسماء لم تُربط (${unknownT}) — صححيها كما وردت في المنتسبات أو استخدمي الرقم الشخصي ثم أعيدي الرفع:<br>${[...unknownNames].map(n=>'• «'+n+'»').join('<br>')}`:''}`;
+    showWarns('ttWarns',warns); if(warns.length) $('ttWarns').style.display='block';
+    refreshStats();
+  }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
+  finally{ $('ttRun').disabled=false; setTimeout(()=>{$('ttProg').style.display='none';},1500); }
+});
+
+</script>
+</body>
+</html>

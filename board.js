@@ -84,5 +84,5 @@ async function loadBoard(){
   $('bMissing').textContent=p1Missing;
 }
 
-registerTab({id:'boardMain', label:'متابعة الرصد',
+registerTab({id:'boardMain', label:'متابعة الرصد', group:'attendance', groupLabel:'متابعة الغياب',
   show:f=>f.isAdmin||f.isLead||f.isSocial||f.isReg, onOpen:loadBoard});

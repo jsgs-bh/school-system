@@ -1,20 +1,21 @@
 /* ministry.js — قائمة الوزارة اليومية
    المصدر: الغياب الرسمي المحسوب (غائبات الحصة الأولى ناقص التأخير/الاستئذان).
    الشاشة تعرض القائمة، والإرشاد الاجتماعي يعبئ أعمدة المتابعة الأربعة،
-   وزرّا تصدير إكسل: استمارة بيانات المتغيبات + استمارة الأسماء والأعداد.
+   وتصدير إكسل منسّق فعلياً (ExcelJS: ترويسة، حدود، تلوين) + تنزيل PDF (طباعة المتصفح).
    الملف مكتفٍ بذاته: يضيف تبويبه وتنسيقاته بنفسه — لا تعديل على app.css. */
 import { db, $, S, AR_DAYS, dstr, chunk, toast, registerTab } from './core.js';
 
-/* قيم القوائم — مبدئية قابلة للكتابة الحرة، وسنستبدلها بقوائم الوزارة الرسمية عند وصولها */
+/* قيم القوائم — مبدئية قابلة للكتابة الحرة، وستُستبدل بقوائم الوزارة الرسمية عند وصولها */
 const OPT = {
   status:   ['غياب بعذر','غياب بدون عذر','منقطعة'],
   action:   ['الاتصال بمتولي الأمر','إرسال رسالة نصية','استدعاء متولي الأمر','تحويل للإرشاد الاجتماعي'],
   response: ['تم الرد','لم يتم الرد','تعهد بالحضور','لا استجابة'],
 };
+const SCHOOL='مدرسة جدحفص الثانوية للبنات';
 
 /* ============ حقن الواجهة والتنسيقات ============ */
 $('appView').insertAdjacentHTML('beforeend', `
-<div class="app-main" id="ministryMain" style="display:none">
+<div class="app-main wide" id="ministryMain" style="display:none">
   <div class="datebar">
     <div class="today-lbl" id="minTitle">قائمة الوزارة</div>
     <input type="date" id="minPick">
@@ -28,8 +29,9 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="panel">
     <div class="actions" style="margin-bottom:14px">
       <button class="btn gold" id="minSave">حفظ المتابعة</button>
-      <button class="btn ghost" id="minXls1">⬇ استمارة بيانات المتغيبات</button>
-      <button class="btn ghost" id="minXls2">⬇ استمارة الأسماء والأعداد</button>
+      <button class="btn ghost" id="minXls1">⬇ إكسل — بيانات المتغيبات</button>
+      <button class="btn ghost" id="minXls2">⬇ إكسل — الأسماء والأعداد</button>
+      <button class="btn ghost" id="minPdf">⬇ PDF — بيانات المتغيبات</button>
     </div>
     <div class="board-wrap"><table class="board min-tbl" id="minTable"></table></div>
   </div>
@@ -37,13 +39,30 @@ $('appView').insertAdjacentHTML('beforeend', `
 <datalist id="dlStatus">${OPT.status.map(v=>`<option value="${v}">`).join('')}</datalist>
 <datalist id="dlAction">${OPT.action.map(v=>`<option value="${v}">`).join('')}</datalist>
 <datalist id="dlResponse">${OPT.response.map(v=>`<option value="${v}">`).join('')}</datalist>
+<div id="printArea"></div>
 <style>
-  .min-tbl{min-width:980px}
-  .min-tbl td{text-align:right}
+  #ministryMain.wide{max-width:1400px}
+  .min-tbl{width:100%;table-layout:fixed}
+  .min-tbl th{font-size:11.5px;padding:9px 6px}
+  .min-tbl td{text-align:right;padding:5px}
   .min-tbl td.c{text-align:center}
-  .min-tbl input{width:100%;min-width:120px;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-size:12px;background:#fbfaf7}
+  .min-tbl input{width:100%;min-width:0;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-size:11.5px;background:#fbfaf7}
   .min-tbl input:focus{outline:none;border-color:var(--navy);background:var(--white)}
   .min-tbl tr.saved input{background:var(--ok-soft)}
+  #printArea{display:none}
+  @media print{
+    body *{visibility:hidden}
+    #printArea, #printArea *{visibility:visible}
+    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+    .p-head{text-align:center;margin-bottom:14px}
+    .p-head h1{font-family:'Amiri',serif;font-size:20px;color:#1d3d5c;margin-bottom:4px}
+    .p-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:8px}
+    .p-head p{font-size:12px;color:#333}
+    .p-tbl{width:100%;border-collapse:collapse;font-size:11px}
+    .p-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
+    .p-tbl td{padding:5px;border:1px solid #ccc;text-align:right}
+    .p-tbl td.c{text-align:center}
+  }
 </style>`);
 
 let MIN_DATE=new Date(), ROWS=[];
@@ -57,6 +76,7 @@ function initPick(){
   $('minSave').addEventListener('click',saveFollowup);
   $('minXls1').addEventListener('click',()=>exportXls(1));
   $('minXls2').addEventListener('click',()=>exportXls(2));
+  $('minPdf').addEventListener('click',exportPdf);
 }
 
 async function loadMinistry(){
@@ -125,16 +145,24 @@ async function loadMinistry(){
   $('mAbs').textContent=ROWS.length;
   $('mDone').textContent=ROWS.filter(r=>r.fu.absence_status||r.fu.action_taken).length;
 
-  tbl.innerHTML='<tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th><th>تواصل ١</th><th>تواصل ٢</th>'+
+  tbl.innerHTML='<tr><th style="width:32px">#</th><th style="width:78px">أكاديمي</th><th>اسم الطالبة</th><th style="width:60px">الصف</th>'+
+    '<th style="width:90px">تواصل ١</th><th style="width:90px">تواصل ٢</th>'+
     '<th>حالة الغياب</th><th>الإجراء المتخذ</th><th>حالة الاستجابة</th><th>سبب الغياب</th></tr>'+
     ROWS.map((r,i)=>`<tr data-id="${r.id}" class="${r.fu.absence_status||r.fu.action_taken?'saved':''}">
       <td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td><b>${r.full_name}</b></td>
-      <td class="c">${r.sec}</td><td class="c" dir="ltr">${r.contact1||'—'}</td><td class="c" dir="ltr">${r.contact2||'—'}</td>
+      <td class="c">${r.sec}</td><td class="c" dir="ltr">${fmtPhone(r.contact1)}</td><td class="c" dir="ltr">${fmtPhone(r.contact2)}</td>
       <td><input list="dlStatus"   data-f="absence_status"  value="${r.fu.absence_status||''}"></td>
       <td><input list="dlAction"   data-f="action_taken"    value="${r.fu.action_taken||''}"></td>
       <td><input list="dlResponse" data-f="response_status" value="${r.fu.response_status||''}"></td>
       <td><input                   data-f="reason"          value="${r.fu.reason||''}"></td>
     </tr>`).join('');
+}
+
+/* يحمي العرض من أي رقم وصل بصيغة عشرية (بيانات قديمة قبل تصحيح نوع العمود) */
+function fmtPhone(v){
+  if(v===null||v===undefined||v==='') return '—';
+  const s=String(v);
+  return s.includes('.') ? s.split('.')[0] : s;
 }
 
 async function saveFollowup(){
@@ -158,37 +186,112 @@ async function saveFollowup(){
   finally{ btn.disabled=false; btn.textContent='حفظ المتابعة'; }
 }
 
-function exportXls(kind){
+/* ============ تصدير إكسل منسّق فعلياً (ExcelJS) ============ */
+const NAVY='FF1D3D5C', GOLD='FFB98A2F', WHITE='FFFFFFFF', LINE='FFDCD5C8';
+const thin = {style:'thin', color:{argb:LINE}};
+const border = {top:thin,left:thin,right:thin,bottom:thin};
+
+async function exportXls(kind){
   if(!ROWS.length){ toast('لا غائبات في هذا اليوم'); return; }
   const day=AR_DAYS[MIN_DATE.getDay()]||'', date=dstr(MIN_DATE);
-  const wb=XLSX.utils.book_new();
-  let aoa,name,widths;
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('القائمة', {views:[{rightToLeft:true}]});
+
+  const addTitleRow=(text,size,bold,fillColor,fontColor,cols)=>{
+    const row=ws.addRow([text]);
+    ws.mergeCells(row.number,1,row.number,cols);
+    const cell=row.getCell(1);
+    cell.font={name:'Arial',size,bold,color:{argb:fontColor}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    if(fillColor) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fillColor}};
+    row.height=size>=16?26:20;
+  };
+
+  let cols, headers, dataRows, fileBase;
   if(kind===1){
-    /* استمارة بيانات الطلبة المتغيبين */
-    aoa=[ ['مدرسة جدحفص الثانوية للبنات'], ['استمارة بيانات الطلبة المتغيبين'],
-      [`اليوم: ${day}`,'','',`التاريخ: ${date}`], [],
-      ['#','الرقم الأكاديمي','اسم الطالبة','الصف','رقم تواصل ١','رقم تواصل ٢','حالة الغياب','الإجراء المتخذ','حالة الاستجابة','سبب الغياب'],
-      ...ROWS.map((r,i)=>[i+1,r.academic_number,r.full_name,r.sec,r.contact1||'',r.contact2||'',
-        r.fu.absence_status||'',r.fu.action_taken||'',r.fu.response_status||'',r.fu.reason||'']) ];
-    name=`استمارة_المتغيبات_${date}`; widths=[5,14,30,9,14,14,16,22,16,22];
+    cols=10; fileBase=`استمارة_المتغيبات_${date}`;
+    headers=['#','الرقم الأكاديمي','اسم الطالبة','الصف','تواصل ١','تواصل ٢','حالة الغياب','الإجراء المتخذ','حالة الاستجابة','سبب الغياب'];
+    dataRows=ROWS.map((r,i)=>[i+1,r.academic_number,r.full_name,r.sec,fmtPhone(r.contact1),fmtPhone(r.contact2),
+      r.fu.absence_status||'',r.fu.action_taken||'',r.fu.response_status||'',r.fu.reason||'']);
   }else{
-    /* استمارة الأسماء والأعداد */
-    const perSec={}; for(const r of ROWS) perSec[r.sec]=(perSec[r.sec]||0)+1;
-    aoa=[ ['مدرسة جدحفص الثانوية للبنات'], ['أسماء الطالبات المتغيبات وأعدادهن'],
-      [`اليوم: ${day}`,'',`التاريخ: ${date}`], [],
-      ['#','الرقم الأكاديمي','اسم الطالبة','الصف'],
-      ...ROWS.map((r,i)=>[i+1,r.academic_number,r.full_name,r.sec]),
-      [], ['العدد الكلي',ROWS.length], [],
-      ['الصف','العدد'], ...Object.keys(perSec).sort((a,b)=>a.localeCompare(b,'ar')).map(s=>[s,perSec[s]]) ];
-    name=`أعداد_المتغيبات_${date}`; widths=[12,14,30,9];
+    cols=4; fileBase=`أعداد_المتغيبات_${date}`;
+    headers=['#','الرقم الأكاديمي','اسم الطالبة','الصف'];
+    dataRows=ROWS.map((r,i)=>[i+1,r.academic_number,r.full_name,r.sec]);
   }
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=widths.map(w=>({wch:w}));
-  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:widths.length-1}},{s:{r:1,c:0},e:{r:1,c:widths.length-1}}];
-  if(!wb.Workbook) wb.Workbook={}; wb.Workbook.Views=[{RTL:true}];
-  XLSX.utils.book_append_sheet(wb,ws,'القائمة');
-  XLSX.writeFile(wb,name+'.xlsx');
+
+  addTitleRow(SCHOOL,16,true,NAVY,WHITE,cols);
+  addTitleRow(kind===1?'استمارة بيانات الطلبة المتغيبين':'أسماء الطالبات المتغيبات وأعدادهن',13,true,GOLD,NAVY,cols);
+  addTitleRow(`اليوم: ${day}   —   التاريخ: ${date}`,11,false,null,'FF22303C',cols);
+  ws.addRow([]);
+
+  const hdrRow=ws.addRow(headers);
+  hdrRow.eachCell(c=>{
+    c.font={name:'Arial',size:11,bold:true,color:{argb:WHITE}};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}};
+    c.alignment={horizontal:'center',vertical:'middle'};
+    c.border=border;
+  });
+  hdrRow.height=22;
+
+  dataRows.forEach((r,i)=>{
+    const row=ws.addRow(r);
+    row.eachCell((c,colNo)=>{
+      c.border=border;
+      c.alignment={horizontal: colNo===3?'right':'center', vertical:'middle'};
+      c.font={name:'Arial',size:10.5};
+      if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}};
+      /* أرقام التواصل والأرقام الأكاديمية نصوص دائماً — تمنع تحوّلها العشري في إكسل */
+      if(kind===1 && (colNo===5||colNo===6)) c.numFmt='@';
+      if(colNo===2) c.numFmt='@';
+    });
+  });
+
+  if(kind===2){
+    ws.addRow([]);
+    const totalRow=ws.addRow(['العدد الكلي', ROWS.length]);
+    totalRow.getCell(1).font={bold:true}; totalRow.getCell(2).font={bold:true};
+    ws.addRow([]);
+    const perSec={}; for(const r of ROWS) perSec[r.sec]=(perSec[r.sec]||0)+1;
+    const subHdr=ws.addRow(['الصف','العدد']);
+    subHdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.border=border; c.alignment={horizontal:'center'}; });
+    for(const s of Object.keys(perSec).sort((a,b)=>a.localeCompare(b,'ar'))){
+      const r=ws.addRow([s,perSec[s]]); r.eachCell(c=>{c.border=border; c.alignment={horizontal:'center'};});
+    }
+  }
+
+  const widths = kind===1 ? [5,14,28,9,13,13,17,22,16,20] : [5,14,28,9];
+  ws.columns.forEach((c,i)=>{ c.width=widths[i]||14; });
+  ws.views=[{rightToLeft:true,state:'frozen',ySplit:4}];
+
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=fileBase+'.xlsx'; a.click();
+  URL.revokeObjectURL(url);
 }
 
-registerTab({id:'ministryMain', label:'قائمة الوزارة',
+/* ============ تنزيل PDF (طباعة المتصفح — تدعم العربية والاتجاه تلقائياً) ============ */
+function exportPdf(){
+  if(!ROWS.length){ toast('لا غائبات في هذا اليوم'); return; }
+  const day=AR_DAYS[MIN_DATE.getDay()]||'', date=dstr(MIN_DATE);
+  const rowsHtml=ROWS.map((r,i)=>`<tr>
+    <td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td>
+    <td class="c" dir="ltr">${fmtPhone(r.contact1)}</td><td class="c" dir="ltr">${fmtPhone(r.contact2)}</td>
+    <td>${r.fu.absence_status||''}</td><td>${r.fu.action_taken||''}</td><td>${r.fu.response_status||''}</td><td>${r.fu.reason||''}</td>
+  </tr>`).join('');
+  $('printArea').innerHTML = `
+    <div class="p-head">
+      <h1>${SCHOOL}</h1>
+      <h2>استمارة بيانات الطلبة المتغيبين</h2>
+      <p>اليوم: ${day} — التاريخ: ${date} — إجمالي الغائبات: ${ROWS.length}</p>
+    </div>
+    <table class="p-tbl">
+      <tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th><th>تواصل ١</th><th>تواصل ٢</th>
+        <th>حالة الغياب</th><th>الإجراء المتخذ</th><th>حالة الاستجابة</th><th>سبب الغياب</th></tr>
+      ${rowsHtml}
+    </table>`;
+  window.print();
+}
+
+registerTab({id:'ministryMain', label:'قائمة الوزارة', group:'attendance', groupLabel:'متابعة الغياب',
   show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead, onOpen:loadMinistry});

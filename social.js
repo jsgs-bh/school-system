@@ -94,5 +94,5 @@ async function loadSocLists(){
   }));
 }
 
-registerTab({id:'socialMain', label:'التأخير والاستئذان',
+registerTab({id:'socialMain', label:'التأخير والاستئذان', group:'attendance', groupLabel:'متابعة الغياب',
   show:f=>f.isAdmin||f.isSocial, onOpen:loadSocial});
