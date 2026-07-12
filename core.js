@@ -114,6 +114,7 @@ async function boot(session){
     isReg:   /تسجيل/.test(dept),
     isTeacher: staff.title==='teacher'||staff.title==='senior_teacher',
     isAttendanceLead: (roles||[]).some(r=>r.role==='attendance_lead'),
+    isAnalysis: (roles||[]).some(r=>r.role==='analysis_supervisor'),
   };
   $('userName').textContent = staff.full_name;
   $('userRole').textContent = (roles||[]).map(r=>roleNames[r.role]).join(' · ') || titleNames[staff.title] || 'منتسبة';
