@@ -213,7 +213,7 @@ function presentExamNames(){
 }
 function examCellHtml(r){
   if(!r) return '<td class="c">—</td>';
-  return `<td class="c"><b>${r.score}/${r.total}</b><br><small>${r.pct.toFixed(1)}٪${r.cat?` — <span style="color:${r.cat.color}">${r.cat.name}</span>`:''}</small></td>`;
+  return `<td class="c" style="${r.cat?`background:${r.cat.color}33`:''}"><b>${r.score}/${r.total}</b><br><small>${r.pct.toFixed(1)}٪${r.cat?` — <span style="color:${r.cat.color}">${r.cat.name}</span>`:''}</small></td>`;
 }
 
 function render(){
@@ -259,7 +259,10 @@ async function exportXls(){
     const cells=exams.map(n=>{ const r=g.exams[n]; return r?`${r.score}/${r.total} (${r.pct.toFixed(1)}٪ ${r.cat?.name||''})`:''; });
     const row=ws.addRow([g.student,g.acad,g.sec,g.subj,...cells]);
     row.eachCell((c,colNo)=>{ c.border=spBorder; c.alignment={horizontal:colNo===1?'right':'center'}; c.font={size:10.5}; c.numFmt='@';
-      if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+      const examIdx=colNo-5; // أعمدة الاختبارات تبدأ بعد الأعمدة الأربعة الأولى
+      const r = examIdx>=0 ? g.exams[exams[examIdx]] : null;
+      if(r?.cat) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+r.cat.color.replace('#','')}};
+      else if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
   });
   ws.columns=[{width:26},{width:16},{width:11},{width:11},...exams.map(()=>({width:22}))];
   ws.views=[{rightToLeft:true,state:'frozen',ySplit:3}];
@@ -273,7 +276,7 @@ function exportPdf(){
   if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
   const groups=pivotRows(), exams=presentExamNames();
   const rows=groups.map(g=>{
-    const cells=exams.map(n=>{ const r=g.exams[n]; return `<td>${r?`${r.score}/${r.total}<br>${r.pct.toFixed(1)}٪ ${r.cat?.name||''}`:'—'}</td>`; }).join('');
+    const cells=exams.map(n=>{ const r=g.exams[n]; return `<td style="${r?.cat?`background:${r.cat.color}33`:''}">${r?`${r.score}/${r.total}<br>${r.pct.toFixed(1)}٪ ${r.cat?.name||''}`:'—'}</td>`; }).join('');
     return `<tr><td>${g.student}</td><td>${g.acad}</td><td>${g.sec}</td><td>${g.subj}</td>${cells}</tr>`;
   }).join('');
   $('printAreaSP').innerHTML=`

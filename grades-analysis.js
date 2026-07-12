@@ -27,12 +27,19 @@ $('appView').insertAdjacentHTML('beforeend', `
 
     <div class="panel">
       <h3>تقرير القسم الشامل</h3>
-      <div class="sub">لهذا المقرر (كل شعبه) — اختاري الأجزاء التي تريدينها في تقرير واحد مجمّع.</div>
+      <div class="sub">اختاري المقررات المشمولة (مقرر واحد أو أكثر أو كل المقررات)، والأجزاء التي تريدينها — تُجمع كلها في ملف واحد.</div>
+      <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn ghost" id="brSelectAll" style="width:auto;padding:7px 16px;font-size:12.5px">تحديد كل المقررات</button>
+        <button class="btn ghost" id="brSelectNone" style="width:auto;padding:7px 16px;font-size:12.5px">إلغاء التحديد</button>
+        <button class="btn ghost" id="brSelectCurrent" style="width:auto;padding:7px 16px;font-size:12.5px">المقرر الحالي فقط</button>
+      </div>
+      <div id="brSubjectList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;max-height:150px;overflow-y:auto;padding:12px;background:var(--sand);border-radius:9px"></div>
+      <div class="sub">الأجزاء</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
         <label class="ga-cmp-check"><input type="checkbox" id="brRemedial" checked> استمارة التغذية الراجعة</label>
         <label class="ga-cmp-check"><input type="checkbox" id="brComp" checked> كفايات الاختبار لكل الصفوف</label>
         <label class="ga-cmp-check"><input type="checkbox" id="brSheets" checked> كشف الاختبارات لكل الصفوف (تشخيصي/الأول/الثاني)</label>
-        <label class="ga-cmp-check"><input type="checkbox" id="brCompare" checked> مقارنة الاختبارات (إجمالي المقرر)</label>
+        <label class="ga-cmp-check"><input type="checkbox" id="brCompare" checked> مقارنة الاختبارات (إجمالي كل مقرر)</label>
       </div>
       <div class="actions">
         <button class="btn gold" id="brPdf">⬇ PDF — التقرير الشامل</button>
@@ -152,6 +159,13 @@ async function initAnalysis(){
   const {data:subs}=await db.from('subjects').select('id,code,exam_total').order('code');
   SUBJECTS=subs||[];
   $('gaSubject').innerHTML=SUBJECTS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+  $('brSubjectList').innerHTML=SUBJECTS.map(s=>`<label class="ga-cmp-check"><input type="checkbox" value="${s.id}"> ${s.code}</label>`).join('')
+    || '<span style="color:#8a93a0;font-size:13px">لا مقررات بعد.</span>';
+  $('brSelectAll').addEventListener('click',()=>{ $('brSubjectList').querySelectorAll('input').forEach(i=>i.checked=true); });
+  $('brSelectNone').addEventListener('click',()=>{ $('brSubjectList').querySelectorAll('input').forEach(i=>i.checked=false); });
+  $('brSelectCurrent').addEventListener('click',()=>{
+    $('brSubjectList').querySelectorAll('input').forEach(i=>i.checked = CUR_SUBJECT && i.value===CUR_SUBJECT.id);
+  });
   $('gaSubject').addEventListener('change',()=>{ CUR_SUBJECT=SUBJECTS.find(s=>s.id===$('gaSubject').value); loadGrid(); });
   if(SUBJECTS.length){ CUR_SUBJECT=SUBJECTS[0]; loadGrid(); }
 }
@@ -376,7 +390,7 @@ async function exportXls(){
   URL.revokeObjectURL(url);
 }
 function gaPageHtml(d,subjectCode,examTotal){
-  const rows=d.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.academic_number}</td><td style="text-align:right">${r.full_name}</td>
+  const rows=d.rows.map((r,i)=>`<tr style="${r.cat?`background:${r.cat.color}33`:''}"><td>${i+1}</td><td>${r.academic_number}</td><td style="text-align:right">${r.full_name}</td>
     <td>${r.score??'—'}</td><td>${r.pct!=null?r.pct.toFixed(1)+'٪':'—'}</td><td>${r.cat?.name||'—'}</td></tr>`).join('');
   return `<div class="ga-page">
     <div class="ga-head"><h2>كشف الدرجات والتصنيف — ${d.secCode} — ${subjectCode} — ${d.examName}</h2>
@@ -696,71 +710,79 @@ async function fetchComparisonForBundle(subject){
 
 let MASTERY_PCT_BUNDLE=80;
 async function generateBundle(kind){
-  if(!CUR_SUBJECT){ toast('اختاري مقرراً'); return; }
+  const subjIds=[...$('brSubjectList').querySelectorAll('input:checked')].map(i=>i.value);
+  if(!subjIds.length){ toast('اختاري مقرراً واحداً على الأقل (أو "تحديد كل المقررات")'); return; }
+  const subjects=SUBJECTS.filter(s=>subjIds.includes(s.id));
   const {data:gs}=await db.from('grade_settings').select('mastery_pct').eq('id',1).maybeSingle();
   MASTERY_PCT_BUNDLE=gs?.mastery_pct||80;
   const btn = kind==='pdf' ? $('brPdf') : $('brXls');
   btn.disabled=true; $('brStatus').style.display='block'; $('brStatus').className='result';
-  $('brStatus').textContent='جارٍ تجميع التقرير…';
+  const wb = kind==='xlsx' ? new ExcelJS.Workbook() : null;
+  let html='';
   try{
-    const parts={};
-    if($('brRemedial').checked) parts.remedial = await fetchRemedialForBundle(CUR_SUBJECT);
-    if($('brComp').checked) parts.comp = await fetchCompetencyForBundle(CUR_SUBJECT);
-    if($('brSheets').checked) parts.sheets = await collectSubjectDetails(CUR_SUBJECT);
-    if($('brCompare').checked) parts.compare = await fetchComparisonForBundle(CUR_SUBJECT);
+    for(let si=0; si<subjects.length; si++){
+      const subject=subjects[si];
+      $('brStatus').textContent=`جارٍ تجميع بيانات ${subject.code}… (${si+1}/${subjects.length})`;
+      const parts={};
+      if($('brRemedial').checked) parts.remedial = await fetchRemedialForBundle(subject);
+      if($('brComp').checked) parts.comp = await fetchCompetencyForBundle(subject);
+      if($('brSheets').checked) parts.sheets = await collectSubjectDetails(subject);
+      if($('brCompare').checked) parts.compare = await fetchComparisonForBundle(subject);
 
+      if(kind==='pdf'){
+        if(parts.remedial?.length){
+          for(const p of parts.remedial){
+            const rows=p.rows.map(r=>`<tr><td>${r.label}</td>${p.sections.map(s=>`<td>${(p.countsBySec[s.code]||{})[r.key.startsWith('cat:')?r.key.slice(4):r.key]??0}</td>`).join('')}<td>${r.action||'—'}</td><td>${r.status==='done'?'نُفذ':r.status==='in_progress'?'جاري التنفيذ':'لم يُنفذ'}</td></tr>`).join('');
+            html+=`<div class="ga-page"><div class="ga-head"><h2>استمارة التغذية الراجعة — ${subject.code} — ${p.examName}</h2>${p.goal?`<p>الهدف الخاص: ${p.goal}</p>`:''}</div>
+              <table class="ga-tbl"><tr><th>الفئة</th>${p.sections.map(s=>`<th>${s.code}</th>`).join('')}<th>الإجراء</th><th>متابعة التنفيذ</th></tr>${rows}</table></div>`;
+          }
+        }
+        if(parts.comp?.length){
+          for(const c of parts.comp){
+            const rows=c.list.map(l=>`<tr><td>${l.name}</td><td>${l.itemCount}</td><td>${l.pct!=null?l.pct.toFixed(1)+'٪':'—'}</td><td>${l.pct==null?'—':(l.status?'أتقن':'لم يتقن')}</td></tr>`).join('');
+            html+=`<div class="ga-page"><div class="ga-head"><h2>كفايات الاختبار — ${c.secCode} — ${subject.code} — ${c.examName}</h2></div>
+              <table class="ga-tbl"><tr><th>الكفاية</th><th>عدد الفقرات</th><th>نسبة الإنجاز</th><th>الحالة</th></tr>${rows}</table></div>`;
+          }
+        }
+        if(parts.sheets?.length){ for(const d of parts.sheets) html+=gaPageHtml(d,subject.code,d.examTotal); }
+        if(parts.compare?.length){
+          const rows=parts.compare.map(s=>`<tr><td>${s.name}</td><td>${s.graded}</td><td>${s.passPct.toFixed(1)}٪</td><td>${s.masteryPct.toFixed(1)}٪</td></tr>`).join('');
+          html+=`<div class="ga-page"><div class="ga-head"><h2>مقارنة الاختبارات — إجمالي المقرر — ${subject.code}</h2></div>
+            <table class="ga-tbl"><tr><th>الاختبار</th><th>عدد المرصودات</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>${rows}</table></div>`;
+        }
+      }else{
+        if(parts.remedial?.length){
+          for(const p of parts.remedial){
+            const ws=wb.addWorksheet(`${subject.code}-تغذية-${p.examName}`.slice(0,31),{views:[{rightToLeft:true}]});
+            ws.addRow(['الفئة',...p.sections.map(s=>s.code),'الإجراء','الحالة']).eachCell(c=>{c.font={bold:true};});
+            for(const r of p.rows) ws.addRow([r.label,...p.sections.map(s=>(p.countsBySec[s.code]||{})[r.key.startsWith('cat:')?r.key.slice(4):r.key]??0),r.action,r.status]);
+          }
+        }
+        if(parts.comp?.length){
+          const ws=wb.addWorksheet(`${subject.code}-كفايات`.slice(0,31),{views:[{rightToLeft:true}]});
+          ws.addRow(['الشعبة','الاختبار','الكفاية','عدد الفقرات','النسبة','الحالة']).eachCell(c=>{c.font={bold:true};});
+          for(const c of parts.comp) for(const l of c.list) ws.addRow([c.secCode,c.examName,l.name,l.itemCount,l.pct!=null?l.pct.toFixed(1)+'٪':'',l.pct==null?'':(l.status?'أتقن':'لم يتقن')]);
+        }
+        if(parts.sheets?.length){ for(const d of parts.sheets) addGaSheet(wb,d,subject.code,d.examTotal); }
+        if(parts.compare?.length){
+          const ws=wb.addWorksheet(`${subject.code}-مقارنة إجمالية`.slice(0,31),{views:[{rightToLeft:true}]});
+          ws.addRow(['الاختبار','عدد المرصودات','نسبة النجاح','نسبة الإتقان']).eachCell(c=>{c.font={bold:true};});
+          for(const s of parts.compare) ws.addRow([s.name,s.graded,s.passPct.toFixed(1)+'٪',s.masteryPct.toFixed(1)+'٪']);
+        }
+      }
+    }
+
+    const fname = subjects.length===1 ? `تقرير_${subjects[0].code}` : `تقرير_${subjects.length}_مقررات`;
     if(kind==='pdf'){
-      let html='';
-      if(parts.remedial?.length){
-        for(const p of parts.remedial){
-          const rows=p.rows.map(r=>`<tr><td>${r.label}</td>${p.sections.map(s=>`<td>${(p.countsBySec[s.code]||{})[r.key.startsWith('cat:')?r.key.slice(4):r.key]??0}</td>`).join('')}<td>${r.action||'—'}</td><td>${r.status==='done'?'نُفذ':r.status==='in_progress'?'جاري التنفيذ':'لم يُنفذ'}</td></tr>`).join('');
-          html+=`<div class="ga-page"><div class="ga-head"><h2>استمارة التغذية الراجعة — ${CUR_SUBJECT.code} — ${p.examName}</h2>${p.goal?`<p>الهدف الخاص: ${p.goal}</p>`:''}</div>
-            <table class="ga-tbl"><tr><th>الفئة</th>${p.sections.map(s=>`<th>${s.code}</th>`).join('')}<th>الإجراء</th><th>متابعة التنفيذ</th></tr>${rows}</table></div>`;
-        }
-      }
-      if(parts.comp?.length){
-        for(const c of parts.comp){
-          const rows=c.list.map(l=>`<tr><td>${l.name}</td><td>${l.itemCount}</td><td>${l.pct!=null?l.pct.toFixed(1)+'٪':'—'}</td><td>${l.pct==null?'—':(l.status?'أتقن':'لم يتقن')}</td></tr>`).join('');
-          html+=`<div class="ga-page"><div class="ga-head"><h2>كفايات الاختبار — ${c.secCode} — ${CUR_SUBJECT.code} — ${c.examName}</h2></div>
-            <table class="ga-tbl"><tr><th>الكفاية</th><th>عدد الفقرات</th><th>نسبة الإنجاز</th><th>الحالة</th></tr>${rows}</table></div>`;
-        }
-      }
-      if(parts.sheets?.length){
-        for(const d of parts.sheets) html+=gaPageHtml(d,CUR_SUBJECT.code,d.examTotal);
-      }
-      if(parts.compare?.length){
-        const rows=parts.compare.map(s=>`<tr><td>${s.name}</td><td>${s.graded}</td><td>${s.passPct.toFixed(1)}٪</td><td>${s.masteryPct.toFixed(1)}٪</td></tr>`).join('');
-        html+=`<div class="ga-page"><div class="ga-head"><h2>مقارنة الاختبارات — إجمالي المقرر — ${CUR_SUBJECT.code}</h2></div>
-          <table class="ga-tbl"><tr><th>الاختبار</th><th>عدد المرصودات</th><th>نسبة النجاح</th><th>نسبة الإتقان</th></tr>${rows}</table></div>`;
-      }
       if(!html){ toast('لا بيانات في العناصر المختارة'); return; }
       $('printAreaGA').innerHTML=html;
-      printWithTitle(`تقرير_القسم_${CUR_SUBJECT.code}`);
+      printWithTitle(fname);
     }else{
-      const wb=new ExcelJS.Workbook();
-      if(parts.remedial?.length){
-        for(const p of parts.remedial){
-          const ws=wb.addWorksheet(`تغذية-${p.examName}`.slice(0,31),{views:[{rightToLeft:true}]});
-          ws.addRow(['الفئة',...p.sections.map(s=>s.code),'الإجراء','الحالة']).eachCell(c=>{c.font={bold:true};});
-          for(const r of p.rows) ws.addRow([r.label,...p.sections.map(s=>(p.countsBySec[s.code]||{})[r.key.startsWith('cat:')?r.key.slice(4):r.key]??0),r.action,r.status]);
-        }
-      }
-      if(parts.comp?.length){
-        const ws=wb.addWorksheet('كفايات الاختبار',{views:[{rightToLeft:true}]});
-        ws.addRow(['الشعبة','الاختبار','الكفاية','عدد الفقرات','النسبة','الحالة']).eachCell(c=>{c.font={bold:true};});
-        for(const c of parts.comp) for(const l of c.list) ws.addRow([c.secCode,c.examName,l.name,l.itemCount,l.pct!=null?l.pct.toFixed(1)+'٪':'',l.pct==null?'':(l.status?'أتقن':'لم يتقن')]);
-      }
-      if(parts.sheets?.length){ for(const d of parts.sheets) addGaSheet(wb,d,CUR_SUBJECT.code,d.examTotal); }
-      if(parts.compare?.length){
-        const ws=wb.addWorksheet('مقارنة إجمالية',{views:[{rightToLeft:true}]});
-        ws.addRow(['الاختبار','عدد المرصودات','نسبة النجاح','نسبة الإتقان']).eachCell(c=>{c.font={bold:true};});
-        for(const s of parts.compare) ws.addRow([s.name,s.graded,s.passPct.toFixed(1)+'٪',s.masteryPct.toFixed(1)+'٪']);
-      }
       if(!wb.worksheets.length){ toast('لا بيانات في العناصر المختارة'); return; }
       const buf=await wb.xlsx.writeBuffer();
       const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
       const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download=`تقرير_القسم_${CUR_SUBJECT.code}.xlsx`; a.click();
+      const a=document.createElement('a'); a.href=url; a.download=fname+'.xlsx'; a.click();
       URL.revokeObjectURL(url);
     }
   }catch(err){ toast('تعذر إنشاء التقرير: '+(err.message||err)); }
