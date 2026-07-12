@@ -52,9 +52,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   .min-tbl tr.saved input{background:var(--ok-soft)}
   #printArea{display:none}
   @media print{
+    @page{margin:0}
     body *{visibility:hidden}
     #printArea, #printArea *{visibility:visible}
-    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm 16mm}
     .p-head{text-align:center;margin-bottom:14px}
     .p-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:8px}
     .p-head p{font-size:12px;color:#333}
@@ -62,7 +63,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     .p-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .p-tbl td{padding:5px;border:1px solid #ccc;text-align:right}
     .p-tbl td.c{text-align:center}
-    .p-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
+    .p-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 

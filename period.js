@@ -81,10 +81,11 @@ $('appView').insertAdjacentHTML('beforeend', `
   #periodMain input[type=date]{padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)}
   #printAreaPeriod{display:none}
   @media print{
+    @page{margin:0}
     body *{visibility:hidden}
     #printAreaPeriod, #printAreaPeriod *{visibility:visible}
     #printAreaPeriod{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
-    .pr-page{page-break-after:always;padding:6px}
+    .pr-page{page-break-after:always;padding:14mm 12mm 16mm}
     .pr-page:last-child{page-break-after:auto}
     .pr-head{text-align:center;margin-bottom:12px}
     .pr-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
@@ -94,7 +95,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     .pr-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
     .pr-tbl td.c{text-align:center}
     .pr-sub{font-size:12.5px;color:#1d3d5c;font-weight:700;margin:10px 0 6px}
-    .pr-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
+    .pr-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 

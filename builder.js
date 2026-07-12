@@ -54,16 +54,17 @@ $('appView').insertAdjacentHTML('beforeend', `
   #bFields label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer}
   #printAreaBuilder{display:none}
   @media print{
+    @page{margin:0}
     body *{visibility:hidden}
     #printAreaBuilder, #printAreaBuilder *{visibility:visible}
-    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm 16mm}
     .bd-head{text-align:center;margin-bottom:12px}
     .bd-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .bd-head p{font-size:11.5px;color:#333}
     .bd-tbl{width:100%;border-collapse:collapse;font-size:10px}
     .bd-tbl th{background:#1d3d5c;color:#fff;padding:5px;border:1px solid #1d3d5c}
     .bd-tbl td{padding:4px;border:1px solid #ccc;text-align:right}
-    .bd-footer{position:fixed;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
+    .bd-footer{position:fixed;bottom:6mm;left:12mm;right:12mm;text-align:center;font-size:9.5px;color:#555;border-top:1px solid #ccc;padding-top:4px;font-family:'Amiri',serif}
   }
 </style>`);
 
