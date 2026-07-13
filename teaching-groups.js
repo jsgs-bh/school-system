@@ -49,7 +49,7 @@ async function initTG(){
   if($('tgGo').dataset.ready) return;
   $('tgGo').dataset.ready='1';
   const [{data:secs},{data:subs}] = await Promise.all([
-    db.from('sections').select('id,code').eq('academic_year_id',S.YEAR.id).order('code'),
+    db.from('sections').select('id,code,semester').eq('academic_year_id',S.YEAR.id).order('code'),
     db.from('subjects').select('id,code').order('code'),
   ]);
   SECTIONS=secs||[]; SUBJECTS=subs||[];
@@ -72,7 +72,7 @@ async function loadGroups(){
     .eq('section_id',secId).eq('subject_id',subjId);
 
   if(!groups?.length){
-    const {data:newGroup,error}=await db.from('teaching_groups').insert({section_id:secId, subject_id:subjId, name:'المجموعة الوحيدة', academic_year_id:S.YEAR.id}).select('id').single();
+    const {data:newGroup,error}=await db.from('teaching_groups').insert({section_id:secId, subject_id:subjId, name:'المجموعة الوحيدة', academic_year_id:S.YEAR.id, semester:CUR_SEC?.semester}).select('id').single();
     if(error){ toast('تعذر الإنشاء: '+error.message); return; }
     if(ALL_STUDENTS.length){
       await db.from('teaching_group_members').insert(ALL_STUDENTS.map(s=>({group_id:newGroup.id, student_id:s.id})));
@@ -176,7 +176,7 @@ async function saveAll(){
     for(const g of GROUPS){
       let groupId=g.id;
       if(!groupId){
-        const {data,error}=await db.from('teaching_groups').insert({section_id:CUR_SEC.id, subject_id:CUR_SUBJ.id, name:g.name, academic_year_id:S.YEAR.id}).select('id').single();
+        const {data,error}=await db.from('teaching_groups').insert({section_id:CUR_SEC.id, subject_id:CUR_SUBJ.id, name:g.name, academic_year_id:S.YEAR.id, semester:CUR_SEC.semester}).select('id').single();
         if(error) throw error;
         groupId=data.id; g.id=groupId;
       }else{

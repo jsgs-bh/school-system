@@ -272,7 +272,7 @@ function show(id){
 async function loadMySubjects(){
   $('gSubjList').innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
   const {data:rows,error}=await db.from('entry_teachers')
-    .select('timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code),subjects(code,exam_total))')
+    .select('timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code,semester),subjects(code,exam_total))')
     .eq('staff_id',S.ME.id).eq('timetable_entries.academic_year_id',S.YEAR.id);
   if(error){ $('gSubjList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   const seen=new Map();
@@ -280,14 +280,15 @@ async function loadMySubjects(){
     const e=r.timetable_entries; if(!e?.subject_id||!e?.section_id) continue;
     const key=`${e.section_id}|${e.subject_id}`;
     if(!seen.has(key)) seen.set(key,{section_id:e.section_id,subject_id:e.subject_id,
-      section_code:e.sections?.code||'—',subject_code:e.subjects?.code||'—',exam_total:e.subjects?.exam_total||25});
+      section_code:e.sections?.code||'—',subject_code:e.subjects?.code||'—',exam_total:e.subjects?.exam_total||25,
+      semester:e.sections?.semester});
   }
   const timetablePairs=[...seen.values()];
   if(!timetablePairs.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات مرتبطة باسمك في الجدول الدراسي.</div>'; return; }
 
   /* لكل زوج (شعبة، مقرر): نجد مجموعة التدريس الخاصة بي — أو ننشئها تلقائياً
      أول مرة (مقرر غير منقسم = مجموعة واحدة بكل طالبات الشعبة، بلا أي إعداد). */
-  MY_PAIRS=[];
+  MY_PAIRS=[]; const autoErrors=[];
   for(const p of timetablePairs){
     let {data:myGroups}=await db.from('teaching_group_teachers')
       .select('group_id, teaching_groups!inner(section_id,subject_id)')
@@ -296,8 +297,8 @@ async function loadMySubjects(){
       const {data:anyGroups}=await db.from('teaching_groups').select('id').eq('section_id',p.section_id).eq('subject_id',p.subject_id);
       if(anyGroups?.length) continue; // مقسّم مسبقاً ولستُ مسندة لأي مجموعة فيه — يحتاج إسناد من الأدمن
       const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',p.section_id).is('to_date',null);
-      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({section_id:p.section_id,subject_id:p.subject_id,name:'المجموعة الوحيدة',academic_year_id:S.YEAR.id}).select('id').single();
-      if(e1) continue;
+      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({section_id:p.section_id,subject_id:p.subject_id,name:'المجموعة الوحيدة',academic_year_id:S.YEAR.id,semester:p.semester}).select('id').single();
+      if(e1){ autoErrors.push(`${p.section_code} — ${p.subject_code}: ${e1.message}`); continue; }
       await db.from('teaching_group_teachers').insert({group_id:newGroup.id, staff_id:S.ME.id});
       if(enr?.length) await db.from('teaching_group_members').insert(enr.map(e=>({group_id:newGroup.id, student_id:e.student_id})));
       myGroups=[{group_id:newGroup.id}];
@@ -305,7 +306,13 @@ async function loadMySubjects(){
     MY_PAIRS.push({...p, group_ids: myGroups.map(g=>g.group_id)});
   }
   MY_PAIRS.sort((a,b)=>a.section_code.localeCompare(b.section_code,'ar')||a.subject_code.localeCompare(b.subject_code,'ar'));
-  if(!MY_PAIRS.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات جاهزة بعد — إن كان مقررك منقسماً بين معلمتين، اطلبي من الأدمن إسنادك لمجموعتك من "مجموعات التدريس".</div>'; return; }
+  if(!MY_PAIRS.length){
+    $('gSubjList').innerHTML = autoErrors.length
+      ? `<div class="empty-day">تعذر تجهيز مقرراتك تلقائياً — أرسلي هذا الخطأ للدعم الفني:<br>${autoErrors.join('<br>')}</div>`
+      : '<div class="empty-day">لا مقررات جاهزة بعد — إن كان مقررك منقسماً بين معلمتين، اطلبي من الأدمن إسنادك لمجموعتك من "مجموعات التدريس".</div>';
+    return;
+  }
+  if(autoErrors.length) toast(`تعذر تجهيز ${autoErrors.length} مقرر تلقائياً — راجعي الدعم الفني`);
   $('gSubjList').innerHTML=MY_PAIRS.map((p,i)=>`
     <div class="g-subj" data-i="${i}"><div><b>${p.section_code} — ${p.subject_code}</b><small>درجة الاختبار: ${p.exam_total}</small></div><span>›</span></div>`).join('');
   $('gSubjList').querySelectorAll('.g-subj').forEach(el=>el.addEventListener('click',()=>{
