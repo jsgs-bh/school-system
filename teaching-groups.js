@@ -6,7 +6,7 @@
    تلقائياً "مجموعة وحيدة" بلا أي إعداد يدوي أول ما تفتحه أي معلمة.
    ملاحظة بنيوية: teaching_groups.teacher_id عمود مفرد (NOT NULL) —
    معلمة واحدة مسؤولة لكل مجموعة، لا قائمة معلمات. */
-import { db, $, S, clean, toast, registerTab } from './core.js';
+import { db, $, S, clean, toast, bindDrop, readSheet, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="teachingGroups" style="display:none">
@@ -30,7 +30,9 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="panel">
       <h3>توزيع الطالبات</h3>
       <div class="sub">كل طالبة تنتمي لمجموعة واحدة فقط. الطالبات غير المخصَّصة بعد يظهرن أولاً.</div>
-      <div id="tgMembersList"></div>
+      <div class="dropzone" id="tgDrop"><b>أو ارفعي ملف توزيع جاهز</b><p>إكسل — عمود لكل مجموعة بنفس ترتيبها أعلاه، وتحته الأرقام الأكاديمية</p>
+        <input type="file" id="tgFile" accept=".xlsx,.xls" hidden></div>
+      <div id="tgMembersList" style="margin-top:14px"></div>
       <button class="btn gold" id="tgSave" style="width:auto;padding:11px 26px;margin-top:14px">حفظ التوزيع</button>
     </div>
   </div>
@@ -62,6 +64,30 @@ async function initTG(){
   $('tgGo').addEventListener('click',loadGroups);
   $('tgAddGroup').addEventListener('click',addGroup);
   $('tgSave').addEventListener('click',saveAll);
+  bindDrop($('tgDrop'),$('tgFile'),handleDistributionUpload);
+}
+
+async function handleDistributionUpload(file){
+  if(!GROUPS.length){ toast('أنشئي المجموعات أولاً (أو افتحي الشعبة والمقرر ليُنشأ الافتراضي)'); return; }
+  const rows=await readSheet(file);
+  if(rows.length<2){ toast('الملف فارغ'); return; }
+  const numCols=GROUPS.length;
+  const byAcad={}; for(const s of ALL_STUDENTS) byAcad[String(s.academic_number).trim()]=s.id;
+  let matched=0, skipped=0;
+  const start = /[أ-ي]/.test(String(rows[0][0]??'')) ? 1 : 0; // تجاهل صف عناوين نصي إن وُجد
+  for(let col=0; col<numCols; col++){
+    for(let r=start; r<rows.length; r++){
+      const val=String(rows[r]?.[col]??'').trim();
+      if(!val) continue;
+      const sid=byAcad[val];
+      if(!sid){ skipped++; continue; }
+      for(const g of GROUPS) g.memberIds.delete(sid);
+      GROUPS[col].memberIds.add(sid);
+      matched++;
+    }
+  }
+  renderGroups(); renderMembers();
+  toast(`تم توزيع ${matched} طالبة من الملف${skipped?` — تجاهلت ${skipped} رقماً غير موجود بهذي الشعبة`:''}`);
 }
 
 async function loadGroups(){
