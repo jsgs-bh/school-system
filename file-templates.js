@@ -78,8 +78,13 @@ async function loadTemplate(kind){
   $(`${p}SheetName`).value=data?.sheet_name||'';
 }
 
+function safeExt(filename){
+  const m=/\.([a-zA-Z0-9]+)$/.exec(filename);
+  return m ? m[1].toLowerCase() : 'xlsx';
+}
+
 async function uploadTemplate(kind,file){
-  const path=`templates/${kind}-${Date.now()}-${file.name}`;
+  const path=`templates/${kind}-${Date.now()}.${safeExt(file.name)}`;
   const {error:upErr}=await db.storage.from(BUCKET).upload(path,file,{upsert:true});
   if(upErr){ toast('تعذر رفع الملف: '+upErr.message); return; }
   const {error}=await db.from('file_templates').upsert({
@@ -109,7 +114,7 @@ async function saveTemplateConfig(kind){
 
 async function uploadSharedFile(file){
   const title=$('sfTitle').value.trim()||file.name;
-  const path=`shared/${Date.now()}-${file.name}`;
+  const path=`shared/${Date.now()}.${safeExt(file.name)}`;
   const {error:upErr}=await db.storage.from(BUCKET).upload(path,file);
   if(upErr){ toast('تعذر رفع الملف: '+upErr.message); return; }
   const {error}=await db.from('shared_files').insert({title, file_path:path, file_name:file.name, uploaded_by:S.ME.id});
