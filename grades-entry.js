@@ -281,8 +281,30 @@ async function loadMySubjects(){
     if(!seen.has(key)) seen.set(key,{section_id:e.section_id,subject_id:e.subject_id,
       section_code:e.sections?.code||'—',subject_code:e.subjects?.code||'—',exam_total:e.subjects?.exam_total||25});
   }
-  MY_PAIRS=[...seen.values()].sort((a,b)=>a.section_code.localeCompare(b.section_code,'ar')||a.subject_code.localeCompare(b.subject_code,'ar'));
-  if(!MY_PAIRS.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات مرتبطة باسمك في الجدول الدراسي.</div>'; return; }
+  const timetablePairs=[...seen.values()];
+  if(!timetablePairs.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات مرتبطة باسمك في الجدول الدراسي.</div>'; return; }
+
+  /* لكل زوج (شعبة، مقرر): نجد مجموعة التدريس الخاصة بي — أو ننشئها تلقائياً
+     أول مرة (مقرر غير منقسم = مجموعة واحدة بكل طالبات الشعبة، بلا أي إعداد). */
+  MY_PAIRS=[];
+  for(const p of timetablePairs){
+    let {data:myGroups}=await db.from('teaching_group_teachers')
+      .select('group_id, teaching_groups!inner(section_id,subject_id)')
+      .eq('staff_id',S.ME.id).eq('teaching_groups.section_id',p.section_id).eq('teaching_groups.subject_id',p.subject_id);
+    if(!myGroups?.length){
+      const {data:anyGroups}=await db.from('teaching_groups').select('id').eq('section_id',p.section_id).eq('subject_id',p.subject_id);
+      if(anyGroups?.length) continue; // مقسّم مسبقاً ولستُ مسندة لأي مجموعة فيه — يحتاج إسناد من الأدمن
+      const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',p.section_id).is('to_date',null);
+      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({section_id:p.section_id,subject_id:p.subject_id,name:'المجموعة الوحيدة'}).select('id').single();
+      if(e1) continue;
+      await db.from('teaching_group_teachers').insert({group_id:newGroup.id, staff_id:S.ME.id});
+      if(enr?.length) await db.from('teaching_group_members').insert(enr.map(e=>({group_id:newGroup.id, student_id:e.student_id})));
+      myGroups=[{group_id:newGroup.id}];
+    }
+    MY_PAIRS.push({...p, group_ids: myGroups.map(g=>g.group_id)});
+  }
+  MY_PAIRS.sort((a,b)=>a.section_code.localeCompare(b.section_code,'ar')||a.subject_code.localeCompare(b.subject_code,'ar'));
+  if(!MY_PAIRS.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات جاهزة بعد — إن كان مقررك منقسماً بين معلمتين، اطلبي من الأدمن إسنادك لمجموعتك من "مجموعات التدريس".</div>'; return; }
   $('gSubjList').innerHTML=MY_PAIRS.map((p,i)=>`
     <div class="g-subj" data-i="${i}"><div><b>${p.section_code} — ${p.subject_code}</b><small>درجة الاختبار: ${p.exam_total}</small></div><span>›</span></div>`).join('');
   $('gSubjList').querySelectorAll('.g-subj').forEach(el=>el.addEventListener('click',()=>{
@@ -336,8 +358,8 @@ async function openExam(exam){
   $('gGridTitle').textContent=`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${exam.name}`;
   $('gGridSub').textContent=`الدرجة الكلية: ${CUR_EXAM_TOTAL}`;
   $('gGrid').innerHTML='<div class="empty-day">جارٍ تحميل الطالبات…</div>';
-  const {data:enr,error}=await db.from('enrollments')
-    .select('students(id,full_name,academic_number)').eq('section_id',CUR_PAIR.section_id).is('to_date',null);
+  const {data:enr,error}=await db.from('teaching_group_members')
+    .select('students(id,full_name,academic_number,special_case)').in('group_id',CUR_PAIR.group_ids);
   if(error){ $('gGrid').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean)
     .sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
@@ -516,24 +538,30 @@ async function saveGrades(){
 /* ============ كشف الدرجات والتصنيف (مطابق لقالب المدرسة) ============ */
 function computeClassificationRows(){
   const inputs=[...$('gGrid').querySelectorAll('input')];
+  const specialCat={id:'special', name:'حالة خاصة', color:S.SETTINGS.special_case_color||'#9CA3AF'};
   return STUDENTS.map(s=>{
     const inp=inputs.find(i=>i.dataset.sid===s.id);
     const score = inp && inp.value!=='' ? +inp.value : null;
     const pct = score!=null ? (score/CUR_EXAM_TOTAL*100) : null;
-    const cat = pct!=null ? categoryOf(pct) : null;
+    const cat = s.special_case ? specialCat : (pct!=null ? categoryOf(pct) : null);
     return {...s, score, pct, cat};
   });
 }
 function classificationSummary(rows){
   const perCat={}; for(const c of CATS) perCat[c.id]=0;
-  let mastered=0;
-  for(const r of rows){ if(r.cat) perCat[r.cat.id]++; if(r.pct!=null && r.pct>=MASTERY_PCT) mastered++; }
-  return {perCat, mastered};
+  let mastered=0, specialCount=0;
+
+  for(const r of rows){
+    if(r.special_case){ specialCount++; continue; }
+    if(r.cat) perCat[r.cat.id]++;
+    if(r.pct!=null && r.pct>=MASTERY_PCT) mastered++;
+  }
+  return {perCat, mastered, specialCount};
 }
 async function exportClassificationXls(){
   const rows=computeClassificationRows();
   if(!rows.some(r=>r.score!=null)){ toast('لا درجات مرصودة بعد'); return; }
-  const {perCat,mastered}=classificationSummary(rows);
+  const {perCat,mastered,specialCount}=classificationSummary(rows);
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('كشف الدرجات والتصنيف',{views:[{rightToLeft:true}]});
   const addTitle=(text,size,bold,color)=>{
@@ -573,6 +601,14 @@ async function exportClassificationXls(){
   mRow.getCell(1).font={bold:true}; mRow.getCell(1).alignment={horizontal:'center'}; mRow.getCell(1).border=gBorder;
   mRow.getCell(2).font={bold:true}; mRow.getCell(2).alignment={horizontal:'center'}; mRow.getCell(2).border=gBorder;
   mRow.getCell(2).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD9D9D9'}};
+  if(specialCount){
+    const scColor='FF'+(S.SETTINGS.special_case_color||'#9CA3AF').replace('#','');
+    const sRow=ws.addRow([specialCount,'عدد الحالات الخاصة:']);
+    ws.mergeCells(sRow.number,2,sRow.number,4);
+    sRow.getCell(1).font={bold:true}; sRow.getCell(1).alignment={horizontal:'center'}; sRow.getCell(1).border=gBorder;
+    sRow.getCell(2).font={bold:true}; sRow.getCell(2).alignment={horizontal:'center'}; sRow.getCell(2).border=gBorder;
+    sRow.getCell(2).fill={type:'pattern',pattern:'solid',fgColor:{argb:scColor}};
+  }
 
   ws.columns=[{width:6},{width:16},{width:30},{width:16}];
   const buf=await wb.xlsx.writeBuffer();
@@ -585,10 +621,11 @@ async function exportClassificationXls(){
 function exportClassificationPdf(){
   const rows=computeClassificationRows();
   if(!rows.some(r=>r.score!=null)){ toast('لا درجات مرصودة بعد'); return; }
-  const {perCat,mastered}=classificationSummary(rows);
+  const {perCat,mastered,specialCount}=classificationSummary(rows);
   const body=rows.map((r,i)=>`<tr style="${r.cat?`background:${r.cat.color}66`:''}"><td>${i+1}</td><td>${r.academic_number}</td><td style="text-align:right">${r.full_name}</td><td>${r.score??'—'}</td></tr>`).join('');
   const summaryRows=CATS.map(c=>`<tr><td style="background:${c.color}66;font-weight:700">عدد طالبات ${c.name}:</td><td>${perCat[c.id]}</td></tr>`).join('')
-    +`<tr><td style="background:#d9d9d9;font-weight:700">عدد المتقنات:</td><td>${mastered}</td></tr>`;
+    +`<tr><td style="background:#d9d9d9;font-weight:700">عدد المتقنات:</td><td>${mastered}</td></tr>`
+    +(specialCount?`<tr><td style="background:${S.SETTINGS.special_case_color||'#9CA3AF'}66;font-weight:700">عدد الحالات الخاصة:</td><td>${specialCount}</td></tr>`:'');
   $('printAreaComp').innerHTML=`
     <div class="cp-head"><h2>ترتيب الطالبات حسب الفئات في الاختبار</h2></div>
     <table class="cp-hdr">
@@ -611,7 +648,7 @@ async function openCompetency(exam){
   $('cCompList').innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
   $('cTemplateBanner').style.display='none';
 
-  const {data:enr}=await db.from('enrollments').select('students(id)').eq('section_id',CUR_PAIR.section_id).is('to_date',null);
+  const {data:enr}=await db.from('teaching_group_members').select('student_id').in('group_id',CUR_PAIR.group_ids);
   COMP_ENROLLED=(enr||[]).length;
   $('cQN').textContent=COMP_ENROLLED;
 
@@ -791,7 +828,7 @@ async function runExtract(){
       const {data:ex}=await db.from('exams').select('id,exam_total').eq('section_id',p.section_id).eq('subject_id',p.subject_id).eq('name',name).maybeSingle();
       if(!ex) continue;
       const examTotal=ex.exam_total ?? p.exam_total;
-      const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',p.section_id).is('to_date',null);
+      const {data:enr}=await db.from('teaching_group_members').select('students(id,full_name,academic_number)').in('group_id',p.group_ids);
       const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',ex.id);
       const scoreBy={}; for(const r of recs||[]) if(r.score!=null) scoreBy[r.student_id]=r.score;
       for(const e of enr||[]){
