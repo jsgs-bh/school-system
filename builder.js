@@ -54,6 +54,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #bFields label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer}
   #printAreaBuilder{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaBuilder, #printAreaBuilder *{visibility:visible}

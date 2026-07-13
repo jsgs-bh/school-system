@@ -52,6 +52,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .min-tbl tr.saved input{background:var(--ok-soft)}
   #printArea{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printArea, #printArea *{visibility:visible}

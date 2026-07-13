@@ -114,6 +114,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ga-cmp-check{display:inline-flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:9px 16px;margin-inline-end:8px;cursor:pointer}
   #printAreaGA{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaGA, #printAreaGA *{visibility:visible}
@@ -249,7 +250,7 @@ async function loadGrid(){
 
 /* ============ شاشة التحليل التفصيلي ============ */
 async function buildDetail(secId,secCode,examId,examName,examTotal){
-  const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
+  const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number,special_case)').eq('section_id',secId).is('to_date',null);
   const students=(enr||[]).map(e=>e.students).filter(Boolean);
   const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',examId);
   const scoreBy={}; for(const r of recs||[]) if(r.score!=null) scoreBy[r.student_id]=r.score;
@@ -257,16 +258,17 @@ async function buildDetail(secId,secCode,examId,examName,examTotal){
   const generalNote=(notes||[]).find(n=>!n.student_id)||null;
   const noteBy={}; for(const n of notes||[]) if(n.student_id) noteBy[n.student_id]=n;
 
+  const specialCat={id:'special', name:'حالة خاصة', color:S.SETTINGS.special_case_color||'#9CA3AF'};
   const total=examTotal;
   const rows=students.map(s=>{
     const score=scoreBy[s.id];
     const pct = score!=null ? (score/total*100) : null;
-    const cat = pct!=null ? categoryOf(pct) : null;
+    const cat = s.special_case ? specialCat : (pct!=null ? categoryOf(pct) : null);
     const n=noteBy[s.id];
     return {...s, score, pct, cat, note:n?.note||'', action:n?.action_taken||''};
   }).sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
 
-  const graded=rows.filter(r=>r.score!=null);
+  const graded=rows.filter(r=>r.score!=null && !r.special_case);
   const passCount=graded.filter(r=>r.pct>=THRESH.pass_pct).length;
   const masteryCount=graded.filter(r=>r.pct>=THRESH.mastery_pct).length;
   const failCount=graded.length-passCount;
@@ -296,8 +298,10 @@ function renderDetail(det){
 
   const perCat={}; for(const c of CATS) perCat[c.id]={cat:c,count:0};
   for(const r of det.graded) if(r.cat) perCat[r.cat.id].count++;
+  const specialCount=det.rows.filter(r=>r.special_case).length;
   $('gaCatTable').innerHTML='<tr><th>الفئة</th><th>الحد</th><th>العدد</th></tr>'+
-    CATS.map(c=>`<tr><td><span class="ga-swatch" style="background:${c.color}"></span>${c.name}</td><td class="c">${c.min_pct}–${c.max_pct}٪</td><td class="c">${perCat[c.id].count}</td></tr>`).join('');
+    CATS.map(c=>`<tr><td><span class="ga-swatch" style="background:${c.color}"></span>${c.name}</td><td class="c">${c.min_pct}–${c.max_pct}٪</td><td class="c">${perCat[c.id].count}</td></tr>`).join('')
+    + (specialCount?`<tr><td><span class="ga-swatch" style="background:${S.SETTINGS.special_case_color||'#9CA3AF'}"></span>حالة خاصة</td><td class="c">—</td><td class="c">${specialCount}</td></tr>`:'');
 
   $('gaGenNote').value=det.generalNote?.note||'';
   $('gaGenAction').value=det.generalNote?.action_taken||'';

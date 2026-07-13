@@ -201,6 +201,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .rp-tbl td.cnt{text-align:center;font-weight:700}
   #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *, #printAreaAlerts, #printAreaAlerts *, #printAreaRemedial, #printAreaRemedial *{visibility:visible}

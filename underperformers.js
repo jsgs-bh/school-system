@@ -38,6 +38,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .up-reason.low_performance{background:#fff3cd;color:#8a6100}
   #printAreaUP{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaUP, #printAreaUP *{visibility:visible}

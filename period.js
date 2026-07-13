@@ -81,6 +81,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #periodMain input[type=date]{padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)}
   #printAreaPeriod{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaPeriod, #printAreaPeriod *{visibility:visible}

@@ -48,6 +48,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .rp-tbl td.cnt{text-align:center;font-weight:700}
   #printAreaRP{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaRP, #printAreaRP *{visibility:visible}

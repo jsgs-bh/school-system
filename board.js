@@ -27,6 +27,7 @@ if(!document.getElementById('boardExtraStyle')){
     .detail-row{display:flex;justify-content:space-between;align-items:center;background:var(--sand);border-radius:9px;padding:9px 13px;margin-bottom:6px;font-size:13px}
     #printAreaBoard{display:none}
     @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
       @page{margin:0}
       body *{visibility:hidden}
       #printAreaBoard, #printAreaBoard *{visibility:visible}

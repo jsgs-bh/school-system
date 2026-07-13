@@ -52,6 +52,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .sp-cat-chip{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
   #printAreaSP{display:none}
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
     #printAreaSP, #printAreaSP *{visibility:visible}
@@ -163,7 +164,7 @@ async function runSearch(){
 
   let query=db.from('grade_records').select(`
     student_id, score,
-    students(full_name,academic_number),
+    students(full_name,academic_number,special_case),
     exams!inner(id,name,exam_total,subject_id,section_id,subjects(code,exam_total),sections(code))
   `).not('score','is',null);
 
@@ -185,10 +186,11 @@ async function runSearch(){
   const {data,error}=await query;
   if(error){ toast('تعذر التحميل: '+error.message); return; }
 
+  const specialCat={id:'special', name:'حالة خاصة', color:S.SETTINGS.special_case_color||'#9CA3AF'};
   let rows=(data||[]).filter(r=>r.score!=null).map(r=>{
     const ex=r.exams;
     const total=ex.exam_total ?? ex.subjects?.exam_total ?? 25; // احتياطي أخير لو تعذّر إيجاد الدرجة الكلية من أي مصدر
-    const pct=r.score/total*100, cat=categoryOf(pct);
+    const pct=r.score/total*100, cat = r.students?.special_case ? specialCat : categoryOf(pct);
     return {student:r.students?.full_name||'—', acad:r.students?.academic_number||'—',
       sec:ex.sections?.code||'—', subj:ex.subjects?.code||'—', exam:ex.name,
       score:r.score, total, pct, cat, studentId:r.student_id, subjectId:ex.subject_id, sectionId:ex.section_id};
@@ -220,11 +222,13 @@ function render(){
   $('spResults').style.display='block';
   const uniqStudents=new Set(ROWS.map(r=>r.studentId)).size;
   const perCat={}; for(const c of CATS) perCat[c.id]=0;
-  for(const r of ROWS) if(r.cat) perCat[r.cat.id]++;
+  let specialCount=0;
+  for(const r of ROWS){ if(r.cat?.id==='special') specialCount++; else if(r.cat) perCat[r.cat.id]++; }
   $('spStats').innerHTML=`
     <div class="stat"><b>${uniqStudents}</b><span>طالبة</span></div>
     <div class="stat"><b>${ROWS.length}</b><span>سجل درجة</span></div>
-    ${CATS.map(c=>`<div class="stat"><b style="color:${c.color}">${perCat[c.id]}</b><span>${c.name}</span></div>`).join('')}`;
+    ${CATS.map(c=>`<div class="stat"><b style="color:${c.color}">${perCat[c.id]}</b><span>${c.name}</span></div>`).join('')}
+    ${specialCount?`<div class="stat"><b style="color:${S.SETTINGS.special_case_color||'#9CA3AF'}">${specialCount}</b><span>حالة خاصة</span></div>`:''}`;
   if(!ROWS.length){ $('spTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا نتائج مطابقة</td></tr>'; return; }
 
   const groups=pivotRows(), exams=presentExamNames();
