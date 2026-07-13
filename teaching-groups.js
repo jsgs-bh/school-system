@@ -3,7 +3,9 @@
    المقررات المنقسمة بين معلمتين: كل معلمة تتعامل مع طالباتها فقط في
    الدرجات والتحليل والتغذية والتنبيهات، بينما الغياب يبقى موحداً للشعبة
    كاملة كما هو (لا علاقة له بهذه الشاشة). المقرر غير المنقسم يُنشأ له
-   تلقائياً "مجموعة وحيدة" بلا أي إعداد يدوي أول ما تفتحه أي معلمة. */
+   تلقائياً "مجموعة وحيدة" بلا أي إعداد يدوي أول ما تفتحه أي معلمة.
+   ملاحظة بنيوية: teaching_groups.teacher_id عمود مفرد (NOT NULL) —
+   معلمة واحدة مسؤولة لكل مجموعة، لا قائمة معلمات. */
 import { db, $, S, clean, toast, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
@@ -16,6 +18,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <select id="tgSubject" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"></select>
       <button class="btn gold" id="tgGo" style="width:auto;padding:10px 24px">فتح</button>
     </div>
+    <div class="result" id="tgStatus" style="display:none"></div>
   </div>
 
   <div id="tgResults" style="display:none">
@@ -37,13 +40,14 @@ $('appView').insertAdjacentHTML('beforeend', `
   .tg-group-row input[type=text]{padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-weight:700;color:var(--navy);min-width:160px}
   .tg-group-row .tg-teacher{flex:1;min-width:200px;position:relative}
   .tg-group-row .tg-teacher input{width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit}
+  .tg-group-row.no-teacher .tg-teacher input{border-color:#e0b84a}
   .tg-group-row button.del{background:none;border:none;color:var(--err);cursor:pointer;font-size:14px}
   .tg-member-row{display:flex;justify-content:space-between;align-items:center;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:9px 14px;margin-bottom:6px}
   .tg-member-row select{padding:6px 10px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12.5px;background:#fbfaf7}
   .tg-member-row.unassigned{border-color:#e0b84a;background:#fff8ea}
 </style>`);
 
-let SECTIONS=[], SUBJECTS=[], GROUPS=[], MEMBERS_BY_STUDENT={}, ALL_STUDENTS=[], CUR_SEC=null, CUR_SUBJ=null;
+let SECTIONS=[], SUBJECTS=[], GROUPS=[], ALL_STUDENTS=[], CUR_SEC=null, CUR_SUBJ=null;
 
 async function initTG(){
   if($('tgGo').dataset.ready) return;
@@ -64,42 +68,56 @@ async function loadGroups(){
   const secId=$('tgSection').value, subjId=$('tgSubject').value;
   if(!secId||!subjId){ toast('اختاري الشعبة والمقرر'); return; }
   CUR_SEC=SECTIONS.find(s=>s.id===secId); CUR_SUBJ=SUBJECTS.find(s=>s.id===subjId);
+  $('tgStatus').style.display='none';
 
   const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
   ALL_STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
 
-  let {data:groups}=await db.from('teaching_groups').select('id,name,teaching_group_teachers(staff_id,staff(full_name)),teaching_group_members(student_id)')
+  let {data:groups}=await db.from('teaching_groups').select('id,name,teacher_id,teaching_group_members(student_id)')
     .eq('section_id',secId).eq('subject_id',subjId);
 
   if(!groups?.length){
-    const {data:newGroup,error}=await db.from('teaching_groups').insert({section_id:secId, subject_id:subjId, name:'المجموعة الوحيدة', academic_year_id:S.YEAR.id, semester:CUR_SEC?.semester}).select('id').single();
-    if(error){ toast('تعذر الإنشاء: '+error.message); return; }
-    if(ALL_STUDENTS.length){
-      await db.from('teaching_group_members').insert(ALL_STUDENTS.map(s=>({group_id:newGroup.id, student_id:s.id})));
+    const {data:ents}=await db.from('entry_teachers')
+      .select('staff_id,timetable_entries!inner(section_id,subject_id)')
+      .eq('timetable_entries.section_id',secId).eq('timetable_entries.subject_id',subjId);
+    const defaultTeacherId=ents?.[0]?.staff_id||null;
+    if(!defaultTeacherId){
+      $('tgStatus').style.display='block'; $('tgStatus').className='result';
+      $('tgStatus').textContent='لا معلمة مرتبطة بهذا المقرر في الجدول الدراسي بعد — أضيفي مجموعة يدوياً أدناه وحددي معلمتها.';
+      GROUPS=[];
+    }else{
+      const {data:newGroup,error}=await db.from('teaching_groups').insert({
+        section_id:secId, subject_id:subjId, name:'المجموعة الوحيدة',
+        academic_year_id:S.YEAR.id, semester:CUR_SEC?.semester, teacher_id:defaultTeacherId
+      }).select('id').single();
+      if(error){ toast('تعذر الإنشاء: '+error.message); return; }
+      if(ALL_STUDENTS.length) await db.from('teaching_group_members').insert(ALL_STUDENTS.map(s=>({group_id:newGroup.id, student_id:s.id})));
+      const {data:groups2}=await db.from('teaching_groups').select('id,name,teacher_id,teaching_group_members(student_id)').eq('section_id',secId).eq('subject_id',subjId);
+      groups=groups2;
+      toast('لا مجموعات سابقة — أُنشئت "المجموعة الوحيدة" تلقائياً بكل طالبات الشعبة');
     }
-    const {data:groups2}=await db.from('teaching_groups').select('id,name,teaching_group_teachers(staff_id,staff(full_name)),teaching_group_members(student_id)')
-      .eq('section_id',secId).eq('subject_id',subjId);
-    groups=groups2;
-    toast('لا مجموعات سابقة — أُنشئت "المجموعة الوحيدة" تلقائياً بكل طالبات الشعبة');
   }
 
-  GROUPS=(groups||[]).map(g=>({id:g.id, name:g.name,
-    teachers:(g.teaching_group_teachers||[]).map(t=>({staff_id:t.staff_id, name:t.staff?.full_name||'—'})),
+  const teacherIds=[...new Set((groups||[]).map(g=>g.teacher_id).filter(Boolean))];
+  let teacherNames={};
+  if(teacherIds.length){
+    const {data:staffRows}=await db.from('staff').select('id,full_name').in('id',teacherIds);
+    for(const s of staffRows||[]) teacherNames[s.id]=s.full_name;
+  }
+  GROUPS=(groups||[]).map(g=>({id:g.id, name:g.name, teacher_id:g.teacher_id, teacher_name:teacherNames[g.teacher_id]||'',
     memberIds:new Set((g.teaching_group_members||[]).map(m=>m.student_id))}));
-
-  MEMBERS_BY_STUDENT={};
-  for(const g of GROUPS) for(const sid of g.memberIds) MEMBERS_BY_STUDENT[sid]=g.id;
 
   renderGroups(); renderMembers();
   $('tgResults').style.display='block';
 }
 
 function renderGroups(){
+  if(!GROUPS.length){ $('tgGroupsList').innerHTML='<div class="empty-day">لا مجموعات بعد — أضيفي واحدة.</div>'; return; }
   $('tgGroupsList').innerHTML=GROUPS.map((g,gi)=>`
-    <div class="tg-group-row" data-gi="${gi}">
+    <div class="tg-group-row ${g.teacher_id?'':'no-teacher'}" data-gi="${gi}">
       <input type="text" class="tg-name" value="${g.name.replace(/"/g,'&quot;')}">
       <div class="tg-teacher">
-        <input type="text" class="tg-teacher-search" placeholder="ابحثي عن المعلمة المسؤولة…" value="${g.teachers[0]?.name||''}" data-staff="${g.teachers[0]?.staff_id||''}">
+        <input type="text" class="tg-teacher-search" placeholder="ابحثي عن المعلمة المسؤولة…" value="${g.teacher_name||''}">
         <div class="sugg" style="display:none"></div>
       </div>
       <span style="font-size:12px;color:#6b7683">${g.memberIds.size} طالبة</span>
@@ -120,8 +138,9 @@ function renderGroups(){
         box.innerHTML=st.map((s,i)=>`<div data-i="${i}">${s.full_name}</div>`).join('');
         box.style.display='block';
         box.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click',()=>{
-          inp.value=st[i].full_name; inp.dataset.staff=st[i].id; box.style.display='none';
-          GROUPS[gi].teachers=[{staff_id:st[i].id, name:st[i].full_name}];
+          inp.value=st[i].full_name; box.style.display='none';
+          GROUPS[gi].teacher_id=st[i].id; GROUPS[gi].teacher_name=st[i].full_name;
+          inp.closest('.tg-group-row').classList.remove('no-teacher');
         }));
       },250);
     });
@@ -137,7 +156,7 @@ function renderGroups(){
 
 function addGroup(){
   const n=GROUPS.length+1;
-  GROUPS.push({id:null, name:`المجموعة ${n===1?'الأولى':n===2?'الثانية':n}`, teachers:[], memberIds:new Set()});
+  GROUPS.push({id:null, name:`المجموعة ${n===1?'الأولى':n===2?'الثانية':n}`, teacher_id:null, teacher_name:'', memberIds:new Set()});
   renderGroups(); renderMembers();
 }
 
@@ -150,7 +169,7 @@ function renderMembers(){
   $('tgMembersList').innerHTML = rows.map(({s,curGroupIdx})=>`
     <div class="tg-member-row ${curGroupIdx===-1?'unassigned':''}" data-sid="${s.id}">
       <span>${s.full_name} <small style="color:#8a93a0">${s.academic_number}</small></span>
-      <select class="tg-assign" data-sid="${s.id}">
+      <select class="tg-assign" data-sid="${s.id}" ${!GROUPS.length?'disabled':''}>
         ${curGroupIdx===-1?'<option value="">— اختاري —</option>':''}
         ${GROUPS.map((g,gi)=>`<option value="${gi}" ${gi===curGroupIdx?'selected':''}>${g.name}</option>`).join('')}
       </select>
@@ -165,9 +184,8 @@ function renderMembers(){
 }
 
 async function saveAll(){
-  if(GROUPS.some(g=>!g.teachers.length)){
-    if(!confirm('توجد مجموعة بلا معلمة محددة — تكملين الحفظ؟')) return;
-  }
+  if(!GROUPS.length){ toast('أضيفي مجموعة واحدة على الأقل'); return; }
+  if(GROUPS.some(g=>!g.teacher_id)){ toast('كل مجموعة يجب أن يكون لها معلمة محددة قبل الحفظ'); return; }
   const unassigned=ALL_STUDENTS.filter(s=>!GROUPS.some(g=>g.memberIds.has(s.id)));
   if(unassigned.length){ toast(`${unassigned.length} طالبة بلا مجموعة — وزّعيهن أولاً`); return; }
 
@@ -176,14 +194,16 @@ async function saveAll(){
     for(const g of GROUPS){
       let groupId=g.id;
       if(!groupId){
-        const {data,error}=await db.from('teaching_groups').insert({section_id:CUR_SEC.id, subject_id:CUR_SUBJ.id, name:g.name, academic_year_id:S.YEAR.id, semester:CUR_SEC.semester}).select('id').single();
+        const {data,error}=await db.from('teaching_groups').insert({
+          section_id:CUR_SEC.id, subject_id:CUR_SUBJ.id, name:g.name,
+          academic_year_id:S.YEAR.id, semester:CUR_SEC.semester, teacher_id:g.teacher_id
+        }).select('id').single();
         if(error) throw error;
         groupId=data.id; g.id=groupId;
       }else{
-        await db.from('teaching_groups').update({name:g.name}).eq('id',groupId);
+        const {error}=await db.from('teaching_groups').update({name:g.name, teacher_id:g.teacher_id}).eq('id',groupId);
+        if(error) throw error;
       }
-      await db.from('teaching_group_teachers').delete().eq('group_id',groupId);
-      if(g.teachers.length){ const {error}=await db.from('teaching_group_teachers').insert(g.teachers.map(t=>({group_id:groupId, staff_id:t.staff_id}))); if(error) throw error; }
       await db.from('teaching_group_members').delete().eq('group_id',groupId);
       if(g.memberIds.size){ const {error}=await db.from('teaching_group_members').insert([...g.memberIds].map(sid=>({group_id:groupId, student_id:sid}))); if(error) throw error; }
     }

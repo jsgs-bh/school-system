@@ -290,20 +290,21 @@ async function loadMySubjects(){
      أول مرة (مقرر غير منقسم = مجموعة واحدة بكل طالبات الشعبة، بلا أي إعداد). */
   MY_PAIRS=[]; const autoErrors=[];
   for(const p of timetablePairs){
-    let {data:myGroups}=await db.from('teaching_group_teachers')
-      .select('group_id, teaching_groups!inner(section_id,subject_id)')
-      .eq('staff_id',S.ME.id).eq('teaching_groups.section_id',p.section_id).eq('teaching_groups.subject_id',p.subject_id);
+    let {data:myGroups}=await db.from('teaching_groups')
+      .select('id').eq('teacher_id',S.ME.id).eq('section_id',p.section_id).eq('subject_id',p.subject_id);
     if(!myGroups?.length){
       const {data:anyGroups}=await db.from('teaching_groups').select('id').eq('section_id',p.section_id).eq('subject_id',p.subject_id);
       if(anyGroups?.length) continue; // مقسّم مسبقاً ولستُ مسندة لأي مجموعة فيه — يحتاج إسناد من الأدمن
       const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',p.section_id).is('to_date',null);
-      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({section_id:p.section_id,subject_id:p.subject_id,name:'المجموعة الوحيدة',academic_year_id:S.YEAR.id,semester:p.semester}).select('id').single();
+      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({
+        section_id:p.section_id, subject_id:p.subject_id, name:'المجموعة الوحيدة',
+        academic_year_id:S.YEAR.id, semester:p.semester, teacher_id:S.ME.id
+      }).select('id').single();
       if(e1){ autoErrors.push(`${p.section_code} — ${p.subject_code}: ${e1.message}`); continue; }
-      await db.from('teaching_group_teachers').insert({group_id:newGroup.id, staff_id:S.ME.id});
       if(enr?.length) await db.from('teaching_group_members').insert(enr.map(e=>({group_id:newGroup.id, student_id:e.student_id})));
-      myGroups=[{group_id:newGroup.id}];
+      myGroups=[{id:newGroup.id}];
     }
-    MY_PAIRS.push({...p, group_ids: myGroups.map(g=>g.group_id)});
+    MY_PAIRS.push({...p, group_ids: myGroups.map(g=>g.id)});
   }
   MY_PAIRS.sort((a,b)=>a.section_code.localeCompare(b.section_code,'ar')||a.subject_code.localeCompare(b.subject_code,'ar'));
   if(!MY_PAIRS.length){
