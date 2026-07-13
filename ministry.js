@@ -306,5 +306,5 @@ function exportPdf(kind){
   }
 }
 
-registerTab({id:'ministryMain', label:'قائمة الوزارة', group:'attendance', groupLabel:'متابعة الغياب',
+registerTab({id:'ministryMain', label:'قائمة الغياب', group:'attendance', groupLabel:'متابعة الغياب',
   show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead||f.isAttendanceLead, onOpen:loadMinistry});
