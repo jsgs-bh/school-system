@@ -296,7 +296,7 @@ async function loadMySubjects(){
       const {data:anyGroups}=await db.from('teaching_groups').select('id').eq('section_id',p.section_id).eq('subject_id',p.subject_id);
       if(anyGroups?.length) continue; // مقسّم مسبقاً ولستُ مسندة لأي مجموعة فيه — يحتاج إسناد من الأدمن
       const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',p.section_id).is('to_date',null);
-      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({section_id:p.section_id,subject_id:p.subject_id,name:'المجموعة الوحيدة'}).select('id').single();
+      const {data:newGroup,error:e1}=await db.from('teaching_groups').insert({section_id:p.section_id,subject_id:p.subject_id,name:'المجموعة الوحيدة',academic_year_id:S.YEAR.id}).select('id').single();
       if(e1) continue;
       await db.from('teaching_group_teachers').insert({group_id:newGroup.id, staff_id:S.ME.id});
       if(enr?.length) await db.from('teaching_group_members').insert(enr.map(e=>({group_id:newGroup.id, student_id:e.student_id})));
