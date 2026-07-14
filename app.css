@@ -154,4 +154,10 @@
 
   @media print{
     body{background:#fff!important}
+    .shared-print-head{text-align:center;margin-bottom:14px}
+    .shared-print-head img{max-height:70px;margin-bottom:8px}
+    .shared-print-head h2{font-size:15px;color:#1d3d5c;font-weight:600}
+    .shared-print-footer{position:fixed;bottom:6mm;inset-inline:12mm;display:flex;justify-content:space-between;font-size:12pt;font-weight:700;color:#1a2733}
+    .shared-print-footer div{text-align:center}
+    .shared-print-footer b{display:block;margin-bottom:4px;font-size:12pt;font-weight:700}
   }

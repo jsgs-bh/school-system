@@ -2,7 +2,7 @@
    شاشة فرعية تحت "حصصي" بجانب رصد الغياب. تعرض مقررات المعلمة (شعبة×مقرر)،
    تفتح/تنشئ اختباراً، ثم تتيح إدخال الدرجات بطريقتين معاً من البداية:
    شبكة تفاعلية تدعم لصق عمود كامل من إكسل، أو رفع ملف إكسل جاهز. */
-import { db, $, S, toast, chunk, bindDrop, readSheet, printWithTitle, getLogoUrl, registerTab } from './core.js';
+import { db, $, S, toast, chunk, bindDrop, readSheet, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const EXAM_NAMES = ['اختبار تشخيصي','الاختبار الأول','الاختبار الثاني'];
@@ -640,13 +640,14 @@ function exportClassificationPdf(){
     +`<tr><td style="background:#d9d9d9;font-weight:700">عدد المتقنات:</td><td>${mastered}</td></tr>`
     +(specialCount?`<tr><td style="background:${S.SETTINGS.special_case_color||'#9CA3AF'}66;font-weight:700">عدد الحالات الخاصة:</td><td>${specialCount}</td></tr>`:'');
   $('printAreaComp').innerHTML=`
-    <div class="cp-head"><h2>ترتيب الطالبات حسب الفئات في الاختبار</h2></div>
+    ${printHeaderHtml('ترتيب الطالبات حسب الفئات في الاختبار')}
     <table class="cp-hdr">
       <tr><td>الشعبة</td><td style="color:red;font-weight:700">${CUR_PAIR.section_code}</td><td>المعلمة</td><td>${S.ME.full_name}</td></tr>
       <tr><td>رمز المقرر</td><td>${CUR_PAIR.subject_code}</td><td>الاختبار</td><td>${CUR_EXAM.name}</td></tr>
     </table>
     <table class="cp-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>درجة الاختبار</th></tr>${body}</table>
-    <table class="cp-tbl" style="margin-top:14px;width:60%">${summaryRows}</table>`;
+    <table class="cp-tbl" style="margin-top:14px;width:60%">${summaryRows}</table>
+    ${printFooterHtml('اسم المعلمة', S.ME.full_name)}`;
   printWithTitle(`كشف_الدرجات_والتصنيف_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`);
 }
 
@@ -991,9 +992,8 @@ async function exportAlertsXls(){
   URL.revokeObjectURL(url);
 }
 function printStudentAlert(r){
-  const logo=getLogoUrl();
   $('printAreaAlerts').innerHTML=`
-    <div class="cp-head">${logo?`<img src="${logo}" style="max-height:70px;margin-bottom:8px">`:''}<h2>متابعة أداء الطالبات</h2></div>
+    ${printHeaderHtml('متابعة أداء الطالبات')}
     <table class="cp-tbl cp-single">
       <tr><td>الاسم</td><td>${r.students?.full_name||'—'}</td></tr>
       <tr><td>الرقم الأكاديمي</td><td>${r.students?.academic_number||'—'}</td></tr>
@@ -1002,10 +1002,7 @@ function printStudentAlert(r){
       <tr><td>إجراء المعلمة</td><td>${r.teacher_action||'—'}</td></tr>
       <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
     </table>
-    <div class="cp-footer" style="display:flex;justify-content:space-between">
-      <div><b>اسم المعلمة</b>${S.ME.full_name||''}</div>
-      <div><b>مديرة المدرسة</b>${S.SETTINGS.principal_name||'—'}</div>
-    </div>`;
+    ${printFooterHtml('اسم المعلمة', S.ME.full_name)}`;
   printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
 }
 
@@ -1015,8 +1012,9 @@ function exportAlertsPdf(){
     <td>${r.exams?.sections?.code||''}</td><td>${r.exams?.subjects?.code||''}</td><td>${r.exams?.name||''}</td>
     <td>${REASON_LABEL[r.reason]||r.reason}</td><td>${r.score??''}</td><td>${r.pct!=null?(+r.pct).toFixed(1)+'٪':''}</td><td>${r.teacher_action||'—'}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
   $('printAreaAlerts').innerHTML=`
-    <div class="cp-head"><h2>متابعة أداء طالباتي</h2></div>
-    <table class="cp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>الحالة</th></tr>${rows}</table>`;
+    ${printHeaderHtml('متابعة أداء طالباتي')}
+    <table class="cp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>الحالة</th></tr>${rows}</table>
+    ${printFooterHtml('اسم المعلمة', S.ME.full_name)}`;
   printWithTitle('متابعة_أداء_طالباتي');
 }
 

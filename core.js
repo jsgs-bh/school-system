@@ -23,6 +23,13 @@ export const dstr = d => d.toISOString().slice(0,10);
 export function toast(t){ $('toastMsg').textContent=t; $('toast').classList.add('show'); setTimeout(()=>$('toast').classList.remove('show'),2400); }
 /* طباعة PDF باسم ملف مقترح = اسم التقرير + التاريخ (متصفحات Chrome تقترح اسم الملف من عنوان الصفحة) */
 export function printWithTitle(filenameBase){
+  // إصلاح تراكب التقارير: كل ملف له حاوية طباعة خاصة، وأي محتوى قديم متبقٍ
+  // في حاوية أخرى كان يظهر معها لأن قواعد @media print مستقلة لكل حاوية.
+  // نفرّغ كل حاوية غير الحاوية المستخدَمة الآن (المعروفة بأنها غير فارغة).
+  const containers=[...document.querySelectorAll('[id^="printArea"]')];
+  const active=containers.find(el=>el.innerHTML.trim()!=='');
+  containers.forEach(el=>{ if(el!==active) el.innerHTML=''; });
+
   const prev=document.title;
   document.title=filenameBase;
   const restore=()=>{ document.title=prev; window.removeEventListener('afterprint',restore); };
@@ -99,6 +106,18 @@ export function getLogoUrl(){
   if(!S.SETTINGS.logo_path) return null;
   const {data}=db.storage.from('school-files').getPublicUrl(S.SETTINGS.logo_path);
   return data?.publicUrl||null;
+}
+/* هيدر موحّد لكل التقارير المطبوعة (الشعار + العنوان). */
+export function printHeaderHtml(title){
+  const logo=getLogoUrl();
+  return `<div class="shared-print-head">${logo?`<img src="${logo}">`:''}<h2>${title}</h2></div>`;
+}
+/* تذييل موحّد: يمين = المعلمة أو المكتب، يسار = مديرة المدرسة — ثابت أسفل كل صفحة. */
+export function printFooterHtml(rightLabel,rightName,leftLabel,leftName){
+  return `<div class="shared-print-footer">
+    <div><b>${rightLabel}</b>${rightName||''}</div>
+    <div><b>${leftLabel||'مديرة المدرسة'}</b>${leftName||S.SETTINGS.principal_name||'—'}</div>
+  </div>`;
 }
 
 /* ============ الجلسة ============ */
