@@ -214,6 +214,10 @@ $('appView').insertAdjacentHTML('beforeend', `
     .cp-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .cp-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .cp-tbl td{padding:5px;border:1px solid #ccc;text-align:center}
+    .cp-single{width:60%;margin:0 auto}
+    .cp-single td:first-child{background:#f5f2ec;font-weight:700;width:160px;text-align:right}
+    .cp-footer{margin-top:60px;text-align:right}
+    .cp-footer b{display:block;margin-bottom:6px}
     .ga-page{page-break-after:always}
     .ga-page:last-child{page-break-after:auto}
   }
@@ -924,14 +928,16 @@ function renderAlerts(){
     <div class="stat"><b>${ALERT_ROWS.filter(r=>r.status==='in_progress').length}</b><span>جاري المتابعة</span></div>
     <div class="stat green"><b>${ALERT_ROWS.filter(r=>r.status==='done').length}</b><span>تم</span></div>`;
   if(!ALERT_ROWS.length){ $('gAlertsTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
-  $('gAlertsTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>الحالة</th></tr>'+
-    ALERT_ROWS.map(r=>`<tr>
+  $('gAlertsTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>الحالة</th><th></th></tr>'+
+    ALERT_ROWS.map((r,i)=>`<tr>
       <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
       <td class="c">${r.exams?.sections?.code||'—'}</td><td class="c">${r.exams?.subjects?.code||'—'}</td><td class="c">${r.exams?.name||'—'}</td>
       <td class="c"><span class="ga-reason ${r.reason}">${REASON_LABEL[r.reason]||r.reason}</span></td>
       <td class="c">${r.score??'—'}</td><td class="c">${r.pct!=null?(+r.pct).toFixed(1)+'٪':'—'}</td>
       <td><input class="ga-note-input" data-id="${r.id}" data-role="teacher-action" value="${(r.teacher_action||'').replace(/"/g,'&quot;')}"></td>
-      <td><select class="ga-status" data-id="${r.id}">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td></tr>`).join('');
+      <td><select class="ga-status" data-id="${r.id}">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td><button class="btn ghost" data-print="${i}" style="width:auto;padding:6px 12px;font-size:11px">🖨️ تقرير</button></td></tr>`).join('');
+  $('gAlertsTable').querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudentAlert(ALERT_ROWS[+b.dataset.print])));
   $('gAlertsTable').querySelectorAll('.ga-status').forEach(sel=>sel.addEventListener('change', async ()=>{
     const {error}=await db.from('underperformer_alerts').update({status:sel.value, handled_by:S.ME.id, handled_at:new Date().toISOString()}).eq('id',sel.dataset.id);
     if(error){ toast('تعذر الحفظ: '+error.message); return; }
@@ -976,6 +982,24 @@ async function exportAlertsXls(){
   const a=document.createElement('a'); a.href=url; a.download='متابعة_أداء_طالباتي.xlsx'; a.click();
   URL.revokeObjectURL(url);
 }
+function printStudentAlert(r){
+  $('printAreaAlerts').innerHTML=`
+    <div class="cp-head"><h2>متابعة أداء الطالبات</h2></div>
+    <table class="cp-tbl cp-single">
+      <tr><td>الاسم</td><td>${r.students?.full_name||'—'}</td></tr>
+      <tr><td>الرقم الأكاديمي</td><td>${r.students?.academic_number||'—'}</td></tr>
+      <tr><td>المقرر</td><td>${r.exams?.subjects?.code||'—'}</td></tr>
+      <tr><td>درجة الاختبار</td><td>${r.score??'—'}</td></tr>
+      <tr><td>إجراء المعلمة</td><td>${r.teacher_action||'—'}</td></tr>
+      <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
+    </table>
+    <div class="cp-footer">
+      <b>اسم المعلمة:</b>
+      ${S.ME.full_name||''}
+    </div>`;
+  printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
+}
+
 function exportAlertsPdf(){
   if(!ALERT_ROWS.length){ toast('لا بيانات للتصدير'); return; }
   const rows=ALERT_ROWS.map(r=>`<tr><td>${r.students?.full_name||''}</td><td>${r.students?.academic_number||''}</td>
