@@ -50,7 +50,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaSECAR{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0;size:portrait}
     body *{visibility:hidden}
     #printAreaSECAR, #printAreaSECAR *{visibility:visible}
     #printAreaSECAR{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:10mm}

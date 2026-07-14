@@ -47,7 +47,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaEAR{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0;size:portrait}
     body *{visibility:hidden}
     #printAreaEAR, #printAreaEAR *{visibility:visible}
     #printAreaEAR{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:10mm}
