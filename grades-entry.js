@@ -908,28 +908,36 @@ function exportExtractPdf(){
 
 /* ============ متابعة أداء طالباتي (نطاق المعلمة نفسها فقط) ============ */
 const REASON_LABEL={fail:'راسبة', low_performance:'أداء منخفض'};
-const STATUS_LABEL={pending:'قيد الانتظار', in_progress:'جاري المتابعة', done:'تم'};
-let ALERT_ROWS=[];
+const STATUS_LABEL={pending:'جديد', in_progress:'قيد المتابعة', done:'تمت المتابعة'};
+let ALERT_ROWS=[], ALERT_FILTER=null;
 function openAlerts(){ show('gAlertsView'); loadAlerts(); }
 async function loadAlerts(){
   $('gAlertsTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
-  const pairs=new Set(MY_PAIRS.map(p=>`${p.subject_id}|${p.section_id}`));
+  const subjectStudentPairs=new Set();
+  for(const p of MY_PAIRS){
+    const {data:members}=await db.from('teaching_group_members').select('student_id').in('group_id',p.group_ids);
+    for(const m of members||[]) subjectStudentPairs.add(`${p.subject_id}|${m.student_id}`);
+  }
   const {data:alerts,error}=await db.from('underperformer_alerts')
-    .select('id,reason,score,pct,status,teacher_action,students(full_name,academic_number),exams(name,subject_id,section_id,subjects(code),sections(code))')
+    .select('id,student_id,reason,score,pct,status,teacher_action,office_action,students(full_name,academic_number),exams(name,subject_id,section_id,subjects(code),sections(code))')
     .order('created_at',{ascending:false});
   if(error){ $('gAlertsTable').innerHTML=`<tr><td style="padding:20px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
-  ALERT_ROWS=(alerts||[]).filter(a=>a.exams && pairs.has(`${a.exams.subject_id}|${a.exams.section_id}`));
+  ALERT_ROWS=(alerts||[]).filter(a=>a.exams && subjectStudentPairs.has(`${a.exams.subject_id}|${a.student_id}`));
   renderAlerts();
 }
 function renderAlerts(){
   $('gAlertsStats').innerHTML=`
-    <div class="stat red"><b>${ALERT_ROWS.length}</b><span>إجمالي التنبيهات</span></div>
-    <div class="stat"><b>${ALERT_ROWS.filter(r=>r.status==='pending').length}</b><span>قيد الانتظار</span></div>
-    <div class="stat"><b>${ALERT_ROWS.filter(r=>r.status==='in_progress').length}</b><span>جاري المتابعة</span></div>
-    <div class="stat green"><b>${ALERT_ROWS.filter(r=>r.status==='done').length}</b><span>تم</span></div>`;
-  if(!ALERT_ROWS.length){ $('gAlertsTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
+    <div class="stat red ga-filter" data-filter="" style="cursor:pointer">${!ALERT_FILTER?'▸ ':''}<b>${ALERT_ROWS.length}</b><span>إجمالي التنبيهات</span></div>
+    <div class="stat ga-filter" data-filter="pending" style="cursor:pointer"><b>${ALERT_ROWS.filter(r=>r.status==='pending').length}</b><span>${ALERT_FILTER==='pending'?'▸ ':''}جديد</span></div>
+    <div class="stat ga-filter" data-filter="in_progress" style="cursor:pointer"><b>${ALERT_ROWS.filter(r=>r.status==='in_progress').length}</b><span>${ALERT_FILTER==='in_progress'?'▸ ':''}قيد المتابعة</span></div>
+    <div class="stat green ga-filter" data-filter="done" style="cursor:pointer"><b>${ALERT_ROWS.filter(r=>r.status==='done').length}</b><span>${ALERT_FILTER==='done'?'▸ ':''}تمت المتابعة</span></div>`;
+  $('gAlertsStats').querySelectorAll('.ga-filter').forEach(el=>el.addEventListener('click',()=>{
+    ALERT_FILTER = el.dataset.filter || null; renderAlerts();
+  }));
+  const rows = ALERT_FILTER ? ALERT_ROWS.filter(r=>r.status===ALERT_FILTER) : ALERT_ROWS;
+  if(!rows.length){ $('gAlertsTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات في هذا التصنيف 🎉</td></tr>'; return; }
   $('gAlertsTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>الحالة</th><th></th></tr>'+
-    ALERT_ROWS.map((r,i)=>`<tr>
+    rows.map((r,i)=>`<tr>
       <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
       <td class="c">${r.exams?.sections?.code||'—'}</td><td class="c">${r.exams?.subjects?.code||'—'}</td><td class="c">${r.exams?.name||'—'}</td>
       <td class="c"><span class="ga-reason ${r.reason}">${REASON_LABEL[r.reason]||r.reason}</span></td>
@@ -937,7 +945,7 @@ function renderAlerts(){
       <td><input class="ga-note-input" data-id="${r.id}" data-role="teacher-action" value="${(r.teacher_action||'').replace(/"/g,'&quot;')}"></td>
       <td><select class="ga-status" data-id="${r.id}">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td>
       <td><button class="btn ghost" data-print="${i}" style="width:auto;padding:6px 12px;font-size:11px">🖨️ تقرير</button></td></tr>`).join('');
-  $('gAlertsTable').querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudentAlert(ALERT_ROWS[+b.dataset.print])));
+  $('gAlertsTable').querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudentAlert(rows[+b.dataset.print])));
   $('gAlertsTable').querySelectorAll('.ga-status').forEach(sel=>sel.addEventListener('change', async ()=>{
     const {error}=await db.from('underperformer_alerts').update({status:sel.value, handled_by:S.ME.id, handled_at:new Date().toISOString()}).eq('id',sel.dataset.id);
     if(error){ toast('تعذر الحفظ: '+error.message); return; }

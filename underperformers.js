@@ -8,15 +8,15 @@ import { db, $, S, chunk, toast, printWithTitle, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const REASON_LABEL = {fail:'راسبة', low_performance:'أداء منخفض'};
-const STATUS_LABEL = {pending:'قيد الانتظار', in_progress:'جاري المتابعة', done:'تم'};
+const STATUS_LABEL = {pending:'جديد', in_progress:'قيد المتابعة', done:'تمت المتابعة'};
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="upMain" style="display:none">
   <div class="stats">
-    <div class="stat red"><b id="upTotal">—</b><span>إجمالي التنبيهات</span></div>
-    <div class="stat"><b id="upPending">—</b><span>قيد الانتظار</span></div>
-    <div class="stat"><b id="upProgress">—</b><span>جاري المتابعة</span></div>
-    <div class="stat green"><b id="upDone">—</b><span>تم التعامل معها</span></div>
+    <div class="stat red" id="upFilterAll" data-filter="" style="cursor:pointer"><b id="upTotal">—</b><span>إجمالي التنبيهات</span></div>
+    <div class="stat" id="upFilterPending" data-filter="pending" style="cursor:pointer"><b id="upPending">—</b><span>جديد</span></div>
+    <div class="stat" id="upFilterProgress" data-filter="in_progress" style="cursor:pointer"><b id="upProgress">—</b><span>قيد المتابعة</span></div>
+    <div class="stat green" id="upFilterDone" data-filter="done" style="cursor:pointer"><b id="upDone">—</b><span>تمت المتابعة</span></div>
   </div>
   <div class="panel">
     <div class="actions" style="margin-bottom:14px">
@@ -56,7 +56,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let ROWS=[], CAN_EDIT_OFFICE=false;
+let ROWS=[], CAN_EDIT_OFFICE=false, STATUS_FILTER=null;
 
 async function initUP(){
   if($('upRefresh').dataset.ready) return;
@@ -66,6 +66,10 @@ async function initUP(){
   $('upXls').addEventListener('click',exportXls);
   $('upPdf').addEventListener('click',exportPdf);
   $('upBackfill').addEventListener('click',backfillAlerts);
+  $('upFilterAll').addEventListener('click',()=>{ STATUS_FILTER=null; render(); });
+  $('upFilterPending').addEventListener('click',()=>{ STATUS_FILTER='pending'; render(); });
+  $('upFilterProgress').addEventListener('click',()=>{ STATUS_FILTER='in_progress'; render(); });
+  $('upFilterDone').addEventListener('click',()=>{ STATUS_FILTER='done'; render(); });
   await load();
 }
 
@@ -156,9 +160,10 @@ function render(){
   $('upProgress').textContent=ROWS.filter(r=>r.status==='in_progress').length;
   $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
   const tbl=$('upTable');
-  if(!ROWS.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
+  const rows = STATUS_FILTER ? ROWS.filter(r=>r.status===STATUS_FILTER) : ROWS;
+  if(!rows.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات في هذا التصنيف 🎉</td></tr>'; return; }
   tbl.innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th><th></th></tr>'+
-    ROWS.map((r,i)=>`<tr>
+    rows.map((r,i)=>`<tr>
       <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
       <td class="c">${r.exams?.sections?.code||'—'}</td><td class="c">${r.exams?.subjects?.code||'—'}</td><td class="c">${r.exams?.name||'—'}</td>
       <td class="c"><span class="up-reason ${r.reason}">${REASON_LABEL[r.reason]||r.reason}</span></td>
@@ -171,7 +176,7 @@ function render(){
         ${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}
       </select></td>
       <td><button class="btn ghost" data-print="${i}" style="width:auto;padding:6px 12px;font-size:11px">🖨️ تقرير</button></td></tr>`).join('');
-  tbl.querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudentReport(ROWS[+b.dataset.print])));
+  tbl.querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudentReport(rows[+b.dataset.print])));
   tbl.querySelectorAll('.up-office-action').forEach(inp=>inp.addEventListener('change', async ()=>{
     const {error}=await db.from('underperformer_alerts').update({office_action:inp.value.trim()||null}).eq('id',inp.dataset.id);
     if(error){ toast('تعذر الحفظ: '+error.message); return; }
