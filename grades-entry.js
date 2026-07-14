@@ -2,7 +2,7 @@
    شاشة فرعية تحت "حصصي" بجانب رصد الغياب. تعرض مقررات المعلمة (شعبة×مقرر)،
    تفتح/تنشئ اختباراً، ثم تتيح إدخال الدرجات بطريقتين معاً من البداية:
    شبكة تفاعلية تدعم لصق عمود كامل من إكسل، أو رفع ملف إكسل جاهز. */
-import { db, $, S, toast, chunk, bindDrop, readSheet, printWithTitle, registerTab } from './core.js';
+import { db, $, S, toast, chunk, bindDrop, readSheet, printWithTitle, getLogoUrl, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const EXAM_NAMES = ['اختبار تشخيصي','الاختبار الأول','الاختبار الثاني'];
@@ -991,8 +991,9 @@ async function exportAlertsXls(){
   URL.revokeObjectURL(url);
 }
 function printStudentAlert(r){
+  const logo=getLogoUrl();
   $('printAreaAlerts').innerHTML=`
-    <div class="cp-head"><h2>متابعة أداء الطالبات</h2></div>
+    <div class="cp-head">${logo?`<img src="${logo}" style="max-height:70px;margin-bottom:8px">`:''}<h2>متابعة أداء الطالبات</h2></div>
     <table class="cp-tbl cp-single">
       <tr><td>الاسم</td><td>${r.students?.full_name||'—'}</td></tr>
       <tr><td>الرقم الأكاديمي</td><td>${r.students?.academic_number||'—'}</td></tr>
@@ -1001,9 +1002,9 @@ function printStudentAlert(r){
       <tr><td>إجراء المعلمة</td><td>${r.teacher_action||'—'}</td></tr>
       <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
     </table>
-    <div class="cp-footer">
-      <b>اسم المعلمة:</b>
-      ${S.ME.full_name||''}
+    <div class="cp-footer" style="display:flex;justify-content:space-between">
+      <div><b>اسم المعلمة</b>${S.ME.full_name||''}</div>
+      <div><b>مديرة المدرسة</b>${S.SETTINGS.principal_name||'—'}</div>
     </div>`;
   printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
 }

@@ -290,4 +290,4 @@ function exportPdf(){
 }
 
 registerTab({id:'spMain', label:'تتبع الدرجات', group:'grades', groupLabel:'الدرجات',
-  show:f=>f.isAdmin||f.isLead||f.isAnalysis||f.isAcademicGuidance||f.isSeniorTeacher, init:initSP});
+  show:f=>f.isAdmin||f.isLead||f.isAnalysis||f.isSeniorTeacher, init:initSP});

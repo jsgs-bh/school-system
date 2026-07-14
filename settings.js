@@ -1,16 +1,29 @@
 /* settings.js — تبويب «الإعدادات» (للدعم الفني/الأدمن فقط):
    البيانات الأساسية (اسم المدرسة، أوقات الحصص) + الصلاحيات (منح/سحب الأدوار).
    الملف مكتفٍ بذاته: يضيف تبويباته وتنسيقاته بنفسه. */
-import { db, $, S, clean, normDigits, toast, roleNames, applySettingsToDom, registerTab } from './core.js';
+import { db, $, S, clean, normDigits, toast, roleNames, applySettingsToDom, bindDrop, registerTab } from './core.js';
 
 /* ============ حقن الواجهة ============ */
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="settingsData" style="display:none">
   <div class="panel">
-    <h3>اسم المدرسة</h3>
-    <div class="sub">يظهر في شاشة الدخول، الترويسة، الاستمارات، والتقارير المصدَّرة.</div>
-    <div class="field"><input id="setSchoolName" type="text" style="max-width:420px"></div>
-    <button class="btn gold" id="setSaveName" style="width:auto;padding:11px 26px">حفظ الاسم</button>
+    <h3>بيانات المدرسة</h3>
+    <div class="sub">اسم المديرة يُستخدم في تذييل التقارير المصدَّرة (يسار التذييل). ابحثي عن منتسبة لتعبئة الاسم تلقائياً، أو اكتبيه مباشرة.</div>
+    <div class="field"><label>اسم المدرسة</label><input id="setSchoolName" type="text" style="max-width:420px"></div>
+    <div class="field" style="position:relative;max-width:420px"><label>اسم المديرة</label>
+      <input id="setPrincipal" type="text" autocomplete="off"><div class="sugg" id="setPrincipalSugg"></div></div>
+    <div class="field" style="position:relative;max-width:420px"><label>اسم المديرة المساعدة ١</label>
+      <input id="setDeputy1" type="text" autocomplete="off"><div class="sugg" id="setDeputy1Sugg"></div></div>
+    <div class="field" style="position:relative;max-width:420px"><label>اسم المديرة المساعدة ٢</label>
+      <input id="setDeputy2" type="text" autocomplete="off"><div class="sugg" id="setDeputy2Sugg"></div></div>
+    <button class="btn gold" id="setSaveName" style="width:auto;padding:11px 26px">حفظ بيانات المدرسة</button>
+  </div>
+  <div class="panel">
+    <h3>شعار المدرسة</h3>
+    <div class="sub">يُستخدم كهيدر في التقارير المصدَّرة.</div>
+    <div class="dropzone" id="setLogoDrop"><b id="setLogoCurrent">لا شعار مرفوع بعد</b><p>صورة PNG أو JPG</p>
+      <input type="file" id="setLogoFile" accept="image/*" hidden></div>
+    <img id="setLogoPreview" style="display:none;max-height:80px;margin-top:12px;border-radius:8px">
   </div>
   <div class="panel">
     <h3>عدد الحصص وأوقاتها</h3>
@@ -50,21 +63,70 @@ $('appView').insertAdjacentHTML('beforeend', `
 </style>`);
 
 /* ============ البيانات الأساسية ============ */
+function bindNameSearch(inputId,suggId){
+  const inp=$(inputId), box=$(suggId);
+  let deb=null;
+  inp.addEventListener('input',()=>{
+    clearTimeout(deb);
+    deb=setTimeout(async ()=>{
+      const q=clean(inp.value);
+      if(q.length<2){ box.style.display='none'; return; }
+      const {data:st}=await db.from('staff').select('full_name').ilike('full_name',`%${q}%`).limit(6);
+      if(!(st||[]).length){ box.style.display='none'; return; }
+      box.innerHTML=st.map((s,i)=>`<div data-i="${i}">${s.full_name}</div>`).join('');
+      box.style.display='block';
+      box.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click',()=>{
+        inp.value=st[i].full_name; box.style.display='none';
+      }));
+    },250);
+  });
+}
 function initData(){
   const el=$('setSchoolName');
   if(!el.dataset.ready){
     el.dataset.ready='1';
     el.value = S.SETTINGS.school_name||'';
+    $('setPrincipal').value = S.SETTINGS.principal_name||'';
+    $('setDeputy1').value = S.SETTINGS.deputy1_name||'';
+    $('setDeputy2').value = S.SETTINGS.deputy2_name||'';
+    bindNameSearch('setPrincipal','setPrincipalSugg');
+    bindNameSearch('setDeputy1','setDeputy1Sugg');
+    bindNameSearch('setDeputy2','setDeputy2Sugg');
     $('setSaveName').addEventListener('click', async ()=>{
       const name=clean(el.value);
       if(!name){ toast('اكتبي اسم المدرسة'); return; }
-      const {error}=await db.from('app_settings').upsert({id:1, school_name:name, updated_at:new Date().toISOString()});
+      const {error}=await db.from('app_settings').upsert({
+        id:1, school_name:name,
+        principal_name: clean($('setPrincipal').value)||null,
+        deputy1_name: clean($('setDeputy1').value)||null,
+        deputy2_name: clean($('setDeputy2').value)||null,
+        updated_at:new Date().toISOString()
+      });
       if(error){ toast('تعذر الحفظ: '+error.message); return; }
-      S.SETTINGS.school_name=name; applySettingsToDom();
-      toast('تم حفظ اسم المدرسة');
+      Object.assign(S.SETTINGS,{school_name:name, principal_name:$('setPrincipal').value, deputy1_name:$('setDeputy1').value, deputy2_name:$('setDeputy2').value});
+      applySettingsToDom();
+      toast('تم حفظ بيانات المدرسة');
     });
+    if(S.SETTINGS.logo_path){
+      $('setLogoCurrent').textContent='الشعار الحالي:';
+      $('setLogoPreview').src=logoPublicUrl(S.SETTINGS.logo_path); $('setLogoPreview').style.display='block';
+    }
+    bindDrop($('setLogoDrop'),$('setLogoFile'),uploadLogo);
   }
   loadPeriods();
+}
+function logoPublicUrl(path){ const {data}=db.storage.from('school-files').getPublicUrl(path); return data?.publicUrl; }
+async function uploadLogo(file){
+  const ext=(/\.([a-zA-Z0-9]+)$/.exec(file.name)?.[1]||'png').toLowerCase();
+  const path=`logo/school-logo-${Date.now()}.${ext}`;
+  const {error:upErr}=await db.storage.from('school-files').upload(path,file,{upsert:true});
+  if(upErr){ toast('تعذر رفع الشعار: '+upErr.message); return; }
+  const {error}=await db.from('app_settings').upsert({id:1, logo_path:path, updated_at:new Date().toISOString()});
+  if(error){ toast('تعذر الحفظ: '+error.message); return; }
+  S.SETTINGS.logo_path=path;
+  $('setLogoCurrent').textContent='الشعار الحالي:';
+  $('setLogoPreview').src=logoPublicUrl(path); $('setLogoPreview').style.display='block';
+  toast('تم رفع الشعار');
 }
 let PATTERN_ID=null, PERIOD_VALUES={};
 async function loadPeriods(){

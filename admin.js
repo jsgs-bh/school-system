@@ -288,4 +288,4 @@ $('ttRun').addEventListener('click', async ()=>{
   finally{ $('ttRun').disabled=false; setTimeout(()=>{$('ttProg').style.display='none';},1500); }
 });
 
-registerTab({id:'adminMain', label:'الاستيراد', show:f=>f.isAdmin, init:refreshStats});
+registerTab({id:'adminMain', label:'الاستيراد', group:'settings', groupLabel:'الإعدادات', show:f=>f.isAdmin, init:refreshStats});

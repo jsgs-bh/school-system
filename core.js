@@ -94,6 +94,12 @@ export function applySettingsToDom(){
   const login=$('schoolNameLogin'); if(login) login.textContent = name;
   const foot=$('footerSchoolName'); if(foot) foot.textContent = name;
 }
+/* رابط شعار المدرسة (لو مرفوع) — يُستخدم كهيدر في التقارير المصدَّرة. */
+export function getLogoUrl(){
+  if(!S.SETTINGS.logo_path) return null;
+  const {data}=db.storage.from('school-files').getPublicUrl(S.SETTINGS.logo_path);
+  return data?.publicUrl||null;
+}
 
 /* ============ الجلسة ============ */
 async function boot(session){

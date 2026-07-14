@@ -4,7 +4,7 @@
    المعلمة (طالباتها فقط) — المعلمة الأولى (نطاق إشرافها) —
    رئيسة التحليل/القيادة/الإرشاد الأكاديمي (الكل). حالة المتابعة قابلة
    للتحديث مباشرة، وتصدير إكسل وPDF متاح دائماً. */
-import { db, $, S, chunk, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, chunk, toast, printWithTitle, getLogoUrl, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const REASON_LABEL = {fail:'راسبة', low_performance:'أداء منخفض'};
@@ -197,8 +197,9 @@ function render(){
 }
 
 function printStudentReport(r){
+  const logo=getLogoUrl();
   $('printAreaUP').innerHTML=`
-    <div class="up-head"><h2>متابعة أداء الطالبات</h2></div>
+    <div class="up-head">${logo?`<img src="${logo}" style="max-height:70px;margin-bottom:8px">`:''}<h2>متابعة أداء الطالبات</h2></div>
     <table class="up-tbl up-single">
       <tr><td>الاسم</td><td>${r.students?.full_name||'—'}</td></tr>
       <tr><td>الرقم الأكاديمي</td><td>${r.students?.academic_number||'—'}</td></tr>
@@ -207,9 +208,9 @@ function printStudentReport(r){
       <tr><td>إجراء المعلمة</td><td>${r.teacher_action||'—'}</td></tr>
       <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
     </table>
-    <div class="up-footer">
-      <b>مكتب الإرشاد الأكاديمي والتوجيه المهني</b>
-      ${S.ME.full_name||''}
+    <div class="up-footer" style="display:flex;justify-content:space-between">
+      <div><b>مكتب الإرشاد الأكاديمي والتوجيه المهني</b>${S.ME.full_name||''}</div>
+      <div><b>مديرة المدرسة</b>${S.SETTINGS.principal_name||'—'}</div>
     </div>`;
   printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
 }
@@ -260,4 +261,4 @@ function exportPdf(){
 }
 
 registerTab({id:'upMain', label:'متابعة أداء الطالبات', group:'grades', groupLabel:'الدرجات',
-  show:f=>f.isAdmin||f.isLead||f.isAnalysis||f.isAcademicGuidance||f.isSeniorTeacher, init:initUP});
+  show:f=>f.isAdmin||f.isLead||f.isAcademicGuidance||f.isSeniorTeacher, init:initUP});
