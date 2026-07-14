@@ -49,14 +49,19 @@ $('appView').insertAdjacentHTML('beforeend', `
     .up-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .up-tbl th{background:#1d3d5c;color:#fff;padding:6px 5px;border:1px solid #1d3d5c}
     .up-tbl td{padding:5px;border:1px solid #ccc;text-align:center}
+    .up-single{width:60%;margin:0 auto}
+    .up-single td:first-child{background:#f5f2ec;font-weight:700;width:160px;text-align:right}
+    .up-footer{margin-top:60px;text-align:right}
+    .up-footer b{display:block;margin-bottom:6px}
   }
 </style>`);
 
-let ROWS=[];
+let ROWS=[], CAN_EDIT_OFFICE=false;
 
 async function initUP(){
   if($('upRefresh').dataset.ready) return;
   $('upRefresh').dataset.ready='1';
+  CAN_EDIT_OFFICE = S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isAnalysis||S.FLAGS.isAcademicGuidance;
   $('upRefresh').addEventListener('click',load);
   $('upXls').addEventListener('click',exportXls);
   $('upPdf').addEventListener('click',exportPdf);
@@ -152,17 +157,21 @@ function render(){
   $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
   const tbl=$('upTable');
   if(!ROWS.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
-  tbl.innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th></tr>'+
-    ROWS.map(r=>`<tr>
+  tbl.innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th><th></th></tr>'+
+    ROWS.map((r,i)=>`<tr>
       <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
       <td class="c">${r.exams?.sections?.code||'—'}</td><td class="c">${r.exams?.subjects?.code||'—'}</td><td class="c">${r.exams?.name||'—'}</td>
       <td class="c"><span class="up-reason ${r.reason}">${REASON_LABEL[r.reason]||r.reason}</span></td>
       <td class="c">${r.score??'—'}</td><td class="c">${r.pct!=null?(+r.pct).toFixed(1)+'٪':'—'}</td>
       <td>${r.teacher_action||'—'}</td>
-      <td><input class="up-office-action" data-id="${r.id}" value="${(r.office_action||'').replace(/"/g,'&quot;')}"></td>
+      <td>${CAN_EDIT_OFFICE
+        ? `<input class="up-office-action" data-id="${r.id}" value="${(r.office_action||'').replace(/"/g,'&quot;')}">`
+        : (r.office_action||'—')}</td>
       <td><select class="up-status" data-id="${r.id}">
         ${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}
-      </select></td></tr>`).join('');
+      </select></td>
+      <td><button class="btn ghost" data-print="${i}" style="width:auto;padding:6px 12px;font-size:11px">🖨️ تقرير</button></td></tr>`).join('');
+  tbl.querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudentReport(ROWS[+b.dataset.print])));
   tbl.querySelectorAll('.up-office-action').forEach(inp=>inp.addEventListener('change', async ()=>{
     const {error}=await db.from('underperformer_alerts').update({office_action:inp.value.trim()||null}).eq('id',inp.dataset.id);
     if(error){ toast('تعذر الحفظ: '+error.message); return; }
@@ -180,6 +189,24 @@ function render(){
     $('upProgress').textContent=ROWS.filter(r=>r.status==='in_progress').length;
     $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
   }));
+}
+
+function printStudentReport(r){
+  $('printAreaUP').innerHTML=`
+    <div class="up-head"><h2>متابعة أداء الطالبات</h2></div>
+    <table class="up-tbl up-single">
+      <tr><td>الاسم</td><td>${r.students?.full_name||'—'}</td></tr>
+      <tr><td>الرقم الأكاديمي</td><td>${r.students?.academic_number||'—'}</td></tr>
+      <tr><td>المقرر</td><td>${r.exams?.subjects?.code||'—'}</td></tr>
+      <tr><td>درجة الاختبار</td><td>${r.score??'—'}</td></tr>
+      <tr><td>إجراء المعلمة</td><td>${r.teacher_action||'—'}</td></tr>
+      <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
+    </table>
+    <div class="up-footer">
+      <b>مكتب الإرشاد الأكاديمي والتوجيه المهني</b>
+      ${S.ME.full_name||''}
+    </div>`;
+  printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
 }
 
 /* ============ تصدير ============ */
