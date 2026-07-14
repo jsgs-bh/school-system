@@ -130,8 +130,8 @@ function render(){
     `<th colspan="${SEM1_MONTHS.length+3}">الفصل الدراسي الأول</th><th colspan="${SEM2_MONTHS.length+3}">الفصل الدراسي الثاني</th></tr>`+
     `<tr>${sem1Heads}${sem2Heads}</tr>`;
   html+=REPORT_ROWS.map(r=>{
-    const sem1Cells=r.monthly.slice(0,SEM1_MONTHS.length).map(m=>`<td class="c">${m.total?m.late:'—'}</td>`).join('');
-    const sem2Cells=r.monthly.slice(SEM1_MONTHS.length).map(m=>`<td class="c">${m.total?m.late:'—'}</td>`).join('');
+    const sem1Cells=r.monthly.slice(0,SEM1_MONTHS.length).map(m=>`<td class="c">${m.late||'—'}</td>`).join('');
+    const sem2Cells=r.monthly.slice(SEM1_MONTHS.length).map(m=>`<td class="c">${m.late||'—'}</td>`).join('');
     return `<tr><td class="c">${r.acad}</td><td>${r.name}</td><td class="c">${r.sec}</td><td class="c">${r.contact}</td>
       ${sem1Cells}<td class="c">${r.sem1Totals.late}</td><td class="c">${r.sem1Totals.total}</td><td class="c ${pctClass(r.sem1Pct)}">${pctText(r.sem1Pct)}</td>
       ${sem2Cells}<td class="c">${r.sem2Totals.late}</td><td class="c">${r.sem2Totals.total}</td><td class="c ${pctClass(r.sem2Pct)}">${pctText(r.sem2Pct)}</td></tr>`;
@@ -171,8 +171,8 @@ async function exportXls(){
 
   const pct1Col=sem1End-1, pct2Col=sem2End-1;
   REPORT_ROWS.forEach((r,i)=>{
-    const sem1=r.monthly.slice(0,s1n).map(m=>m.total?m.late:'');
-    const sem2=r.monthly.slice(s1n).map(m=>m.total?m.late:'');
+    const sem1=r.monthly.slice(0,s1n).map(m=>m.late||'');
+    const sem2=r.monthly.slice(s1n).map(m=>m.late||'');
     const row=ws.addRow([r.acad,r.name,r.sec,r.contact,...sem1,r.sem1Totals.late,r.sem1Totals.total,pctText(r.sem1Pct),...sem2,r.sem2Totals.late,r.sem2Totals.total,pctText(r.sem2Pct)]);
     row.eachCell((c,colNo)=>{ c.border=earBorder; c.alignment={horizontal:colNo===2?'right':'center'}; c.font={size:9.5}; c.numFmt='@';
       if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}};
