@@ -33,6 +33,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <style>
   #upMain.wide{max-width:1400px}
   .up-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .up-office-action{width:100%;min-width:130px;padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
   .up-reason{font-size:11px;padding:3px 10px;border-radius:99px;font-weight:700}
   .up-reason.fail{background:#fbe7e7;color:var(--err)}
   .up-reason.low_performance{background:#fff3cd;color:#8a6100}
@@ -134,7 +135,7 @@ async function load(){
   tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
   const scope=await getScopeFilter();
   const {data:alerts,error}=await db.from('underperformer_alerts')
-    .select('id,reason,score,pct,status,created_at,students(full_name,academic_number),exams(name,subject_id,section_id,subjects(code),sections(code))')
+    .select('id,reason,score,pct,status,teacher_action,office_action,created_at,students(full_name,academic_number),exams(name,subject_id,section_id,subjects(code),sections(code))')
     .order('created_at',{ascending:false});
   if(error){ tbl.innerHTML=`<tr><td style="padding:30px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
   ROWS=(alerts||[]).filter(a=>{
@@ -151,15 +152,23 @@ function render(){
   $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
   const tbl=$('upTable');
   if(!ROWS.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
-  tbl.innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>'+
+  tbl.innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th></tr>'+
     ROWS.map(r=>`<tr>
       <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
       <td class="c">${r.exams?.sections?.code||'—'}</td><td class="c">${r.exams?.subjects?.code||'—'}</td><td class="c">${r.exams?.name||'—'}</td>
       <td class="c"><span class="up-reason ${r.reason}">${REASON_LABEL[r.reason]||r.reason}</span></td>
       <td class="c">${r.score??'—'}</td><td class="c">${r.pct!=null?(+r.pct).toFixed(1)+'٪':'—'}</td>
+      <td>${r.teacher_action||'—'}</td>
+      <td><input class="up-office-action" data-id="${r.id}" value="${(r.office_action||'').replace(/"/g,'&quot;')}"></td>
       <td><select class="up-status" data-id="${r.id}">
         ${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}
       </select></td></tr>`).join('');
+  tbl.querySelectorAll('.up-office-action').forEach(inp=>inp.addEventListener('change', async ()=>{
+    const {error}=await db.from('underperformer_alerts').update({office_action:inp.value.trim()||null}).eq('id',inp.dataset.id);
+    if(error){ toast('تعذر الحفظ: '+error.message); return; }
+    const row=ROWS.find(r=>r.id===inp.dataset.id); if(row) row.office_action=inp.value.trim();
+    toast('تم حفظ إجراء المكتب');
+  }));
   tbl.querySelectorAll('.up-status').forEach(sel=>sel.addEventListener('change', async ()=>{
     const {error}=await db.from('underperformer_alerts').update({
       status:sel.value, handled_by:S.ME.id, handled_at:new Date().toISOString()
@@ -181,7 +190,7 @@ async function exportXls(){
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('متابعة الأداء',{views:[{rightToLeft:true}]});
   const addTitle=(text,size,bold,fill,color)=>{
-    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,9);
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,11);
     const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
     cell.alignment={horizontal:'center',vertical:'middle'};
     if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
@@ -190,16 +199,16 @@ async function exportXls(){
   addTitle(schoolName(),16,true,NAVY,WHITE);
   addTitle('متابعة أداء الطالبات',12,true,null,'FF22303C');
   ws.addRow([]);
-  const hdr=ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','المقرر','الاختبار','السبب','الدرجة','النسبة','الحالة']);
+  const hdr=ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','المقرر','الاختبار','السبب','الدرجة','النسبة','إجراء المعلمة','إجراء المكتب','الحالة']);
   hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=upBorder; });
   ROWS.forEach((r,i)=>{
     const row=ws.addRow([r.students?.full_name||'', r.students?.academic_number||'', r.exams?.sections?.code||'',
       r.exams?.subjects?.code||'', r.exams?.name||'', REASON_LABEL[r.reason]||r.reason, r.score??'',
-      r.pct!=null?(+r.pct).toFixed(1)+'٪':'', STATUS_LABEL[r.status]||r.status]);
+      r.pct!=null?(+r.pct).toFixed(1)+'٪':'', r.teacher_action||'', r.office_action||'', STATUS_LABEL[r.status]||r.status]);
     row.eachCell((c,colNo)=>{ c.border=upBorder; c.alignment={horizontal:colNo===1?'right':'center'}; c.font={size:10.5}; c.numFmt='@';
       if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
   });
-  ws.columns=[{width:26},{width:16},{width:11},{width:11},{width:16},{width:14},{width:9},{width:9},{width:14}];
+  ws.columns=[{width:26},{width:16},{width:11},{width:11},{width:16},{width:14},{width:9},{width:9},{width:22},{width:22},{width:14}];
   ws.views=[{rightToLeft:true,state:'frozen',ySplit:3}];
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -211,10 +220,10 @@ function exportPdf(){
   if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
   const rows=ROWS.map(r=>`<tr><td>${r.students?.full_name||''}</td><td>${r.students?.academic_number||''}</td>
     <td>${r.exams?.sections?.code||''}</td><td>${r.exams?.subjects?.code||''}</td><td>${r.exams?.name||''}</td>
-    <td>${REASON_LABEL[r.reason]||r.reason}</td><td>${r.score??''}</td><td>${r.pct!=null?(+r.pct).toFixed(1)+'٪':''}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
+    <td>${REASON_LABEL[r.reason]||r.reason}</td><td>${r.score??''}</td><td>${r.pct!=null?(+r.pct).toFixed(1)+'٪':''}</td><td>${r.teacher_action||'—'}</td><td>${r.office_action||'—'}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
   $('printAreaUP').innerHTML=`
     <div class="up-head"><h2>متابعة أداء الطالبات</h2></div>
-    <table class="up-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>الحالة</th></tr>${rows}</table>`;
+    <table class="up-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th></tr>${rows}</table>`;
   printWithTitle('متابعة_أداء_الطالبات');
 }
 
