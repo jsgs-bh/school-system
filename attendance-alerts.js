@@ -27,6 +27,13 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="stat green"><b id="aaDone">—</b><span>تم التعامل معها</span></div>
   </div>
   <div class="panel">
+    <h3>استخراج حسب</h3>
+    <div class="row" style="display:flex;gap:20px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="aaKindAbsence" checked> الغياب</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="aaKindLate" checked> التأخير</label>
+    </div>
+  </div>
+  <div class="panel">
     <div class="actions" style="margin-bottom:14px">
       <button class="btn gold" id="aaRefresh">↻ تحديث التنبيهات</button>
       <button class="btn ghost" id="aaXls">⬇ إكسل</button>
@@ -71,6 +78,8 @@ async function initAA(){
   $('aaRefresh').addEventListener('click',refreshAlerts);
   $('aaXls').addEventListener('click',exportXls);
   $('aaPdf').addEventListener('click',exportPdf);
+  $('aaKindAbsence').addEventListener('change',render);
+  $('aaKindLate').addEventListener('change',render);
   await loadAlerts();
 }
 
@@ -130,14 +139,20 @@ async function loadAlerts(){
   render();
 }
 
+function getFiltered(){
+  const showAbs=$('aaKindAbsence').checked, showLate=$('aaKindLate').checked;
+  return ROWS.filter(r=> (r.kind==='absence'&&showAbs) || (r.kind==='late'&&showLate) );
+}
+
 function render(){
   $('aaTotal').textContent=ROWS.length;
   $('aaPending').textContent=ROWS.filter(r=>r.status==='pending').length;
   $('aaProgress').textContent=ROWS.filter(r=>r.status==='in_progress').length;
   $('aaDone').textContent=ROWS.filter(r=>r.status==='done').length;
-  if(!ROWS.length){ $('aaTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات حالياً 🎉</td></tr>'; return; }
+  const rows=getFiltered();
+  if(!rows.length){ $('aaTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات ضمن هذا الاختيار</td></tr>'; return; }
   $('aaTable').innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>النوع</th><th>العدد</th><th>السبب</th><th>الإجراء</th><th>الحالة</th><th></th></tr>'+
-    ROWS.map((r,i)=>`<tr data-i="${i}">
+    rows.map((r,i)=>`<tr data-i="${i}">
       <td>${r.students?.full_name||'—'}</td><td class="c">${r.students?.academic_number||'—'}</td>
       <td class="c">${r._sec||'—'}</td>
       <td class="c"><span class="aa-reason ${r.kind}">${r.kind==='absence'?'غياب':'تأخير'}</span></td>
@@ -149,7 +164,7 @@ function render(){
     </tr>`).join('');
 
   $('aaTable').querySelectorAll('input,select').forEach(el=>el.addEventListener('change', async ()=>{
-    const tr=el.closest('tr'); const i=+tr.dataset.i; const r=ROWS[i];
+    const tr=el.closest('tr'); const i=+tr.dataset.i; const r=rows[i];
     const payload={updated_at:new Date().toISOString()};
     payload[el.dataset.f]=el.value;
     if(el.dataset.f==='status'){ payload.handled_by=S.ME.id; payload.handled_at=new Date().toISOString(); }
@@ -159,7 +174,7 @@ function render(){
     toast('تم الحفظ');
     render();
   }));
-  $('aaTable').querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudent(ROWS[+b.dataset.print])));
+  $('aaTable').querySelectorAll('button[data-print]').forEach(b=>b.addEventListener('click',()=>printStudent(rows[+b.dataset.print])));
 }
 
 async function printStudent(r){
@@ -190,7 +205,8 @@ async function printStudent(r){
 const NAVY='FF1D3D5C', WHITE='FFFFFFFF', LINE='FFDCD5C8';
 const aaBorder={top:{style:'thin',color:{argb:LINE}},left:{style:'thin',color:{argb:LINE}},right:{style:'thin',color:{argb:LINE}},bottom:{style:'thin',color:{argb:LINE}}};
 async function exportXls(){
-  if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
+  const filtered=getFiltered();
+  if(!filtered.length){ toast('لا بيانات للتصدير'); return; }
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('تنبيهات الغياب والتأخير',{views:[{rightToLeft:true}]});
   const addTitle=(text,size,bold,fill,color)=>{
@@ -205,7 +221,7 @@ async function exportXls(){
   ws.addRow([]);
   const hdr=ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','النوع','العدد','السبب','الإجراء','الحالة']);
   hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=aaBorder; });
-  ROWS.forEach((r,i)=>{
+  filtered.forEach((r,i)=>{
     const row=ws.addRow([r.students?.full_name||'', r.students?.academic_number||'', r._sec||'',
       r.kind==='absence'?'غياب':'تأخير', r.count, r.reason||'', r.action_taken||'', STATUS_LABEL[r.status]||r.status]);
     row.eachCell((c,colNo)=>{ c.border=aaBorder; c.alignment={horizontal:colNo===1?'right':'center'}; c.font={size:10.5}; c.numFmt='@';
@@ -220,8 +236,9 @@ async function exportXls(){
   URL.revokeObjectURL(url);
 }
 function exportPdf(){
-  if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
-  const rows=ROWS.map(r=>`<tr><td>${r.students?.full_name||''}</td><td>${r.students?.academic_number||''}</td>
+  const filtered=getFiltered();
+  if(!filtered.length){ toast('لا بيانات للتصدير'); return; }
+  const rows=filtered.map(r=>`<tr><td>${r.students?.full_name||''}</td><td>${r.students?.academic_number||''}</td>
     <td>${r._sec||''}</td><td>${r.kind==='absence'?'غياب':'تأخير'}</td>
     <td>${r.count}</td><td>${r.reason||'—'}</td><td>${r.action_taken||'—'}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
   $('printAreaAA').innerHTML=`<div class="aa-head"><h2>${schoolName()} — تنبيهات الغياب والتأخير</h2></div>

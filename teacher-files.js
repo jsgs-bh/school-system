@@ -51,7 +51,7 @@ async function renderGradesList(){
     const g=groups[i];
     const {data:members}=await db.from('teaching_group_members').select('students(full_name,academic_number)').eq('group_id',g.id);
     const students=(members||[]).map(m=>m.students).filter(Boolean);
-    await downloadFilledTemplate('grades', students, `كشف_الدرجات_${g.sections?.code}_${g.subjects?.code}`, b);
+    await downloadFilledTemplate('grades', students, `كشف_الدرجات_${g.sections?.code}_${g.subjects?.code}`, b, g.subject_id);
   }));
 }
 
@@ -105,11 +105,19 @@ async function renderSharedList(){
 }
 
 /* ============ ملء القالب المعتمد ونزوله ============ */
-async function downloadFilledTemplate(kind, students, filename, btn){
+async function downloadFilledTemplate(kind, students, filename, btn, subjectId){
   if(!students.length){ toast('لا طالبات في هذي المجموعة/الشعبة'); return; }
   btn.disabled=true; const old=btn.textContent; btn.textContent='جارٍ التحضير…';
   try{
-    const {data:tmpl}=await db.from('file_templates').select('*').eq('kind',kind).maybeSingle();
+    let tmpl=null;
+    if(subjectId){
+      const {data}=await db.from('file_templates').select('*').eq('kind',kind).eq('subject_id',subjectId).maybeSingle();
+      tmpl=data;
+    }
+    if(!tmpl){
+      const {data}=await db.from('file_templates').select('*').eq('kind',kind).is('subject_id',null).maybeSingle();
+      tmpl=data;
+    }
     if(!tmpl){ toast('لا قالب معتمد بعد — اطلبي من الدعم الفني رفعه من الإعدادات'); return; }
     const {data:blob,error}=await db.storage.from(BUCKET).download(tmpl.file_path);
     if(error){ toast('تعذر تحميل القالب: '+error.message); return; }

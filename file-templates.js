@@ -22,6 +22,24 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 
   <div class="panel">
+    <h3>قوالب خاصة بمقررات محددة</h3>
+    <div class="sub">اختياري — لو مقرر معيّن (مثل الحاسوب أو الرياضة) له قالب مختلف عن القالب العام أعلاه، ارفعيه هنا. غير هذي المقررات يستخدمن القالب العام تلقائياً.</div>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <select id="gtSubjectPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:180px"></select>
+    </div>
+    <div class="dropzone" id="gtSubDrop"><b>ارفعي قالب هذا المقرر (إكسل)</b><p>اختاري المقرر أولاً من القائمة أعلاه</p>
+      <input type="file" id="gtSubFile" accept=".xlsx,.xls" hidden></div>
+    <div class="row" style="display:flex;gap:14px;flex-wrap:wrap;margin:14px 0">
+      <div class="field" style="max-width:140px"><label>عمود الرقم الأكاديمي</label><input type="text" id="gtSubAcadCol" placeholder="B" maxlength="2"></div>
+      <div class="field" style="max-width:140px"><label>عمود الاسم</label><input type="text" id="gtSubNameCol" placeholder="C" maxlength="2"></div>
+      <div class="field" style="max-width:160px"><label>صف بداية البيانات</label><input type="number" id="gtSubStartRow" min="1" placeholder="6"></div>
+      <div class="field" style="max-width:200px"><label>اسم الورقة (اختياري)</label><input type="text" id="gtSubSheetName" placeholder="افتراضياً أول ورقة"></div>
+    </div>
+    <button class="btn gold" id="gtSubSave" style="width:auto;padding:10px 24px">حفظ إعدادات قالب هذا المقرر</button>
+    <div id="gtSubList" style="margin-top:18px"></div>
+  </div>
+
+  <div class="panel">
     <h3>قالب كشف الغياب المعتمد</h3>
     <div class="sub">نفس الفكرة — نسخة معبَّأة بأسماء طالبات كل شعبة تُتاح للمعلمة من تبويب "ملفات".</div>
     <div class="dropzone" id="atDrop"><b>ارفعي القالب (إكسل)</b><p id="atCurrent">لا قالب مرفوع بعد</p>
@@ -64,13 +82,74 @@ async function initFT(){
   $('atSave').addEventListener('click',()=>saveTemplateConfig('attendance'));
   bindDrop($('sfDrop'),$('sfFile'), uploadSharedFile);
   loadSharedFiles();
+
+  const {data:subs}=await db.from('subjects').select('id,code').order('code');
+  SUBJECTS=subs||[];
+  $('gtSubjectPick').innerHTML='<option value="">اختاري المقرر…</option>'+SUBJECTS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+  $('gtSubjectPick').addEventListener('change',loadSubTemplateForm);
+  bindDrop($('gtSubDrop'),$('gtSubFile'), uploadSubjectTemplate);
+  $('gtSubSave').addEventListener('click',saveSubjectTemplateConfig);
+  loadSubjectTemplatesList();
+}
+
+let SUBJECTS=[];
+
+function loadSubTemplateForm(){
+  $('gtSubAcadCol').value='B'; $('gtSubNameCol').value='C'; $('gtSubStartRow').value=6; $('gtSubSheetName').value='';
+}
+
+async function uploadSubjectTemplate(file){
+  const subjectId=$('gtSubjectPick').value;
+  if(!subjectId){ toast('اختاري المقرر أولاً'); return; }
+  const path=`templates/grades-${subjectId}-${Date.now()}.${(/\.([a-zA-Z0-9]+)$/.exec(file.name)?.[1]||'xlsx').toLowerCase()}`;
+  const {error:upErr}=await db.storage.from(BUCKET).upload(path,file,{upsert:true});
+  if(upErr){ toast('تعذر رفع الملف: '+upErr.message); return; }
+  const {error}=await db.from('file_templates').upsert({
+    kind:'grades', subject_id:subjectId, file_path:path, file_name:file.name, updated_by:S.ME.id, updated_at:new Date().toISOString()
+  },{onConflict:'kind,subject_id'});
+  if(error){ toast('تعذر الحفظ: '+error.message); return; }
+  toast('تم رفع قالب المقرر — حدّدي إعدادات المواقع واحفظيها');
+  loadSubjectTemplatesList();
+}
+
+async function saveSubjectTemplateConfig(){
+  const subjectId=$('gtSubjectPick').value;
+  if(!subjectId){ toast('اختاري المقرر أولاً'); return; }
+  const payload={
+    kind:'grades', subject_id:subjectId,
+    academic_col: $('gtSubAcadCol').value.trim().toUpperCase()||'B',
+    name_col: $('gtSubNameCol').value.trim().toUpperCase()||'C',
+    start_row: +$('gtSubStartRow').value||6,
+    sheet_name: $('gtSubSheetName').value.trim()||null,
+    updated_by: S.ME.id, updated_at:new Date().toISOString(),
+  };
+  const {data:existing}=await db.from('file_templates').select('id').eq('kind','grades').eq('subject_id',subjectId).maybeSingle();
+  if(!existing){ toast('ارفعي ملف قالب هذا المقرر أولاً'); return; }
+  const {error}=await db.from('file_templates').update(payload).eq('id',existing.id);
+  if(error){ toast('تعذر الحفظ: '+error.message); return; }
+  toast('تم حفظ إعدادات قالب المقرر');
+  loadSubjectTemplatesList();
+}
+
+async function loadSubjectTemplatesList(){
+  const {data,error}=await db.from('file_templates').select('*, subjects(code)').eq('kind','grades').not('subject_id','is',null).order('updated_at',{ascending:false});
+  if(error){ $('gtSubList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  if(!data?.length){ $('gtSubList').innerHTML='<div class="empty-day">لا قوالب خاصة بمقررات بعد.</div>'; return; }
+  $('gtSubList').innerHTML=data.map(t=>`
+    <div class="sf-row"><span><b>${t.subjects?.code||'—'}</b> <small style="color:#8a93a0">${t.file_name}</small></span>
+      <button data-id="${t.id}">✕ حذف (رجوع للقالب العام)</button></div>`).join('');
+  $('gtSubList').querySelectorAll('button').forEach(b=>b.addEventListener('click', async ()=>{
+    if(!confirm('حذف قالب هذا المقرر؟ سيرجع لاستخدام القالب العام تلقائياً.')) return;
+    await db.from('file_templates').delete().eq('id',b.dataset.id);
+    loadSubjectTemplatesList();
+  }));
 }
 
 const PFX = kind => kind==='grades' ? 'gt' : 'at';
 
 async function loadTemplate(kind){
   const p=PFX(kind);
-  const {data}=await db.from('file_templates').select('*').eq('kind',kind).maybeSingle();
+  const {data}=await db.from('file_templates').select('*').eq('kind',kind).is('subject_id',null).maybeSingle();
   $(`${p}Current`).textContent = data ? `القالب الحالي: ${data.file_name}` : 'لا قالب مرفوع بعد';
   $(`${p}AcadCol`).value=data?.academic_col||'B';
   $(`${p}NameCol`).value=data?.name_col||'C';
@@ -87,9 +166,11 @@ async function uploadTemplate(kind,file){
   const path=`templates/${kind}-${Date.now()}.${safeExt(file.name)}`;
   const {error:upErr}=await db.storage.from(BUCKET).upload(path,file,{upsert:true});
   if(upErr){ toast('تعذر رفع الملف: '+upErr.message); return; }
-  const {error}=await db.from('file_templates').upsert({
-    kind, file_path:path, file_name:file.name, updated_by:S.ME.id, updated_at:new Date().toISOString()
-  },{onConflict:'kind'});
+  const {data:existing}=await db.from('file_templates').select('id').eq('kind',kind).is('subject_id',null).maybeSingle();
+  const payload={kind, subject_id:null, file_path:path, file_name:file.name, updated_by:S.ME.id, updated_at:new Date().toISOString()};
+  const {error}= existing
+    ? await db.from('file_templates').update(payload).eq('id',existing.id)
+    : await db.from('file_templates').insert(payload);
   if(error){ toast('تعذر الحفظ: '+error.message); return; }
   toast('تم رفع القالب — حدّدي إعدادات المواقع واحفظيها');
   loadTemplate(kind);
@@ -98,16 +179,15 @@ async function uploadTemplate(kind,file){
 async function saveTemplateConfig(kind){
   const p=PFX(kind);
   const payload={
-    kind,
     academic_col: $(`${p}AcadCol`).value.trim().toUpperCase()||'B',
     name_col: $(`${p}NameCol`).value.trim().toUpperCase()||'C',
     start_row: +$(`${p}StartRow`).value||6,
     sheet_name: $(`${p}SheetName`).value.trim()||null,
     updated_by: S.ME.id, updated_at:new Date().toISOString(),
   };
-  const {data:existing}=await db.from('file_templates').select('id').eq('kind',kind).maybeSingle();
+  const {data:existing}=await db.from('file_templates').select('id').eq('kind',kind).is('subject_id',null).maybeSingle();
   if(!existing){ toast('ارفعي ملف القالب أولاً'); return; }
-  const {error}=await db.from('file_templates').update(payload).eq('kind',kind);
+  const {error}=await db.from('file_templates').update(payload).eq('id',existing.id);
   if(error){ toast('تعذر الحفظ: '+error.message); return; }
   toast('تم حفظ إعدادات القالب');
 }
