@@ -268,7 +268,7 @@ function exportPdf(){
     ${printHeaderHtml('الشكاوى والمقترحات')}
     <table class="cf-tbl"><tr><th>اسم المعلمة</th><th>تاريخ التقديم</th><th>الجهة</th><th>النوع</th><th>عنوان</th><th>وصف</th><th>إجراء المكتب</th><th>الحالة</th></tr>${rows}</table>
     ${printFooterHtml('مكتب الخدمات', S.ME.full_name)}`;
-  printWithTitle('الشكاوى_والمقترحات');
+  printWithTitle('الشكاوى_والمقترحات','printAreaCF');
 }
 
 /* ============ إحصائيات الشكاوى والمقترحات ============ */
@@ -347,14 +347,15 @@ function statRange(){
   }
   return {from:$('csStatFrom').value, to:$('csStatTo').value};
 }
-let STAT_RANGE=null, STAT_COMPLAINTS=null, STAT_SUGGESTIONS=null, STAT_MONTHLY=[];
+let STAT_RANGE=null, STAT_COMPLAINTS=null, STAT_SUGGESTIONS=null, STAT_MONTHLY=[], STAT_ROWS_DETAIL=[];
 
 async function runStats(){
   const {from,to}=statRange();
   STAT_RANGE={from,to};
-  const {data,error}=await db.from('complaints').select('type,status,created_at').gte('created_at',from).lte('created_at',to+'T23:59:59');
+  const {data,error}=await db.from('complaints').select('type,status,created_at,title,description,recipient_type,office_action,staff:submitted_by(full_name)').gte('created_at',from).lte('created_at',to+'T23:59:59').order('created_at');
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const rows=data||[];
+  STAT_ROWS_DETAIL=rows;
   const summarize=(arr)=>{
     const total=arr.length, done=arr.filter(c=>c.status==='done').length, open=total-done;
     return {total, done, open, donePct: total?Math.round(done/total*100):0, openPct: total?Math.round(open/total*100):0};
@@ -412,6 +413,18 @@ async function exportStatsXls(){
       if(i%2===1) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
   });
   ws.columns=[{width:12},{width:14},{width:16},{width:16},{width:14},{width:16},{width:16}];
+
+  ws.addRow([]);
+  const detHdrRow=ws.addRow([`تفاصيل الشكاوى والمقترحات — من ${STAT_RANGE.from} إلى ${STAT_RANGE.to}`]);
+  ws.mergeCells(detHdrRow.number,1,detHdrRow.number,7);
+  detHdrRow.getCell(1).font={bold:true,size:12}; detHdrRow.getCell(1).alignment={horizontal:'center'};
+  const detHdr=ws.addRow(['اسم المعلمة','التاريخ','النوع','الجهة','عنوان','وصف','إجراء المكتب']);
+  detHdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE_S}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY_S}}; c.alignment={horizontal:'center'}; c.border=csBorder; });
+  STAT_ROWS_DETAIL.forEach((r,i)=>{
+    const row=ws.addRow([r.staff?.full_name||'', new Date(r.created_at).toLocaleDateString('ar'), TYPE_LABEL[r.type], recipientLabel(r.recipient_type), r.title, r.description||'', r.office_action||'']);
+    row.eachCell((cell,colNo)=>{ cell.border=csBorder; cell.alignment={horizontal:colNo>=1&&colNo<=6?'right':'center'}; cell.font={size:10};
+      if(i%2===1) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+  });
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
@@ -423,12 +436,16 @@ function exportStatsPdf(){
   const monthlyRows=STAT_MONTHLY.map(({ym,c,s})=>`<tr><td>${ym}</td>
     <td>${c.total}</td><td>${c.done} (${c.donePct}٪)</td><td>${c.open} (${c.openPct}٪)</td>
     <td>${s.total}</td><td>${s.done} (${s.donePct}٪)</td><td>${s.open} (${s.openPct}٪)</td></tr>`).join('');
+  const detailRows=STAT_ROWS_DETAIL.map(r=>`<tr><td>${r.staff?.full_name||''}</td><td>${new Date(r.created_at).toLocaleDateString('ar')}</td>
+    <td>${TYPE_LABEL[r.type]}</td><td>${recipientLabel(r.recipient_type)}</td><td>${r.title}</td><td>${r.description||'—'}</td><td>${r.office_action||'—'}</td></tr>`).join('');
   $('printAreaCS').innerHTML=`
     ${printHeaderHtml(`إحصائيات الشكاوى والمقترحات — التفصيل الشهري (${STAT_RANGE.from} إلى ${STAT_RANGE.to})`)}
     <table class="cf-tbl"><tr><th>الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>
       <tr><th></th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>${monthlyRows}</table>
+    <div style="margin-top:18px;font-weight:700;font-size:13px">تفاصيل الشكاوى والمقترحات لهذي الفترة</div>
+    <table class="cf-tbl" style="margin-top:8px"><tr><th>اسم المعلمة</th><th>التاريخ</th><th>النوع</th><th>الجهة</th><th>عنوان</th><th>وصف</th><th>إجراء المكتب</th></tr>${detailRows}</table>
     ${printFooterHtml('مكتب الخدمات', S.ME.full_name)}`;
-  printWithTitle('إحصائيات_الشكاوى_والمقترحات');
+  printWithTitle('إحصائيات_الشكاوى_والمقترحات','printAreaCS');
 }
 
 registerTab({id:'complaintsStats', label:'إحصائيات', group:'complaints', groupLabel:'الشكاوى والمقترحات',

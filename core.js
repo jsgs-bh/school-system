@@ -22,12 +22,12 @@ export const chunk = (a,n)=>Array.from({length:Math.ceil(a.length/n)},(_,i)=>a.s
 export const dstr = d => d.toISOString().slice(0,10);
 export function toast(t){ $('toastMsg').textContent=t; $('toast').classList.add('show'); setTimeout(()=>$('toast').classList.remove('show'),2400); }
 /* طباعة PDF باسم ملف مقترح = اسم التقرير + التاريخ (متصفحات Chrome تقترح اسم الملف من عنوان الصفحة) */
-export function printWithTitle(filenameBase){
-  // إصلاح تراكب التقارير: كل ملف له حاوية طباعة خاصة، وأي محتوى قديم متبقٍ
-  // في حاوية أخرى كان يظهر معها لأن قواعد @media print مستقلة لكل حاوية.
-  // نفرّغ كل حاوية غير الحاوية المستخدَمة الآن (المعروفة بأنها غير فارغة).
+export function printWithTitle(filenameBase, targetId){
+  // إصلاح تراكب التقارير: كل ملف له حاوية طباعة خاصة. لو مُرِّر معرّف
+  // الحاوية المستخدَمة الآن صراحةً (targetId) نعتمده مباشرة — أدق من
+  // التخمين، الذي كان يفشل لو أكثر من حاوية فيها محتوى قديم متزامن.
   const containers=[...document.querySelectorAll('[id^="printArea"]')];
-  const active=containers.find(el=>el.innerHTML.trim()!=='');
+  const active = targetId ? document.getElementById(targetId) : containers.find(el=>el.innerHTML.trim()!=='');
   containers.forEach(el=>{ if(el!==active) el.innerHTML=''; });
 
   const prev=document.title;
