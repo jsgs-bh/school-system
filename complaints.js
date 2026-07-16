@@ -400,14 +400,7 @@ async function exportStatsXls(){
     row.height=size>=16?26:20;
   };
   addTitle(S.SETTINGS.school_name||'المدرسة',16,true,NAVY_S,WHITE_S);
-  addTitle(`إحصائيات الشكاوى والمقترحات — من ${STAT_RANGE.from} إلى ${STAT_RANGE.to}`,12,true,null,'FF22303C');
-  ws.addRow([]);
-  const sumHdr=ws.addRow(['','العدد الكلي','محلولة (عدد)','محلولة (نسبة)','غير محلولة (عدد)','غير محلولة (نسبة)','']);
-  sumHdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE_S}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY_S}}; c.alignment={horizontal:'center'}; c.border=csBorder; });
-  [['الشكاوى',STAT_COMPLAINTS],['المقترحات',STAT_SUGGESTIONS]].forEach(([label,s])=>{
-    const row=ws.addRow([label,s.total,s.done,s.donePct+'٪',s.open,s.openPct+'٪','']);
-    row.eachCell(c=>{ c.border=csBorder; c.alignment={horizontal:'center'}; c.font={size:10.5}; });
-  });
+  addTitle(`إحصائيات الشكاوى والمقترحات — التفصيل الشهري (${STAT_RANGE.from} إلى ${STAT_RANGE.to})`,12,true,null,'FF22303C');
   ws.addRow([]);
   const mHdr1=ws.addRow(['الشهر','الشكاوى','','','المقترحات','','']);
   ws.mergeCells(mHdr1.number,2,mHdr1.number,4); ws.mergeCells(mHdr1.number,5,mHdr1.number,7);
@@ -431,12 +424,8 @@ function exportStatsPdf(){
     <td>${c.total}</td><td>${c.done} (${c.donePct}٪)</td><td>${c.open} (${c.openPct}٪)</td>
     <td>${s.total}</td><td>${s.done} (${s.donePct}٪)</td><td>${s.open} (${s.openPct}٪)</td></tr>`).join('');
   $('printAreaCS').innerHTML=`
-    ${printHeaderHtml(`إحصائيات الشكاوى والمقترحات — من ${STAT_RANGE.from} إلى ${STAT_RANGE.to}`)}
-    <table class="cf-tbl"><tr><th></th><th>العدد الكلي</th><th>محلولة</th><th>غير محلولة</th></tr>
-      <tr><td>الشكاوى</td><td>${STAT_COMPLAINTS.total}</td><td>${STAT_COMPLAINTS.done} (${STAT_COMPLAINTS.donePct}٪)</td><td>${STAT_COMPLAINTS.open} (${STAT_COMPLAINTS.openPct}٪)</td></tr>
-      <tr><td>المقترحات</td><td>${STAT_SUGGESTIONS.total}</td><td>${STAT_SUGGESTIONS.done} (${STAT_SUGGESTIONS.donePct}٪)</td><td>${STAT_SUGGESTIONS.open} (${STAT_SUGGESTIONS.openPct}٪)</td></tr>
-    </table>
-    <table class="cf-tbl" style="margin-top:14px"><tr><th>الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>
+    ${printHeaderHtml(`إحصائيات الشكاوى والمقترحات — التفصيل الشهري (${STAT_RANGE.from} إلى ${STAT_RANGE.to})`)}
+    <table class="cf-tbl"><tr><th>الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>
       <tr><th></th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>${monthlyRows}</table>
     ${printFooterHtml('مكتب الخدمات', S.ME.full_name)}`;
   printWithTitle('إحصائيات_الشكاوى_والمقترحات');
