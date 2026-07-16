@@ -271,5 +271,112 @@ function exportPdf(){
   printWithTitle('الشكاوى_والمقترحات');
 }
 
+/* ============ إحصائيات الشكاوى والمقترحات ============ */
+$('appView').insertAdjacentHTML('beforeend', `
+<div class="app-main wide" id="complaintsStats" style="display:none">
+  <div class="panel">
+    <h3>إحصائيات الشكاوى والمقترحات</h3>
+    <div class="row" style="display:flex;gap:20px;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="csStatMode" value="month" checked> شهر محدد</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="csStatMode" value="range"> فترة مخصصة</label>
+    </div>
+    <div class="row" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+      <input type="month" id="csStatMonth">
+      <label style="font-size:13px;color:var(--navy);display:none" id="csStatFromLbl">من <input type="date" id="csStatFrom"></label>
+      <label style="font-size:13px;color:var(--navy);display:none" id="csStatToLbl">إلى <input type="date" id="csStatTo"></label>
+      <button class="btn gold" id="csStatGo" style="width:auto;padding:9px 22px">عرض</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>الشكاوى</h3>
+    <div class="stats">
+      <div class="stat"><b id="csStatCTotal">—</b><span>العدد الكلي</span></div>
+      <div class="stat green"><b id="csStatCDone">—</b><span>تم الحل (عدد)</span></div>
+      <div class="stat green"><b id="csStatCDonePct">—</b><span>تم الحل (نسبة)</span></div>
+      <div class="stat red"><b id="csStatCOpen">—</b><span>لم يُحل (عدد)</span></div>
+      <div class="stat red"><b id="csStatCOpenPct">—</b><span>لم يُحل (نسبة)</span></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>المقترحات</h3>
+    <div class="stats">
+      <div class="stat"><b id="csStatSTotal">—</b><span>العدد الكلي</span></div>
+      <div class="stat green"><b id="csStatSDone">—</b><span>تم الحل (عدد)</span></div>
+      <div class="stat green"><b id="csStatSDonePct">—</b><span>تم الحل (نسبة)</span></div>
+      <div class="stat red"><b id="csStatSOpen">—</b><span>لم يُحل (عدد)</span></div>
+      <div class="stat red"><b id="csStatSOpenPct">—</b><span>لم يُحل (نسبة)</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>تفصيل شهري</h3>
+    <div class="board-wrap"><table class="board" id="csStatTable"></table></div>
+  </div>
+</div>`);
+
+async function initStats(){
+  if($('csStatGo').dataset.ready) return;
+  $('csStatGo').dataset.ready='1';
+  const now=new Date();
+  $('csStatMonth').value=now.toISOString().slice(0,7);
+  $('csStatFrom').value=now.toISOString().slice(0,8)+'01';
+  $('csStatTo').value=now.toISOString().slice(0,10);
+  document.querySelectorAll('input[name="csStatMode"]').forEach(r=>r.addEventListener('change',toggleStatMode));
+  $('csStatGo').addEventListener('click',runStats);
+  runStats();
+}
+function toggleStatMode(){
+  const mode=document.querySelector('input[name="csStatMode"]:checked').value;
+  $('csStatMonth').style.display = mode==='month' ? 'inline-block' : 'none';
+  $('csStatFromLbl').style.display = mode==='range' ? 'flex' : 'none';
+  $('csStatToLbl').style.display = mode==='range' ? 'flex' : 'none';
+}
+function statRange(){
+  const mode=document.querySelector('input[name="csStatMode"]:checked').value;
+  if(mode==='month'){
+    const [y,m]=$('csStatMonth').value.split('-').map(Number);
+    const from=`${y}-${String(m).padStart(2,'0')}-01`;
+    const to=new Date(y,m,0).toISOString().slice(0,10);
+    return {from,to};
+  }
+  return {from:$('csStatFrom').value, to:$('csStatTo').value};
+}
+async function runStats(){
+  const {from,to}=statRange();
+  const {data,error}=await db.from('complaints').select('type,status,created_at').gte('created_at',from).lte('created_at',to+'T23:59:59');
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  const rows=data||[];
+  const summarize=(arr)=>{
+    const total=arr.length, done=arr.filter(c=>c.status==='done').length, open=total-done;
+    return {total, done, open, donePct: total?Math.round(done/total*100):0, openPct: total?Math.round(open/total*100):0};
+  };
+  const complaints=summarize(rows.filter(r=>r.type==='complaint'));
+  const suggestions=summarize(rows.filter(r=>r.type==='suggestion'));
+  $('csStatCTotal').textContent=complaints.total; $('csStatCDone').textContent=complaints.done; $('csStatCDonePct').textContent=complaints.donePct+'٪';
+  $('csStatCOpen').textContent=complaints.open; $('csStatCOpenPct').textContent=complaints.openPct+'٪';
+  $('csStatSTotal').textContent=suggestions.total; $('csStatSDone').textContent=suggestions.done; $('csStatSDonePct').textContent=suggestions.donePct+'٪';
+  $('csStatSOpen').textContent=suggestions.open; $('csStatSOpenPct').textContent=suggestions.openPct+'٪';
+
+  // تفصيل شهري: صف لكل شهر ضمن الفترة المختارة
+  const months=[];
+  let cur=new Date(from+'T12:00:00'); const end=new Date(to+'T12:00:00');
+  while(cur<=end){ months.push(cur.toISOString().slice(0,7)); cur=new Date(cur.getFullYear(),cur.getMonth()+1,1); }
+  const rowsHtml=months.map(ym=>{
+    const inMonth=rows.filter(r=>r.created_at.slice(0,7)===ym);
+    const c=summarize(inMonth.filter(r=>r.type==='complaint'));
+    const s=summarize(inMonth.filter(r=>r.type==='suggestion'));
+    return `<tr><td class="sec">${ym}</td>
+      <td class="c">${c.total}</td><td class="c">${c.done} (${c.donePct}٪)</td><td class="c">${c.open} (${c.openPct}٪)</td>
+      <td class="c">${s.total}</td><td class="c">${s.done} (${s.donePct}٪)</td><td class="c">${s.open} (${s.openPct}٪)</td></tr>`;
+  }).join('');
+  $('csStatTable').innerHTML='<tr><th rowspan="2">الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>'+
+    '<tr><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>'+
+    (rowsHtml || '<tr><td colspan="7" style="text-align:center;color:#8a93a0;padding:20px">لا بيانات ضمن هذي الفترة</td></tr>');
+}
+
+registerTab({id:'complaintsStats', label:'إحصائيات', group:'complaints', groupLabel:'الشكاوى والمقترحات',
+  show:f=>f.isAdmin||f.isLead||f.isServices||f.isComplaintsLead, init:initStats});
+
 registerTab({id:'complaintsFollow', label:'متابعة الشكاوى', group:'complaints', groupLabel:'الشكاوى والمقترحات',
   show:f=>f.isAdmin||f.isLead||f.isServices||f.isComplaintsLead, init:initFollow});
