@@ -106,10 +106,12 @@ registerTab({id:'complaintsSubmit', label:'تقديم شكوى/مقترح', grou
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="complaintsFollow" style="display:none">
   <div class="stats">
+    <div class="stat"><b id="cfTotal">—</b><span>إجمالي الشكاوى/المقترحات المقدَّمة</span></div>
     <div class="stat"><b id="cfMonthTotal">—</b><span>هذا الشهر</span></div>
     <div class="stat"><b id="cfMonthDone">—</b><span>حُلّت هذا الشهر</span></div>
     <div class="stat red"><b id="cfNew">—</b><span>جديدة</span></div>
     <div class="stat green"><b id="cfDone">—</b><span>تمت المتابعة (الكل)</span></div>
+    <div class="stat green"><b id="cfDonePct">—</b><span>نسبة الإنجاز</span></div>
   </div>
   <div class="panel">
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
@@ -172,10 +174,13 @@ async function loadAll(){
 function computeStats(){
   const now=new Date(); const ym=now.toISOString().slice(0,7);
   const thisMonth=ALL_ROWS.filter(c=>c.created_at.slice(0,7)===ym);
+  $('cfTotal').textContent=ALL_ROWS.length;
   $('cfMonthTotal').textContent=thisMonth.length;
   $('cfMonthDone').textContent=thisMonth.filter(c=>c.status==='done').length;
   $('cfNew').textContent=ALL_ROWS.filter(c=>c.status==='new').length;
-  $('cfDone').textContent=ALL_ROWS.filter(c=>c.status==='done').length;
+  const doneCount=ALL_ROWS.filter(c=>c.status==='done').length;
+  $('cfDone').textContent=doneCount;
+  $('cfDonePct').textContent = ALL_ROWS.length ? Math.round(doneCount/ALL_ROWS.length*100)+'٪' : '—';
 }
 
 function applyFilters(){
