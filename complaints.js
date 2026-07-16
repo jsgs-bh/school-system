@@ -267,4 +267,4 @@ function exportPdf(){
 }
 
 registerTab({id:'complaintsFollow', label:'متابعة الشكاوى', group:'complaints', groupLabel:'الشكاوى والمقترحات',
-  show:f=>f.isAdmin||f.isLead||f.isServices, init:initFollow});
+  show:f=>f.isAdmin||f.isLead||f.isServices||f.isComplaintsLead, init:initFollow});

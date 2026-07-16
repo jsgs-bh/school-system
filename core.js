@@ -9,7 +9,7 @@ export const S = { ME:null, YEAR:null, PERIODS:[], FLAGS:{}, SETTINGS:{school_na
 
 export const roleNames = {admin:'الدعم الفني',leadership:'القيادة العليا',project_lead:'مسؤولة مشروع',
   committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات',
-  attendance_lead:'مسؤولة متابعة الغياب'};
+  attendance_lead:'مسؤولة متابعة الغياب', complaints_lead:'مسؤولة متابعة الشكاوى'};
 export const titleNames = {teacher:'معلمة',senior_teacher:'معلمة أولى',leadership:'قيادة عليا',staff:'منتسبة'};
 export const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 export const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
@@ -141,6 +141,7 @@ async function boot(session){
     isReg:   /تسجيل/.test(dept),
     isTeacher: staff.title==='teacher'||staff.title==='senior_teacher',
     isAttendanceLead: (roles||[]).some(r=>r.role==='attendance_lead'),
+    isComplaintsLead: (roles||[]).some(r=>r.role==='complaints_lead'),
     isAnalysis: (roles||[]).some(r=>r.role==='analysis_supervisor'),
     isSeniorTeacher: staff.title==='senior_teacher',
   };
