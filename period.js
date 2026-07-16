@@ -4,7 +4,7 @@
    ٢) تقرير فترة شامل: ملخص (أكثر/أقل الصفوف، تجاوز ٢٥٪) + صفحة PDF لكل يوم.
    كلاهما يستخدمان نفس منطق الاحتساب (collectRange) لكن يُشغَّلان بشكل مستقل.
    الملف مكتفٍ بذاته: يضيف تبويبه وتنسيقاته وحاوية طباعته الخاصة. */
-import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const HIGH_THRESHOLD = 25; // % — عتبة «تجاوز الغياب» في التقرير الشامل
@@ -161,7 +161,7 @@ export async function collectRange(from,to){
 
 /* ============ الأداة ١ — تقرير سريع بعدد مرات الغياب (مستقلة تماماً) ============ */
 let CNT_RANGE=null, CURRENT_COUNT=[];
-function initCount(){
+export function initCount(){
   if($('cntFrom').dataset.ready) return;
   $('cntFrom').dataset.ready='1';
   const today=dstr(new Date());
@@ -261,7 +261,7 @@ function exportCountPdf(){
 
 /* ============ الأداة ٢ — تقرير فترة شامل ============ */
 let RANGE=null, SUMMARY=null;
-function initFull(){
+export function initFull(){
   if($('perFrom').dataset.ready) return;
   $('perFrom').dataset.ready='1';
   const today=dstr(new Date());
@@ -411,5 +411,5 @@ function exportPdf(){
   printWithTitle(`تقرير_فترة_${s.from}_${s.to}`);
 }
 
-registerTab({id:'periodMain', label:'تقرير فترة', group:'attendance', groupLabel:'متابعة الغياب',
-  show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead||f.isAttendanceLead, onOpen:()=>{ initCount(); initFull(); }});
+/* لم تعد هذي الأداة تُسجَّل كتبويب مستقل — دُمجت داخل "إنشاء تقارير الغياب"
+   (انظر builder.js) كوضع "تقرير فترة" ضمن نفس التبويب. */

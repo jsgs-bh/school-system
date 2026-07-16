@@ -4,7 +4,7 @@
    يعيد استخدام collectRange من period.js لتفادي ازدواج منطق الاحتساب.
    الملف مكتفٍ بذاته: يضيف تبويبه وتنسيقاته وحاوية طباعته الخاصة. */
 import { db, $, S, AR_DAYS, dstr, chunk, toast, printWithTitle, registerTab } from './core.js';
-import { collectRange } from './period.js';
+import { collectRange, initCount as initPeriodCount, initFull as initPeriodFull } from './period.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 
@@ -24,6 +24,13 @@ const FIELDS = {
 /* ============ حقن الواجهة والتنسيقات ============ */
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="builderMain" style="display:none">
+  <div class="panel">
+    <div class="row" style="display:flex;gap:10px">
+      <button class="btn gold" id="bModeBuilder" style="width:auto;padding:9px 20px">منشئ التقارير</button>
+      <button class="btn ghost" id="bModePeriod" style="width:auto;padding:9px 20px">تقرير فترة (عدّ سريع)</button>
+    </div>
+  </div>
+  <div id="builderInner">
   <div class="panel">
     <h3>منشئ التقارير</h3>
     <div class="sub">اختاري الفترة ومستوى التفصيل والأعمدة التي تحتاجينها فقط، عايني النتيجة، ثم نزّليها إكسل أو PDF.</div>
@@ -45,6 +52,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="panel">
     <div id="bCount" style="font-size:13px;color:#6b7683;margin-bottom:10px"></div>
     <div class="board-wrap"><table class="board" id="bTable"></table></div>
+  </div>
   </div>
 </div>
 <div id="printAreaBuilder"></div>
@@ -81,6 +89,23 @@ function initBuilder(){
   $('bGo').addEventListener('click',generate);
   $('bXls').addEventListener('click',exportXls);
   $('bPdf').addEventListener('click',exportPdf);
+
+  $('bModeBuilder').addEventListener('click',()=>switchMode('builder'));
+  $('bModePeriod').addEventListener('click',()=>switchMode('period'));
+}
+let periodInitDone=false;
+function switchMode(mode){
+  const period=$('periodMain');
+  if(mode==='builder'){
+    $('builderInner').style.display='block';
+    if(period) period.style.display='none';
+    $('bModeBuilder').className='btn gold'; $('bModePeriod').className='btn ghost';
+  }else{
+    $('builderInner').style.display='none';
+    if(period) period.style.display='block';
+    $('bModeBuilder').className='btn ghost'; $('bModePeriod').className='btn gold';
+    if(!periodInitDone){ periodInitDone=true; initPeriodCount(); initPeriodFull(); }
+  }
 }
 function renderFieldPicker(){
   LEVEL=$('bLevel').value;
@@ -217,5 +242,5 @@ function exportPdf(){
   printWithTitle(`${LEVELS[LEVEL].title}_${$('bFrom').value}_${$('bTo').value}`);
 }
 
-registerTab({id:'builderMain', label:'منشئ التقارير', group:'attendance', groupLabel:'متابعة الغياب',
-  show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead||f.isAttendanceLead, onOpen:initBuilder});
+registerTab({id:'builderMain', label:'إنشاء تقارير الغياب', group:'attendance', groupLabel:'متابعة الغياب',
+  show:f=>f.isAdmin||f.isSocial||f.isReg||f.isLead||f.isAttendanceLead, onOpen:()=>{ initBuilder(); switchMode('builder'); }});
