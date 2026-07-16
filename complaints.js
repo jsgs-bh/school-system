@@ -138,13 +138,13 @@ $('appView').insertAdjacentHTML('beforeend', `
   #cfTable textarea{width:100%;min-width:150px;padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7;resize:vertical}
   #cfTable input[type=date]{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px}
   #cfTable select.cf-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
-  #printAreaCF{display:none}
+  #printAreaCF, #printAreaCS{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
     @page{margin:0}
     body *{visibility:hidden}
-    #printAreaCF, #printAreaCF *{visibility:visible}
-    #printAreaCF{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaCF, #printAreaCF *, #printAreaCS, #printAreaCS *{visibility:visible}
+    #printAreaCF, #printAreaCS{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
     .cf-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .cf-tbl th,.cf-tbl td{border:1px solid #ccc;padding:6px;text-align:center}
     .cf-tbl th{background:#1d3d5c;color:#fff}
@@ -285,6 +285,8 @@ $('appView').insertAdjacentHTML('beforeend', `
       <label style="font-size:13px;color:var(--navy);display:none" id="csStatFromLbl">من <input type="date" id="csStatFrom"></label>
       <label style="font-size:13px;color:var(--navy);display:none" id="csStatToLbl">إلى <input type="date" id="csStatTo"></label>
       <button class="btn gold" id="csStatGo" style="width:auto;padding:9px 22px">عرض</button>
+      <button class="btn ghost" id="csStatXls" style="width:auto;padding:9px 22px">⬇ إكسل</button>
+      <button class="btn ghost" id="csStatPdf" style="width:auto;padding:9px 22px">⬇ PDF</button>
     </div>
   </div>
 
@@ -313,7 +315,8 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>تفصيل شهري</h3>
     <div class="board-wrap"><table class="board" id="csStatTable"></table></div>
   </div>
-</div>`);
+</div>
+<div id="printAreaCS"></div>`);
 
 async function initStats(){
   if($('csStatGo').dataset.ready) return;
@@ -324,6 +327,8 @@ async function initStats(){
   $('csStatTo').value=now.toISOString().slice(0,10);
   document.querySelectorAll('input[name="csStatMode"]').forEach(r=>r.addEventListener('change',toggleStatMode));
   $('csStatGo').addEventListener('click',runStats);
+  $('csStatXls').addEventListener('click',exportStatsXls);
+  $('csStatPdf').addEventListener('click',exportStatsPdf);
   runStats();
 }
 function toggleStatMode(){
@@ -342,8 +347,11 @@ function statRange(){
   }
   return {from:$('csStatFrom').value, to:$('csStatTo').value};
 }
+let STAT_RANGE=null, STAT_COMPLAINTS=null, STAT_SUGGESTIONS=null, STAT_MONTHLY=[];
+
 async function runStats(){
   const {from,to}=statRange();
+  STAT_RANGE={from,to};
   const {data,error}=await db.from('complaints').select('type,status,created_at').gte('created_at',from).lte('created_at',to+'T23:59:59');
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const rows=data||[];
@@ -353,6 +361,7 @@ async function runStats(){
   };
   const complaints=summarize(rows.filter(r=>r.type==='complaint'));
   const suggestions=summarize(rows.filter(r=>r.type==='suggestion'));
+  STAT_COMPLAINTS=complaints; STAT_SUGGESTIONS=suggestions;
   $('csStatCTotal').textContent=complaints.total; $('csStatCDone').textContent=complaints.done; $('csStatCDonePct').textContent=complaints.donePct+'٪';
   $('csStatCOpen').textContent=complaints.open; $('csStatCOpenPct').textContent=complaints.openPct+'٪';
   $('csStatSTotal').textContent=suggestions.total; $('csStatSDone').textContent=suggestions.done; $('csStatSDonePct').textContent=suggestions.donePct+'٪';
@@ -362,17 +371,75 @@ async function runStats(){
   const months=[];
   let cur=new Date(from+'T12:00:00'); const end=new Date(to+'T12:00:00');
   while(cur<=end){ months.push(cur.toISOString().slice(0,7)); cur=new Date(cur.getFullYear(),cur.getMonth()+1,1); }
-  const rowsHtml=months.map(ym=>{
+  STAT_MONTHLY=months.map(ym=>{
     const inMonth=rows.filter(r=>r.created_at.slice(0,7)===ym);
     const c=summarize(inMonth.filter(r=>r.type==='complaint'));
     const s=summarize(inMonth.filter(r=>r.type==='suggestion'));
-    return `<tr><td class="sec">${ym}</td>
+    return {ym,c,s};
+  });
+  const rowsHtml=STAT_MONTHLY.map(({ym,c,s})=>
+    `<tr><td class="sec">${ym}</td>
       <td class="c">${c.total}</td><td class="c">${c.done} (${c.donePct}٪)</td><td class="c">${c.open} (${c.openPct}٪)</td>
-      <td class="c">${s.total}</td><td class="c">${s.done} (${s.donePct}٪)</td><td class="c">${s.open} (${s.openPct}٪)</td></tr>`;
-  }).join('');
+      <td class="c">${s.total}</td><td class="c">${s.done} (${s.donePct}٪)</td><td class="c">${s.open} (${s.openPct}٪)</td></tr>`).join('');
   $('csStatTable').innerHTML='<tr><th rowspan="2">الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>'+
     '<tr><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>'+
     (rowsHtml || '<tr><td colspan="7" style="text-align:center;color:#8a93a0;padding:20px">لا بيانات ضمن هذي الفترة</td></tr>');
+}
+
+const NAVY_S='FF1D3D5C', WHITE_S='FFFFFFFF', LINE_S='FFDCD5C8';
+const csBorder={top:{style:'thin',color:{argb:LINE_S}},left:{style:'thin',color:{argb:LINE_S}},right:{style:'thin',color:{argb:LINE_S}},bottom:{style:'thin',color:{argb:LINE_S}}};
+async function exportStatsXls(){
+  if(!STAT_COMPLAINTS){ toast('اعرضي الإحصائية أولاً'); return; }
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('إحصائيات الشكاوى والمقترحات',{views:[{rightToLeft:true}]});
+  const addTitle=(text,size,bold,fill,color)=>{
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,7);
+    const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+    row.height=size>=16?26:20;
+  };
+  addTitle(S.SETTINGS.school_name||'المدرسة',16,true,NAVY_S,WHITE_S);
+  addTitle(`إحصائيات الشكاوى والمقترحات — من ${STAT_RANGE.from} إلى ${STAT_RANGE.to}`,12,true,null,'FF22303C');
+  ws.addRow([]);
+  const sumHdr=ws.addRow(['','العدد الكلي','محلولة (عدد)','محلولة (نسبة)','غير محلولة (عدد)','غير محلولة (نسبة)','']);
+  sumHdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE_S}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY_S}}; c.alignment={horizontal:'center'}; c.border=csBorder; });
+  [['الشكاوى',STAT_COMPLAINTS],['المقترحات',STAT_SUGGESTIONS]].forEach(([label,s])=>{
+    const row=ws.addRow([label,s.total,s.done,s.donePct+'٪',s.open,s.openPct+'٪','']);
+    row.eachCell(c=>{ c.border=csBorder; c.alignment={horizontal:'center'}; c.font={size:10.5}; });
+  });
+  ws.addRow([]);
+  const mHdr1=ws.addRow(['الشهر','الشكاوى','','','المقترحات','','']);
+  ws.mergeCells(mHdr1.number,2,mHdr1.number,4); ws.mergeCells(mHdr1.number,5,mHdr1.number,7);
+  const mHdr2=ws.addRow(['','مرفوعة','محلولة','غير محلولة','مرفوعة','محلولة','غير محلولة']);
+  [mHdr1,mHdr2].forEach(hdr=>hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE_S}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY_S}}; c.alignment={horizontal:'center'}; c.border=csBorder; }));
+  STAT_MONTHLY.forEach(({ym,c,s},i)=>{
+    const row=ws.addRow([ym, c.total, `${c.done} (${c.donePct}٪)`, `${c.open} (${c.openPct}٪)`, s.total, `${s.done} (${s.donePct}٪)`, `${s.open} (${s.openPct}٪)`]);
+    row.eachCell(cell=>{ cell.border=csBorder; cell.alignment={horizontal:'center'}; cell.font={size:10};
+      if(i%2===1) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+  });
+  ws.columns=[{width:12},{width:14},{width:16},{width:16},{width:14},{width:16},{width:16}];
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='إحصائيات_الشكاوى_والمقترحات.xlsx'; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportStatsPdf(){
+  if(!STAT_COMPLAINTS){ toast('اعرضي الإحصائية أولاً'); return; }
+  const monthlyRows=STAT_MONTHLY.map(({ym,c,s})=>`<tr><td>${ym}</td>
+    <td>${c.total}</td><td>${c.done} (${c.donePct}٪)</td><td>${c.open} (${c.openPct}٪)</td>
+    <td>${s.total}</td><td>${s.done} (${s.donePct}٪)</td><td>${s.open} (${s.openPct}٪)</td></tr>`).join('');
+  $('printAreaCS').innerHTML=`
+    ${printHeaderHtml(`إحصائيات الشكاوى والمقترحات — من ${STAT_RANGE.from} إلى ${STAT_RANGE.to}`)}
+    <table class="cf-tbl"><tr><th></th><th>العدد الكلي</th><th>محلولة</th><th>غير محلولة</th></tr>
+      <tr><td>الشكاوى</td><td>${STAT_COMPLAINTS.total}</td><td>${STAT_COMPLAINTS.done} (${STAT_COMPLAINTS.donePct}٪)</td><td>${STAT_COMPLAINTS.open} (${STAT_COMPLAINTS.openPct}٪)</td></tr>
+      <tr><td>المقترحات</td><td>${STAT_SUGGESTIONS.total}</td><td>${STAT_SUGGESTIONS.done} (${STAT_SUGGESTIONS.donePct}٪)</td><td>${STAT_SUGGESTIONS.open} (${STAT_SUGGESTIONS.openPct}٪)</td></tr>
+    </table>
+    <table class="cf-tbl" style="margin-top:14px"><tr><th>الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>
+      <tr><th></th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>${monthlyRows}</table>
+    ${printFooterHtml('مكتب الخدمات', S.ME.full_name)}`;
+  printWithTitle('إحصائيات_الشكاوى_والمقترحات');
 }
 
 registerTab({id:'complaintsStats', label:'إحصائيات', group:'complaints', groupLabel:'الشكاوى والمقترحات',
