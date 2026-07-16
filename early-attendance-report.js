@@ -76,7 +76,6 @@ async function runReport(){
   $('earStatus').style.display='block'; $('earStatus').className='result';
   $('earTable').innerHTML='';
   if(!S.YEAR?.start_date||!S.YEAR?.end_date){ $('earStatus').className='result err'; $('earStatus').textContent='لا توجد سنة دراسية نشطة بتواريخ محددة.'; return; }
-  const today=dstr(new Date());
   SEM1_MONTHS=monthsInSemester(S.YEAR.start_date, S.YEAR.sem1_end||S.YEAR.end_date);
   SEM2_MONTHS=monthsInSemester(S.YEAR.sem2_start||S.YEAR.start_date, S.YEAR.end_date);
   const allMonths=[...SEM1_MONTHS,...SEM2_MONTHS];
@@ -86,8 +85,6 @@ async function runReport(){
     const m=allMonths[i];
     $('earStatus').textContent=`جارٍ الحساب — ${m.label}… (${i+1}/${allMonths.length})`;
     let {from,to}=m;
-    if(from>today){ monthData.push({schoolDays:0, lateByStudent:{}}); continue; }
-    if(to>today) to=today;
     const range=await collectRange(from,to);
     const {data:lateRows}=await db.from('late_log').select('student_id').gte('date',from).lte('date',to);
     const lateByStudent={}; for(const r of lateRows||[]) lateByStudent[r.student_id]=(lateByStudent[r.student_id]||0)+1;

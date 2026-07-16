@@ -81,7 +81,6 @@ async function runReport(){
   $('sarStatus').style.display='block'; $('sarStatus').className='result';
   tbl.innerHTML='';
   if(!S.YEAR?.start_date||!S.YEAR?.end_date){ $('sarStatus').className='result err'; $('sarStatus').textContent='لا توجد سنة دراسية نشطة بتواريخ محددة.'; return; }
-  const today=dstr(new Date());
   SEM1_MONTHS=monthsInSemester(S.YEAR.start_date, S.YEAR.sem1_end||S.YEAR.end_date);
   SEM2_MONTHS=monthsInSemester(S.YEAR.sem2_start||S.YEAR.start_date, S.YEAR.end_date);
   const allMonths=[...SEM1_MONTHS,...SEM2_MONTHS];
@@ -91,8 +90,6 @@ async function runReport(){
     const m=allMonths[i];
     $('sarStatus').textContent=`جارٍ الحساب — ${m.label}… (${i+1}/${allMonths.length})`;
     let {from,to}=m;
-    if(from>today){ monthData.push({m,schoolDaysCount:0,perStudentAbsDays:{}}); continue; }
-    if(to>today) to=today;
     const range=await collectRange(from,to);
     monthData.push({m, schoolDaysCount:range.schoolDaysCount, perStudentAbsDays:range.perStudentAbsDays});
   }

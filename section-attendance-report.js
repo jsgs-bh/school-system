@@ -80,7 +80,6 @@ async function runReport(){
   $('secarStatus').style.display='block'; $('secarStatus').className='result';
   $('secarTable').innerHTML='';
   if(!S.YEAR?.start_date||!S.YEAR?.end_date){ $('secarStatus').className='result err'; $('secarStatus').textContent='لا توجد سنة دراسية نشطة بتواريخ محددة.'; return; }
-  const today=dstr(new Date());
   const sem1=monthsInSemester(S.YEAR.start_date, S.YEAR.sem1_end||S.YEAR.end_date);
   const sem2=monthsInSemester(S.YEAR.sem2_start||S.YEAR.start_date, S.YEAR.end_date);
   ALL_MONTHS=[...sem1,...sem2];
@@ -96,8 +95,6 @@ async function runReport(){
     const m=ALL_MONTHS[i];
     $('secarStatus').textContent=`جارٍ الحساب — ${m.label}… (${i+1}/${ALL_MONTHS.length})`;
     let {from,to}=m;
-    if(from>today){ monthData.push({schoolDays:0, absBySecCode:{}}); continue; }
-    if(to>today) to=today;
     const range=await collectRange(from,to);
     monthData.push({schoolDays:range.schoolDaysCount, absBySecCode:range.perSectionAbsDays});
   }

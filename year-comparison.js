@@ -67,13 +67,11 @@ async function runCompare(){
 
   const {data:th}=await db.from('grade_settings').select('*').eq('id',1).maybeSingle();
   const THRESH=th||{pass_pct:50,mastery_pct:80};
-  const today=new Date().toISOString().slice(0,10);
-
   const rows=[];
   for(let i=0;i<years.length;i++){
     const y=years[i];
     $('ycStatus').textContent=`جارٍ الحساب — ${y.name}… (${i+1}/${years.length})`;
-    let to=y.end_date>today?today:y.end_date;
+    let to=y.end_date;
     let schoolDays=0, absTotal=0;
     if(y.start_date<=to){
       const range=await collectRange(y.start_date,to);

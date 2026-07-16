@@ -97,8 +97,7 @@ async function refreshAlerts(){
     if(!S.YEAR?.start_date){ toast('لا سنة دراسية نشطة بتواريخ محددة'); return; }
     const {data:st}=await db.from('app_settings').select('*').eq('id',1).maybeSingle();
     const absThreshold=st?.absence_alert_threshold||4, lateThreshold=st?.late_alert_threshold||4;
-    const today=dstr(new Date());
-    const to = S.YEAR.end_date>today ? today : S.YEAR.end_date;
+    const to = S.YEAR.end_date;
 
     const range=await collectRange(S.YEAR.start_date,to);
     const absQualified=Object.entries(range.perStudentAbsDays||{}).filter(([,c])=>c>=absThreshold);
@@ -178,8 +177,7 @@ function render(){
 }
 
 async function printStudent(r){
-  const today=dstr(new Date());
-  const to = S.YEAR.end_date>today ? today : S.YEAR.end_date;
+  const to = S.YEAR.end_date;
   let rows='';
   if(r.kind==='absence'){
     const range=await collectRange(S.YEAR.start_date,to);
