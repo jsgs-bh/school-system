@@ -442,7 +442,7 @@ function exportStatsPdf(){
     ${printHeaderHtml(`إحصائيات الشكاوى والمقترحات — التفصيل الشهري (${STAT_RANGE.from} إلى ${STAT_RANGE.to})`)}
     <table class="cf-tbl"><tr><th>الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>
       <tr><th></th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>${monthlyRows}</table>
-    <div style="margin-top:18px;font-weight:700;font-size:13px">تفاصيل الشكاوى والمقترحات لهذي الفترة</div>
+    <div style="margin-top:18px;font-weight:700;font-size:13px">تفاصيل الشكاوى والمقترحات لهذه الفترة</div>
     <table class="cf-tbl" style="margin-top:8px"><tr><th>اسم المعلمة</th><th>التاريخ</th><th>النوع</th><th>الجهة</th><th>عنوان</th><th>وصف</th><th>إجراء المكتب</th></tr>${detailRows}</table>
     ${printFooterHtml('مكتب الخدمات', S.ME.full_name)}`;
   printWithTitle('إحصائيات_الشكاوى_والمقترحات','printAreaCS');
