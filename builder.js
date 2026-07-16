@@ -90,6 +90,11 @@ function initBuilder(){
   $('bXls').addEventListener('click',exportXls);
   $('bPdf').addEventListener('click',exportPdf);
 
+  // ننقل حاوية "تقرير فترة" لتصير داخل هذا التبويب فعلياً (بعد شريط التبديل)
+  // بدل بقائها عنصراً منفصلاً سابقاً لها في الصفحة — يضمن بقاء الشريط فوق دائماً.
+  const period=$('periodMain');
+  if(period) $('builderMain').appendChild(period);
+
   $('bModeBuilder').addEventListener('click',()=>switchMode('builder'));
   $('bModePeriod').addEventListener('click',()=>switchMode('period'));
 }
