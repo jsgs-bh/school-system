@@ -40,7 +40,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="settingsPerms" style="display:none">
   <div class="panel">
     <h3>منح الصلاحيات</h3>
-    <div class="sub">ابحثي عن منتسبة لعرض صلاحياتها الحالية وإضافة أو سحب دور. الدور «مسؤولة متابعة الغياب» يفتح لأي شخص تبويب «متابعة الغياب» كاملاً بغض النظر عن قسمها. لأدوار «رئيسة لجنة» و«مسؤولة مشروع» أضيفي اسم اللجنة/المشروع — حل مؤقت نصي إلى أن تُبنى وحدة اللجان والمشاريع نفسها.</div>
+    <div class="sub">ابحثي عن منتسبة لعرض صلاحياتها الحالية وإضافة أو سحب دور. الدور «مسؤولة متابعة الغياب» يفتح لأي شخص تبويب «متابعة الغياب» كاملاً بغض النظر عن قسمها. لدور «مسؤولة مشروع» اختاري المشروع من القائمة مباشرة. لدور «رئيسة لجنة» اكتبي اسم اللجنة — حل مؤقت نصي إلى أن تُبنى وحدة اللجان نفسها.</div>
     <div class="search-row"><input type="text" id="permSearch" placeholder="اسم المنتسبة أو رقمها الشخصي…"></div>
     <div class="sugg" id="permSugg"></div>
     <div class="picked" id="permPicked">
@@ -48,7 +48,8 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div id="permRoles" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
       <div class="row" style="margin-top:12px">
         <select id="permAdd"></select>
-        <input type="text" id="permScope" placeholder="اسم اللجنة أو المشروع…" style="display:none;flex:1;min-width:160px">
+        <input type="text" id="permScope" placeholder="اسم اللجنة…" style="display:none;flex:1;min-width:160px">
+        <select id="permProjectScope" style="display:none;flex:1;min-width:160px"></select>
         <button class="btn gold" id="permAddBtn">إضافة الدور</button>
       </div>
     </div>
@@ -192,11 +193,14 @@ $('setSavePeriods').addEventListener('click', async ()=>{
 
 /* ============ الصلاحيات ============ */
 const SCOPE_ROLES = new Set(['committee_head','project_lead']);
-let PERM_STAFF=null;
-function initPerms(){
+let PERM_STAFF=null, PERM_PROJECTS=[];
+async function initPerms(){
   if($('permSearch').dataset.ready) return;
   $('permSearch').dataset.ready='1';
   $('permAdd').innerHTML=Object.entries(roleNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+  const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
+  PERM_PROJECTS=projects||[];
+  $('permProjectScope').innerHTML='<option value="">اختاري المشروع…</option>'+PERM_PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   toggleScope();
   $('permAdd').addEventListener('change',toggleScope);
   let deb=null;
@@ -217,16 +221,28 @@ function initPerms(){
   $('permAddBtn').addEventListener('click', async ()=>{
     if(!PERM_STAFF) return;
     const role=$('permAdd').value;
-    const scope = SCOPE_ROLES.has(role) ? clean($('permScope').value) : null;
-    if(SCOPE_ROLES.has(role) && !scope){ toast('اكتبي اسم اللجنة أو المشروع'); return; }
+    let scope=null, projectId=null;
+    if(role==='project_lead'){
+      projectId=$('permProjectScope').value;
+      if(!projectId){ toast('اختاري المشروع'); return; }
+      scope=PERM_PROJECTS.find(p=>p.id===projectId)?.name||null;
+    }else if(SCOPE_ROLES.has(role)){
+      scope=clean($('permScope').value);
+      if(!scope){ toast('اكتبي اسم اللجنة'); return; }
+    }
     const {error}=await db.from('staff_roles').insert({staff_id:PERM_STAFF.id, role, scope});
     if(error){ toast(/duplicate|unique/i.test(error.message)?'الدور موجود مسبقاً لهذه المنتسبة':'تعذر الإضافة: '+error.message); return; }
-    $('permScope').value='';
+    if(role==='project_lead' && projectId){
+      await db.from('staff_project_leads').insert({staff_id:PERM_STAFF.id, project_id:projectId});
+    }
+    $('permScope').value=''; $('permProjectScope').value='';
     toast('تمت إضافة الدور'); refreshRoles();
   });
 }
 function toggleScope(){
-  $('permScope').style.display = SCOPE_ROLES.has($('permAdd').value) ? 'block' : 'none';
+  const role=$('permAdd').value;
+  $('permScope').style.display = (role!=='project_lead' && SCOPE_ROLES.has(role)) ? 'block' : 'none';
+  $('permProjectScope').style.display = role==='project_lead' ? 'block' : 'none';
 }
 async function pickStaff(s){
   PERM_STAFF=s;
@@ -237,10 +253,14 @@ async function pickStaff(s){
 async function refreshRoles(){
   const {data:roles}=await db.from('staff_roles').select('id,role,scope').eq('staff_id',PERM_STAFF.id);
   $('permRoles').innerHTML=(roles||[]).length
-    ? roles.map(r=>`<span class="perm-badge">${roleNames[r.role]||r.role}${r.scope?' — '+r.scope:''}<button data-id="${r.id}">✕</button></span>`).join('')
+    ? roles.map(r=>`<span class="perm-badge">${roleNames[r.role]||r.role}${r.scope?' — '+r.scope:''}<button data-id="${r.id}" data-role="${r.role}" data-scope="${r.scope||''}">✕</button></span>`).join('')
     : '<span style="color:#8a93a0;font-size:13px">لا صلاحيات إضافية — منتسبة بمسمّاها الوظيفي فقط.</span>';
   $('permRoles').querySelectorAll('button').forEach(b=>b.addEventListener('click', async ()=>{
     await db.from('staff_roles').delete().eq('id',b.dataset.id);
+    if(b.dataset.role==='project_lead' && b.dataset.scope){
+      const proj=PERM_PROJECTS.find(p=>p.name===b.dataset.scope);
+      if(proj) await db.from('staff_project_leads').delete().eq('staff_id',PERM_STAFF.id).eq('project_id',proj.id);
+    }
     toast('تم سحب الدور'); refreshRoles();
   }));
 }
