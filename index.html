@@ -65,6 +65,11 @@
       </div>
       <div class="progress" id="stuProg"><div class="bar"><div id="stuBar"></div></div><p id="stuStep">—</p></div>
       <div class="result" id="stuResult"></div>
+      <div id="stuMissingPanel" style="display:none;margin-top:16px">
+        <div class="warnbox">طالبات كنّ نشطات ولم يُذكرن في هذا الملف — حدّدي حالة كل واحدة قبل المتابعة.</div>
+        <div id="stuMissingList"></div>
+        <button class="btn gold" id="stuMissingApply" style="width:auto;padding:10px 24px;margin-top:10px">تطبيق</button>
+      </div>
     </div>
 
     <div class="panel">
@@ -222,6 +227,9 @@
   import './special-cases.js';
   import './academic-years.js';
   import './complaints.js';
+  import './audit-log.js';
+  import './promotion.js';
+  import './graduates.js';
   import './teaching-groups.js';
   import './file-templates.js';
   import './supervision-settings.js';
