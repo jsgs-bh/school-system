@@ -62,13 +62,21 @@ function detailsText(details){
 
 async function load(){
   const from=$('alFrom').value, to=$('alTo').value, q=$('alSearch').value.trim();
-  let query=db.from('audit_log').select('*, staff:actor_id(full_name)').gte('created_at',from).lte('created_at',to+'T23:59:59').order('created_at',{ascending:false}).limit(1000);
+  let query=db.from('audit_log').select('*').gte('created_at',from).lte('created_at',to+'T23:59:59').order('created_at',{ascending:false}).limit(1000);
   const {data,error}=await query;
   if(error){ $('alTable').innerHTML=`<tr><td style="padding:20px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
-  ROWS=(data||[]).filter(r=>{
+  const rows=data||[];
+  const actorIds=[...new Set(rows.map(r=>r.actor_id).filter(Boolean))];
+  let nameById={};
+  if(actorIds.length){
+    const {data:staffRows}=await db.from('staff').select('id,full_name').in('id',actorIds);
+    for(const s of staffRows||[]) nameById[s.id]=s.full_name;
+  }
+  for(const r of rows) r._staffName=nameById[r.actor_id]||null;
+  ROWS=rows.filter(r=>{
     if(!q) return true;
     const ql=q.toLowerCase();
-    return (r.staff?.full_name||'').toLowerCase().includes(ql) || (ACTION_LABEL[r.action]||r.action||'').toLowerCase().includes(ql) || (r.entity||'').toLowerCase().includes(ql);
+    return (r._staffName||'').toLowerCase().includes(ql) || (ACTION_LABEL[r.action]||r.action||'').toLowerCase().includes(ql) || (r.entity||'').toLowerCase().includes(ql);
   });
   render();
 }
@@ -76,7 +84,7 @@ async function load(){
 function render(){
   if(!ROWS.length){ $('alTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا سجلات ضمن هذي الفترة</td></tr>'; return; }
   $('alTable').innerHTML='<tr><th>التاريخ والوقت</th><th>من</th><th>ماذا (الإجراء)</th><th>الوحدة</th><th>تفاصيل</th></tr>'+
-    ROWS.map(r=>`<tr><td class="c">${new Date(r.created_at).toLocaleString('ar')}</td><td class="c">${r.staff?.full_name||'—'}</td>
+    ROWS.map(r=>`<tr><td class="c">${new Date(r.created_at).toLocaleString('ar')}</td><td class="c">${r._staffName||'—'}</td>
       <td class="c">${ACTION_LABEL[r.action]||r.action}</td><td class="c">${r.entity}</td><td>${detailsText(r.details)}</td></tr>`).join('');
 }
 
@@ -99,7 +107,7 @@ async function exportXls(){
   const hdr=ws.addRow(['التاريخ والوقت','من','ماذا (الإجراء)','الوحدة','تفاصيل']);
   hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; c.border=alBorder; });
   ROWS.forEach((r,i)=>{
-    const row=ws.addRow([new Date(r.created_at).toLocaleString('ar'), r.staff?.full_name||'', ACTION_LABEL[r.action]||r.action, r.entity, detailsText(r.details)]);
+    const row=ws.addRow([new Date(r.created_at).toLocaleString('ar'), r._staffName||'', ACTION_LABEL[r.action]||r.action, r.entity, detailsText(r.details)]);
     row.eachCell((c,colNo)=>{ c.border=alBorder; c.alignment={horizontal:colNo>=5?'right':'center'}; c.font={size:10};
       if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
   });
@@ -112,7 +120,7 @@ async function exportXls(){
 }
 function exportPdf(){
   if(!ROWS.length){ toast('لا بيانات للتصدير'); return; }
-  const rows=ROWS.map(r=>`<tr><td>${new Date(r.created_at).toLocaleString('ar')}</td><td>${r.staff?.full_name||''}</td>
+  const rows=ROWS.map(r=>`<tr><td>${new Date(r.created_at).toLocaleString('ar')}</td><td>${r._staffName||''}</td>
     <td>${ACTION_LABEL[r.action]||r.action}</td><td>${r.entity}</td><td>${detailsText(r.details)}</td></tr>`).join('');
   $('printAreaAL').innerHTML=`
     ${printHeaderHtml('سجل العمليات')}
