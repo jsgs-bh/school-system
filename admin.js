@@ -94,9 +94,49 @@ $('stuRun').addEventListener('click', async ()=>{
     R.className='result ok';
     R.innerHTML=`✅ اكتمل الاستيراد:<br>• ${stuRows.length} طالبة<br>• ${secRows.length} شعبة<br>• ${inserts.length} قيد جديد${closes.length?`<br>• ${closes.length} نقل بين شعب`:''}`;
     refreshStats();
+    await checkMissingStudents(STU.students.map(s=>s.academic_number));
   }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
   finally{ $('stuRun').disabled=false; setTimeout(()=>{$('stuProg').style.display='none';},1500); }
 });
+
+/* ============ الطالبات المفقودة من القائمة الجديدة ============ */
+const MISSING_STATUS_LABEL={active:'نشطة (تجاهل — لم تُذكر سهواً)', graduated:'متخرجة', transferred:'منقولة لمدرسة أخرى', home_school:'منازل'};
+let MISSING_STUDENTS=[];
+async function checkMissingStudents(uploadedAcads){
+  const uploadedSet=new Set(uploadedAcads);
+  const {data:activeStudents}=await db.from('students').select('id,full_name,academic_number').eq('status','active');
+  MISSING_STUDENTS=(activeStudents||[]).filter(s=>!uploadedSet.has(s.academic_number));
+  if(!MISSING_STUDENTS.length){ $('stuMissingPanel').style.display='none'; return; }
+  $('stuMissingPanel').style.display='block';
+  $('stuMissingList').innerHTML=MISSING_STUDENTS.map((s,i)=>`
+    <div class="cs-row" style="display:flex;justify-content:space-between;align-items:center;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:10px 14px;margin-bottom:6px">
+      <span>${s.full_name} <small style="color:#8a93a0">${s.academic_number}</small></span>
+      <select data-i="${i}" style="padding:7px 10px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:13px;background:#fbfaf7">
+        ${Object.entries(MISSING_STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${k==='transferred'?'selected':''}>${v}</option>`).join('')}
+      </select>
+    </div>`).join('');
+  $('stuMissingApply').onclick=applyMissingStatuses;
+}
+async function applyMissingStatuses(){
+  const btn=$('stuMissingApply'); btn.disabled=true; btn.textContent='جارٍ التطبيق…';
+  try{
+    const selects=[...$('stuMissingList').querySelectorAll('select')];
+    let updated=0;
+    for(const sel of selects){
+      const s=MISSING_STUDENTS[+sel.dataset.i];
+      const status=sel.value;
+      if(status==='active') continue; // تجاهل — تبقى كما هي
+      await db.from('students').update({status}).eq('id',s.id);
+      await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).eq('student_id',s.id).is('to_date',null);
+      updated++;
+    }
+    await db.from('audit_log').insert({actor_id:S.ME.id,action:'reconcile',entity:'students',details:{updated,total:selects.length}});
+    toast(`تم تحديث حالة ${updated} طالبة`);
+    $('stuMissingPanel').style.display='none';
+    refreshStats();
+  }catch(err){ toast('تعذر التطبيق: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent='تطبيق'; }
+}
 
 /* ============ استيراد المنتسبات ============ */
 function normDept(name){
