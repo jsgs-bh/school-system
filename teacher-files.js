@@ -2,7 +2,8 @@
    تحميل نسخة معبَّأة تلقائياً من القالب المعتمد (كشف الدرجات بأسماء
    طالبات مجموعتها، كشف الغياب بأسماء طالبات شعبتها)، قائمة الحالات
    الخاصة لكل شعبة، ومكتبة الملفات العامة التي يرفعها الأدمن. */
-import { db, $, S, toast, registerTab } from './core.js';
+import { db, $, S, dstr, toast, registerTab } from './core.js';
+import { collectRange } from './period.js';
 
 const BUCKET='school-files';
 
@@ -65,7 +66,11 @@ async function renderAttendanceList(){
   if(!sections.length){ $('tfAttList').innerHTML='<div class="empty-day">لا شعب مرتبطة باسمك بعد.</div>'; return; }
   $('tfAttList').innerHTML=sections.map((s,i)=>`
     <div class="tf-row"><span><b>${s.code}</b></span>
-      <button class="btn gold" data-i="${i}" style="width:auto;padding:9px 20px">⬇ تحميل</button></div>`).join('');
+      <span style="display:flex;gap:8px">
+        <button class="btn ghost" data-cum="${i}" style="width:auto;padding:9px 16px;font-size:12px">⬇ كشف غياب تراكمي (حتى الآن)</button>
+        <button class="btn gold" data-i="${i}" style="width:auto;padding:9px 20px">⬇ تحميل</button>
+      </span></div>`).join('');
+  $('tfAttList').querySelectorAll('button[data-cum]').forEach((b,i)=>b.addEventListener('click',()=>downloadCumulativeAbsence(sections[i],b)));
   $('tfAttList').querySelectorAll('button').forEach((b,i)=>b.addEventListener('click', async ()=>{
     const s=sections[i];
     const {data:enr}=await db.from('enrollments').select('students(full_name,academic_number)').eq('section_id',s.id).is('to_date',null);
@@ -105,6 +110,46 @@ async function renderSharedList(){
 }
 
 /* ============ ملء القالب المعتمد ونزوله ============ */
+async function downloadCumulativeAbsence(section, btn){
+  if(!S.YEAR?.start_date){ toast('لا سنة دراسية نشطة بتواريخ محددة'); return; }
+  btn.disabled=true; const old=btn.textContent; btn.textContent='جارٍ التحضير…';
+  try{
+    const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',section.id).is('to_date',null);
+    const students=(enr||[]).map(e=>e.students).filter(Boolean);
+    if(!students.length){ toast('لا طالبات في هذي الشعبة'); return; }
+    const today=dstr(new Date());
+    const range=await collectRange(S.YEAR.start_date, today);
+    const wb=new ExcelJS.Workbook();
+    const ws=wb.addWorksheet('كشف الغياب التراكمي',{views:[{rightToLeft:true}]});
+    const NAVY='FF1D3D5C', WHITE='FFFFFFFF';
+    const addTitle=(text,size,bold,fill,color)=>{
+      const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,5);
+      const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
+      cell.alignment={horizontal:'center',vertical:'middle'}; if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
+      row.height=size>=16?26:20;
+    };
+    addTitle(S.SETTINGS.school_name||'المدرسة',16,true,NAVY,WHITE);
+    addTitle(`كشف الغياب التراكمي — الشعبة ${section.code} — حتى ${today}`,12,true,null,'FF22303C');
+    ws.addRow([]);
+    const hdr=ws.addRow(['#','الرقم الأكاديمي','اسم الطالبة','أيام الغياب','مجموع الغياب']);
+    hdr.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; c.alignment={horizontal:'center'}; });
+    const sorted=[...students].sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'en',{numeric:true}));
+    sorted.forEach((s,i)=>{
+      const dates=range.DAILY.filter(d=>d.bySid[s.id]).map(d=>d.date);
+      const row=ws.addRow([i+1, s.academic_number, s.full_name, dates.join('، ')||'—', dates.length]);
+      row.eachCell((c,colNo)=>{ c.alignment={horizontal:colNo===3||colNo===4?'right':'center'}; c.font={size:10.5}; if(colNo===2) c.numFmt='@';
+        if(i%2===1) c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF5F2EC'}}; });
+    });
+    ws.columns=[{width:6},{width:16},{width:26},{width:50},{width:12}];
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`كشف_غياب_تراكمي_${section.code}.xlsx`; a.click();
+    URL.revokeObjectURL(url);
+  }catch(err){ toast('تعذر التحضير: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+
 async function downloadFilledTemplate(kind, students, filename, btn, subjectId){
   if(!students.length){ toast('لا طالبات في هذي المجموعة/الشعبة'); return; }
   btn.disabled=true; const old=btn.textContent; btn.textContent='جارٍ التحضير…';
