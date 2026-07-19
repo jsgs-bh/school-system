@@ -138,7 +138,9 @@ async function boot(session){
     m.textContent='حسابك غير مسجل في قائمة المنتسبات. تواصلي مع الدعم الفني.'; return;
   }
   const { data: roles } = await db.from('staff_roles').select('role').eq('staff_id', staff.id);
+  const { data: myCommittees } = await db.from('committee_members').select('committee_id').eq('staff_id', staff.id);
   S.ME = staff;
+  S.MY_COMMITTEE_IDS = (myCommittees||[]).map(c=>c.committee_id);
   const dept = staff.departments?.name||'';
   S.FLAGS = {
     isAdmin: (roles||[]).some(r=>r.role==='admin'),
@@ -154,6 +156,7 @@ async function boot(session){
     isStrategicPlanLead: (roles||[]).some(r=>r.role==='strategic_plan_lead'),
     isAnalysis: (roles||[]).some(r=>r.role==='analysis_supervisor'),
     isSeniorTeacher: staff.title==='senior_teacher',
+    isCommitteeMember: S.MY_COMMITTEE_IDS.length>0,
   };
   $('userName').textContent = staff.full_name;
   $('userRole').textContent = (roles||[]).map(r=>roleNames[r.role]).join(' · ') || titleNames[staff.title] || 'منتسبة';

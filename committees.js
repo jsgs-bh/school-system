@@ -9,7 +9,7 @@ const BUCKET='school-files';
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="committeesMain" style="display:none">
   <div id="cmListView">
-    <div class="panel">
+    <div class="panel" id="cmCreatePanel" style="display:none">
       <h3>إنشاء لجنة جديدة</h3>
       <div class="field"><label>اسم اللجنة</label><input type="text" id="cmNewName"></div>
       <div class="field"><label>نوع اللجنة</label><select id="cmNewType">
@@ -100,6 +100,8 @@ let PROJECTS=[], SELECTED_BENEFICIARIES=new Set(), CUR_COMMITTEE=null, CUR_MINUT
 async function initCommittees(){
   if($('cmCreateBtn').dataset.ready) return;
   $('cmCreateBtn').dataset.ready='1';
+  const CAN_CREATE = S.FLAGS.isAdmin || S.FLAGS.isStrategicPlanLead;
+  $('cmCreatePanel').style.display = CAN_CREATE ? 'block' : 'none';
   const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
   PROJECTS=projects||[];
   $('cmNewHome').innerHTML='<option value="">اختاري المشروع الأم…</option>'+PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
@@ -166,9 +168,12 @@ async function createCommittee(){
 
 const TYPE_LABEL={teachers:'معلمات', students:'طالبات', mixed:'معلمات وطالبات'};
 async function loadCommittees(){
-  const {data,error}=await db.from('committees')
+  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isStrategicPlanLead || S.FLAGS.isLead;
+  let query = db.from('committees')
     .select('id,name,type,home_project_id, plan_projects(name), committee_beneficiary_projects(plan_projects(name))')
     .eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false});
+  if(!canSeeAll) query = query.in('id', S.MY_COMMITTEE_IDS.length ? S.MY_COMMITTEE_IDS : ['00000000-0000-0000-0000-000000000000']);
+  const {data,error}=await query;
   if(error){ $('cmList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   if(!data?.length){ $('cmList').innerHTML='<div class="empty-day">لا لجان بعد.</div>'; return; }
   $('cmList').innerHTML=data.map(c=>{
@@ -319,4 +324,4 @@ async function printAttendance(){
 }
 
 registerTab({id:'committeesMain', label:'اللجان', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isAdmin||f.isProjectLead||f.isSeniorTeacher||f.isLead, init:initCommittees});
+  show:f=>f.isAdmin||f.isStrategicPlanLead||f.isLead||f.isCommitteeMember, init:initCommittees});

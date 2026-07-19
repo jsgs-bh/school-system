@@ -40,15 +40,20 @@ let ALL_INITIATIVES=[], ACTIVE_MONTH='sep';
 async function initPlanView(){
   if($('pvMonthTabs').dataset.ready) return;
   $('pvMonthTabs').dataset.ready='1';
+  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead;
+  if(!canSeeAll){
+    $('pvStats').insertAdjacentHTML('beforebegin',`<div class="sub" style="margin-bottom:10px">مقتصرة على قسمك: ${S.ME.departments?.name||'—'}</div>`);
+  }
   await loadAll();
 }
 
 async function loadAll(){
   const {data:projects}=await db.from('plan_projects').select('id,name,sort_order').eq('academic_year_id',S.YEAR.id).order('sort_order');
   const projectIds=(projects||[]).map(p=>p.id);
-  const {data:initiatives}=projectIds.length
-    ? await db.from('plan_initiatives').select('*').in('project_id',projectIds)
-    : {data:[]};
+  let query = projectIds.length ? db.from('plan_initiatives').select('*').in('project_id',projectIds) : null;
+  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead;
+  if(query && !canSeeAll) query = query.eq('department_id', S.ME.department_id||'00000000-0000-0000-0000-000000000000');
+  const {data:initiatives} = query ? await query : {data:[]};
   const projById={}; for(const p of projects||[]) projById[p.id]=p;
   ALL_INITIATIVES=(initiatives||[]).map(i=>({...i, projectName:projById[i.project_id]?.name||'—'}));
   renderStats();
@@ -90,4 +95,4 @@ function renderMonth(monthId){
 }
 
 registerTab({id:'planView', label:'الخطة التدفقية', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isAdmin||f.isLead||f.isStrategicPlanLead||!f.isSeniorTeacher, init:initPlanView});
+  show:()=>true, init:initPlanView});
