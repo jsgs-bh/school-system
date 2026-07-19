@@ -46,6 +46,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <h3>المهام والتكليفات</h3>
       <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <input type="text" id="cmTaskText" placeholder="نص المهمة" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+        <select id="cmTaskDept" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)"><option value="">القسم المعنيّ…</option></select>
         <input type="date" id="cmTaskDue" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
         <button class="btn gold" id="cmTaskAdd" style="width:auto;padding:9px 20px">إضافة</button>
       </div>
@@ -105,6 +106,8 @@ async function initCommittees(){
   const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
   PROJECTS=projects||[];
   $('cmNewHome').innerHTML='<option value="">اختاري المشروع الأم…</option>'+PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const {data:depts}=await db.from('departments').select('id,name').order('name');
+  $('cmTaskDept').innerHTML='<option value="">القسم المعنيّ…</option>'+(depts||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
   $('cmNewBeneficiaries').innerHTML=PROJECTS.map(p=>`<div class="cm-benef-chip" data-id="${p.id}">${p.name}</div>`).join('');
   $('cmNewBeneficiaries').querySelectorAll('.cm-benef-chip').forEach(chip=>chip.addEventListener('click',()=>{
     const id=chip.dataset.id;
@@ -158,7 +161,19 @@ async function createCommittee(){
     if(SELECTED_BENEFICIARIES.size){
       await db.from('committee_beneficiary_projects').insert([...SELECTED_BENEFICIARIES].map(pid=>({committee_id:committee.id, project_id:pid})));
     }
-    toast('تم إنشاء اللجنة');
+    // اللجنة تُمثَّل كمبادرة ضمن إجراءات مشروعها الأم — نفس بنية القالب المعتمد
+    const monthIds=['sep','oct','nov','dec','jan','feb','mar','apr','may','jun'];
+    const now=new Date(); const jsMonth=now.getMonth(); // 0=يناير
+    const monthMap={8:'sep',9:'oct',10:'nov',11:'dec',0:'jan',1:'feb',2:'mar',3:'apr',4:'may',5:'jun'};
+    const curMonth = monthMap[jsMonth] || 'sep';
+    const {data:initiative,error:initErr}=await db.from('plan_initiatives').insert({
+      project_id:homeProjectId, text:`تشكيل ومتابعة لجنة: ${name}`, responsible:S.ME.full_name,
+      responsible_staff_id:S.ME.id, month:curMonth, status:'not_started', created_by:S.ME.id
+    }).select('id').single();
+    if(!initErr && initiative){
+      await db.from('committees').update({initiative_id:initiative.id}).eq('id',committee.id);
+    }
+    toast('تم إنشاء اللجنة وربطها كمبادرة في خطة المشروع');
     $('cmNewName').value=''; $('cmNewHome').value=''; SELECTED_BENEFICIARIES.clear();
     $('cmNewBeneficiaries').querySelectorAll('.cm-benef-chip').forEach(c=>c.classList.remove('on'));
     loadCommittees();
@@ -233,11 +248,11 @@ async function addMember(item){
 }
 
 async function loadTasks(){
-  const {data}=await db.from('committee_tasks').select('*').eq('committee_id',CUR_COMMITTEE.id).order('created_at');
+  const {data}=await db.from('committee_tasks').select('*, departments(name)').eq('committee_id',CUR_COMMITTEE.id).order('created_at');
   const tasks=data||[];
   const STATUS_LABEL={not_started:'لم يبدأ', in_progress:'جاري', done:'تم'};
   $('cmTasksList').innerHTML=tasks.length ? tasks.map(t=>`
-    <div class="cm-row" style="cursor:default"><span>${t.text}${t.due_date?` <small style="color:#8a93a0">(${t.due_date})</small>`:''}</span>
+    <div class="cm-row" style="cursor:default"><span>${t.text} <span class="cm-tag">${t.departments?.name||'—'}</span>${t.due_date?` <small style="color:#8a93a0">(${t.due_date})</small>`:''}</span>
       <select class="cm-status" data-id="${t.id}">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${t.status===k?'selected':''}>${v}</option>`).join('')}</select></div>`).join('')
     : '<div class="empty-day">لا مهام بعد.</div>';
   $('cmTasksList').querySelectorAll('select').forEach(sel=>sel.addEventListener('change', async ()=>{
@@ -248,9 +263,11 @@ async function loadTasks(){
 async function addTask(){
   const text=clean($('cmTaskText').value);
   if(!text){ toast('اكتبي نص المهمة'); return; }
+  const departmentId=$('cmTaskDept').value;
+  if(!departmentId){ toast('حددي القسم المعنيّ بهذي المهمة'); return; }
   const due=$('cmTaskDue').value||null;
-  await db.from('committee_tasks').insert({committee_id:CUR_COMMITTEE.id, text, due_date:due, assigned_to:null});
-  $('cmTaskText').value=''; $('cmTaskDue').value='';
+  await db.from('committee_tasks').insert({committee_id:CUR_COMMITTEE.id, text, department_id:departmentId, due_date:due, assigned_to:null});
+  $('cmTaskText').value=''; $('cmTaskDue').value=''; $('cmTaskDept').value='';
   toast('تمت الإضافة'); loadTasks();
 }
 
@@ -294,8 +311,7 @@ async function printAssignment(){
     <p style="line-height:2;margin-top:14px">بناءً على مصلحة العمل، يُعتمد تكليف المعلمات الآتية أسماؤهن للعمل ضمن لجنة "<b>${CUR_COMMITTEE.name}</b>" التابعة لمشروع "<b>${CUR_COMMITTEE.plan_projects?.name||''}</b>" للعام الدراسي ${S.YEAR?.name||''}.</p>
     <table class="cm-print-tbl"><tr><th>#</th><th>الاسم</th><th>التوقيع</th></tr>
       ${names.map((n,i)=>`<tr><td>${i+1}</td><td>${n}</td><td></td></tr>`).join('')}
-    </table>
-    ${printFooterHtml('رئيسة اللجنة', S.ME.full_name)}`;
+    </table>`;
   printWithTitle(`تكليف_${CUR_COMMITTEE.name}`,'printAreaCM');
 }
 

@@ -19,7 +19,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="panel">
     <h3>إضافة إجراء جديد</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <input type="text" id="pmNewText" placeholder="نص الإجراء" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <textarea id="pmNewText" placeholder="نص الإجراء" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
       <div style="position:relative;min-width:180px">
         <input type="text" id="pmNewResp" placeholder="المسؤول (ابحثي عن منتسبة)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
         <div class="sugg" id="pmRespSugg"></div>

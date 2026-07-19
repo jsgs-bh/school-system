@@ -20,7 +20,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>إضافة إجراء / مبادرة</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <select id="pdProjectPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:180px"></select>
-      <input type="text" id="pdNewText" placeholder="نص الإجراء" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <textarea id="pdNewText" placeholder="نص الإجراء" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
       <div style="position:relative;min-width:180px">
         <input type="text" id="pdNewResp" placeholder="المسؤولة (ابحثي)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
         <div class="sugg" id="pdRespSugg"></div>
