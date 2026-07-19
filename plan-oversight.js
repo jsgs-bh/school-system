@@ -42,8 +42,10 @@ $('appView').insertAdjacentHTML('beforeend', `
       <select id="poFilterMonth"><option value="">كل الأشهر</option>${MONTHS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</select>
       <select id="poFilterStatus"><option value="">كل الحالات</option>${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
     </div>
-    <div class="actions" style="margin-bottom:14px">
-      <button class="btn ghost" id="poPrint">🖨️ طباعة الخطة كاملة</button>
+    <div class="actions" style="margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <select id="poPrintMonth"><option value="">كل الأشهر</option>${MONTHS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer"><input type="checkbox" id="poBlankStatus"> عمود حالة فاضٍ (للتعبئة اليدوية)</label>
+      <button class="btn ghost" id="poPrint">🖨️ طباعة</button>
       <button class="btn ghost" id="poXls">⬇ تصدير Excel (كل المشاريع)</button>
     </div>
     <div class="board-wrap"><table class="board" id="poTable"></table></div>
@@ -188,22 +190,26 @@ function renderTable(){
 /* ============ طباعة الخطة كاملة ============ */
 function printWhole(){
   if(!ALL.length){ toast('لا بيانات للطباعة بعد'); return; }
+  const monthFilter=$('poPrintMonth').value;
+  const blank=$('poBlankStatus').checked;
+  const monthsToUse = monthFilter ? MONTHS.filter(m=>m.id===monthFilter) : MONTHS;
   let body='';
   PROJECTS.forEach(p=>{
-    const inits=ALL.filter(i=>i.project_id===p.id);
+    const inits=ALL.filter(i=>i.project_id===p.id && monthsToUse.some(m=>m.id===i.month));
     if(!inits.length) return;
-    body+=`<div class="po-phead">📁 ${p.name} — ${pct(inits)}٪ منجز</div>`;
-    MONTHS.forEach(m=>{
+    body+=`<div class="po-phead">📁 ${p.name}${blank?'':` — ${pct(inits)}٪ منجز`}</div>`;
+    monthsToUse.forEach(m=>{
       const monthInits=inits.filter(i=>i.month===m.id);
       if(!monthInits.length) return;
       body+=`<div class="po-mhead">📅 ${m.label}</div>
         <table class="po-tbl"><tr><th>#</th><th>الإجراء</th><th>المسؤول</th><th>الحالة</th></tr>
-        ${monthInits.map((r,n)=>`<tr class="${r.status}"><td>${n+1}</td><td>${r.text}</td><td>${r.responsible||'-'}</td><td>${STATUS_LABEL[r.status]}</td></tr>`).join('')}
+        ${monthInits.map((r,n)=>`<tr class="${blank?'':r.status}"><td>${n+1}</td><td>${r.text}</td><td>${r.responsible||'-'}</td><td>${blank?'':STATUS_LABEL[r.status]}</td></tr>`).join('')}
         </table>`;
     });
   });
+  const titleSuffix = monthFilter ? ` — ${MONTHS.find(m=>m.id===monthFilter)?.label}` : ' — كل المشاريع';
   $('printAreaPO').innerHTML=`
-    ${printHeaderHtml('الخطة التنفيذية الشاملة — كل المشاريع')}
+    ${printHeaderHtml(`الخطة التنفيذية الشاملة${titleSuffix}`)}
     ${body}
     ${printFooterHtml('رئيسة متابعة الخطة الاستراتيجية', S.ME.full_name)}`;
   printWithTitle('الخطة_الشاملة','printAreaPO');

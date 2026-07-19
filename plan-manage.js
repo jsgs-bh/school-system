@@ -221,4 +221,4 @@ async function exportXls(){
 }
 
 registerTab({id:'planManage', label:'متابعة مشروعي', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isProjectLead||f.isSeniorTeacher||f.isAdmin, init:initManage});
+  show:f=>f.isProjectLead, init:initManage});
