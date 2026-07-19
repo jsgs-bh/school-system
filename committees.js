@@ -197,7 +197,7 @@ async function checkMinuteAccess(){
     const {data}=await db.from('committee_members').select('id').eq('committee_id',CUR_COMMITTEE.id).eq('staff_id',S.ME.id).maybeSingle();
     isMember = !!data;
   }
-  const canManage = isHead || isMember || S.FLAGS.isAdmin;
+  const canManage = isHead || isMember;
   $('cmMinuteFormBox').style.display = canManage ? 'block' : 'none';
   $('cmMinuteNoAccess').style.display = canManage ? 'none' : 'block';
 }
