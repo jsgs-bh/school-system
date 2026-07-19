@@ -34,6 +34,10 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="cmBack" style="width:auto;padding:8px 18px;margin-bottom:10px">→ رجوع لكل اللجان</button>
       <h3 id="cmDetailName">—</h3>
       <div class="sub" id="cmDetailMeta"></div>
+      <div id="cmInitiativeStatusBox" style="display:none;margin-top:10px;align-items:center;gap:10px">
+        <span style="font-size:13px;color:var(--navy);font-weight:600">حالة اللجنة كمبادرة في خطة المشروع:</span>
+        <select id="cmInitiativeStatus"><option value="not_started">لم يبدأ</option><option value="in_progress">جاري التنفيذ</option><option value="done">تم التنفيذ</option></select>
+      </div>
     </div>
     <div class="panel">
       <h3>الأعضاء</h3>
@@ -162,7 +166,6 @@ async function createCommittee(){
       await db.from('committee_beneficiary_projects').insert([...SELECTED_BENEFICIARIES].map(pid=>({committee_id:committee.id, project_id:pid})));
     }
     // اللجنة تُمثَّل كمبادرة ضمن إجراءات مشروعها الأم — نفس بنية القالب المعتمد
-    const monthIds=['sep','oct','nov','dec','jan','feb','mar','apr','may','jun'];
     const now=new Date(); const jsMonth=now.getMonth(); // 0=يناير
     const monthMap={8:'sep',9:'oct',10:'nov',11:'dec',0:'jan',1:'feb',2:'mar',3:'apr',4:'may',5:'jun'};
     const curMonth = monthMap[jsMonth] || 'sep';
@@ -201,12 +204,25 @@ async function loadCommittees(){
 }
 
 async function openCommittee(id){
-  const {data:c}=await db.from('committees').select('id,name,type,home_project_id,head_staff_id, plan_projects(name)').eq('id',id).single();
+  const {data:c}=await db.from('committees').select('id,name,type,home_project_id,head_staff_id,initiative_id, plan_projects(name)').eq('id',id).single();
   if(!c) return;
   CUR_COMMITTEE=c;
   $('cmListView').style.display='none'; $('cmDetailView').style.display='block';
   $('cmDetailName').textContent=c.name;
   $('cmDetailMeta').textContent=`المشروع الأم: ${c.plan_projects?.name||'—'} — نوع اللجنة: ${TYPE_LABEL[c.type]||c.type}`;
+  if(c.initiative_id){
+    const {data:init}=await db.from('plan_initiatives').select('status').eq('id',c.initiative_id).maybeSingle();
+    if(init){
+      $('cmInitiativeStatusBox').style.display='flex';
+      $('cmInitiativeStatus').value=init.status;
+      $('cmInitiativeStatus').onchange=async ()=>{
+        await db.from('plan_initiatives').update({status:$('cmInitiativeStatus').value, updated_at:new Date().toISOString()}).eq('id',c.initiative_id);
+        toast('تم تحديث حالة اللجنة كمبادرة');
+      };
+    }
+  }else{
+    $('cmInitiativeStatusBox').style.display='none';
+  }
   await loadMembers(); await loadTasks(); await checkMinuteAccess(); await loadMinutes();
 }
 
