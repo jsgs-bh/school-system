@@ -90,4 +90,4 @@ function renderMonth(monthId){
 }
 
 registerTab({id:'planView', label:'الخطة التدفقية', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:()=>true, init:initPlanView});
+  show:f=>f.isAdmin||f.isLead||f.isStrategicPlanLead||!f.isSeniorTeacher, init:initPlanView});
