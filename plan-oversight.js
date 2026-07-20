@@ -55,6 +55,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <style>
   #planOversight.wide{max-width:1600px}
   #planOversight select{padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)}
+  #poTable select.po-status{padding:6px 8px;font-size:12px;background:#fbfaf7}
   .po-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
   .po-bar-label{min-width:110px;font-size:12.5px;color:var(--navy);font-weight:600}
   .po-bar-track{flex:1;height:9px;background:#e9ecef;border-radius:5px;overflow:hidden}
@@ -184,7 +185,17 @@ function renderTable(){
   if(!rows.length){ $('poTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا نتائج ضمن هذا الفلتر</td></tr>'; return; }
   const monthLabel=id=>MONTHS.find(m=>m.id===id)?.label||id;
   $('poTable').innerHTML='<tr><th>المشروع</th><th>الشهر</th><th>الإجراء</th><th>المسؤول</th><th>الحالة</th></tr>'+
-    rows.map(r=>`<tr><td class="c">${r.projectName}</td><td class="c">${monthLabel(r.month)}</td><td>${r.text}</td><td class="c">${r.responsible||'—'}</td><td class="c">${STATUS_LABEL[r.status]}</td></tr>`).join('');
+    rows.map((r,i)=>`<tr data-i="${i}"><td class="c">${r.projectName}</td><td class="c">${monthLabel(r.month)}</td><td>${r.text}</td><td class="c">${r.responsible||'—'}</td>
+      <td><select class="po-status" data-f="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td></tr>`).join('');
+  $('poTable').querySelectorAll('select[data-f]').forEach(sel=>sel.addEventListener('change', async ()=>{
+    const tr=sel.closest('tr'); const i=+tr.dataset.i; const r=rows[i];
+    const {error}=await db.from('plan_initiatives').update({status:sel.value, updated_at:new Date().toISOString()}).eq('id',r.id);
+    if(error){ toast('تعذر الحفظ: '+error.message); return; }
+    r.status=sel.value;
+    const master=ALL.find(a=>a.id===r.id); if(master) master.status=sel.value;
+    toast('تم الحفظ');
+    renderKpis(); renderSemesters(); renderMonthly(); renderProjects();
+  }));
 }
 
 /* ============ طباعة الخطة كاملة ============ */
