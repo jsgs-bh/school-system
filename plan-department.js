@@ -127,6 +127,7 @@ async function addInitiative(){
     department_id:S.ME.department_id, month, status:'not_started', created_by:S.ME.id
   });
   if(error){ toast('تعذر الإضافة: '+error.message); return; }
+  $('pdFilterProject').value=projectId; $('pdFilterMonth').value=''; $('pdFilterStatus').value='';
   $('pdNewText').value=''; $('pdNewResp').value=''; $('pdProjectPick').value=''; PICKED_RESP_STAFF_ID=null;
   toast('تمت الإضافة'); loadInitiatives();
 }

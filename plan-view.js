@@ -15,6 +15,9 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>الخطة التدفقية</h3>
     <div class="stats" id="pvStats"></div>
   </div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <select id="pvProjectFilter" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--white)"><option value="">كل المشاريع</option></select>
+  </div>
   <div id="pvMonthTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
   <div id="pvGrid"></div>
 </div>
@@ -27,11 +30,11 @@ $('appView').insertAdjacentHTML('beforeend', `
   .pv-card-head{padding:12px 16px;background:var(--sand);display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--navy)}
   .pv-init{display:flex;gap:10px;align-items:flex-start;padding:8px 16px;border-bottom:1px solid #f2f0ea}
   .pv-init:last-child{border-bottom:none}
-  .pv-dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0}
-  .pv-dot.not_started{background:#e2e5e9}
+  .pv-dot{width:16px;height:16px;border-radius:50%;margin-top:2px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:700}
+  .pv-dot.not_started{background:#f8f9fa;border:1.5px solid #e2e5e9}
   .pv-dot.in_progress{background:#f0b429}
   .pv-dot.done{background:#2f9e44}
-  .pv-text.done{text-decoration:line-through;color:#8a93a0}
+  .pv-text.done{color:#4a5568}
   .pv-resp{font-size:11.5px;color:#8a93a0;margin-top:2px}
 </style>`);
 
@@ -44,12 +47,14 @@ async function initPlanView(){
   if(!canSeeAll){
     $('pvStats').insertAdjacentHTML('beforebegin',`<div class="sub" style="margin-bottom:10px">مقتصرة على قسمك: ${S.ME.departments?.name||'—'}</div>`);
   }
+  $('pvProjectFilter').addEventListener('change',()=>{ renderMonthTabs(); renderMonth(ACTIVE_MONTH); });
   await loadAll();
 }
 
 async function loadAll(){
   const {data:projects}=await db.from('plan_projects').select('id,name,sort_order').eq('academic_year_id',S.YEAR.id).order('sort_order');
   const projectIds=(projects||[]).map(p=>p.id);
+  $('pvProjectFilter').innerHTML='<option value="">كل المشاريع</option>'+(projects||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   let query = projectIds.length ? db.from('plan_initiatives').select('*').in('project_id',projectIds) : null;
   const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead;
   if(query && !canSeeAll) query = query.eq('department_id', S.ME.department_id||'00000000-0000-0000-0000-000000000000');
@@ -70,9 +75,15 @@ function renderStats(){
     <div class="stat"><b>${pct}٪</b><span>نسبة الإنجاز</span></div>`;
 }
 
+function scopedInitiatives(){
+  const pf=$('pvProjectFilter').value;
+  return pf ? ALL_INITIATIVES.filter(i=>i.project_id===pf) : ALL_INITIATIVES;
+}
+
 function renderMonthTabs(){
+  const source=scopedInitiatives();
   $('pvMonthTabs').innerHTML=MONTHS.map(m=>{
-    const inMonth=ALL_INITIATIVES.filter(i=>i.month===m.id);
+    const inMonth=source.filter(i=>i.month===m.id);
     const done=inMonth.filter(i=>i.status==='done').length;
     return `<button class="pv-mtab ${m.id===ACTIVE_MONTH?'active':''}" data-m="${m.id}">${m.label}${inMonth.length?`<span class="cnt">${done}/${inMonth.length}</span>`:''}</button>`;
   }).join('');
@@ -80,7 +91,7 @@ function renderMonthTabs(){
 }
 
 function renderMonth(monthId){
-  const inits=ALL_INITIATIVES.filter(i=>i.month===monthId);
+  const inits=scopedInitiatives().filter(i=>i.month===monthId);
   if(!inits.length){ $('pvGrid').innerHTML='<div class="empty-day">لا إجراءات لهذا الشهر.</div>'; return; }
   const byProject={};
   for(const i of inits){ (byProject[i.project_id] ??= {name:i.projectName, items:[]}).items.push(i); }
@@ -88,7 +99,7 @@ function renderMonth(monthId){
     const done=g.items.filter(i=>i.status==='done').length;
     return `<div class="pv-card">
       <div class="pv-card-head"><span>📁 ${g.name}</span><span>${done}/${g.items.length}</span></div>
-      ${g.items.map(i=>`<div class="pv-init"><span class="pv-dot ${i.status}"></span>
+      ${g.items.map(i=>`<div class="pv-init"><span class="pv-dot ${i.status}">${i.status==='done'?'✓':''}</span>
         <div><div class="pv-text ${i.status==='done'?'done':''}">${i.text}</div>${i.responsible?`<div class="pv-resp">👤 ${i.responsible}</div>`:''}</div></div>`).join('')}
     </div>`;
   }).join('');
