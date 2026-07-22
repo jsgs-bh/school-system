@@ -1,7 +1,6 @@
 /* plan-department.js — الخطة التشغيلية (تحت مجموعة "الخطة الاستراتيجية")
-   للمعلمة الأولى: تضيف/تعدّل إجراءات ومبادرات خاصة بقسمها فقط (تُوسَم
-   تلقائياً بقسمها عبر department_id)، عبر أي مشروع تختاره من القائمة.
-   منفصلة تماماً عن "متابعة مشروعي" و"اللجان" — كل واحد بتبويبه. */
+   للمعلمة الأولى: مبادرات في أي مشروع، وكل مبادرة لها إجراءات متعددة
+   بتوقيتها وحالتها الخاصة، مُوسَمة تلقائياً بقسمها. */
 import { db, $, S, clean, toast, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 const MONTHS=[
@@ -16,10 +15,22 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>الخطة التشغيلية — <span id="pdDeptName">—</span></h3>
     <div class="sub">كل إجراء تضيفينه هنا يُوسَم تلقائياً بقسمك، بغض النظر عن أي مشروع تختارينه له.</div>
   </div>
+
   <div class="panel">
-    <h3>إضافة إجراء / مبادرة</h3>
+    <h3>المبادرة</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <select id="pdProjectPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:180px"></select>
+      <select id="pdInitPick" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)"><option value="">اختاري مبادرة من هذا المشروع…</option></select>
+      <span style="color:#8a93a0;font-size:13px">أو</span>
+      <input type="text" id="pdNewInitName" placeholder="اسم مبادرة جديدة" style="min-width:180px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <button class="btn gold" id="pdNewInitBtn" style="width:auto;padding:9px 20px">إنشاء</button>
+    </div>
+  </div>
+
+  <div class="panel" id="pdActionsPanel" style="display:none">
+    <h3>إضافة إجراء / إجراءات — <span id="pdCurInitName" style="color:var(--gold)">—</span></h3>
+    <div class="sub">سطر واحد في مربع النص = إجراء واحد مستقل بتوقيته وحالته الخاصة.</div>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <textarea id="pdNewText" placeholder="نص الإجراء — سطر واحد = إجراء واحد" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
       <div style="position:relative;min-width:180px">
         <input type="text" id="pdNewResp" placeholder="المسؤولة (ابحثي)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
@@ -31,6 +42,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn gold" id="pdAddBtn" style="width:auto;padding:9px 20px">إضافة</button>
     </div>
   </div>
+
   <div class="panel">
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="pdFilterProject"><option value="">كل المشاريع</option></select>
@@ -41,14 +53,21 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="pdPrintByProject">🖨️ طباعة خطة القسم حسب المشاريع</button>
       <button class="btn ghost" id="pdPrintFlow">🖨️ طباعة الخطة التدفقية للقسم</button>
     </div>
-    <div class="board-wrap"><table class="board" id="pdTable"></table></div>
+    <div id="pdGroups"></div>
   </div>
 </div>
 <div id="printAreaPD"></div>
 <style>
   #planDept.wide{max-width:1500px}
   #planDept select{padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)}
-  #pdTable select.pd-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .pd-init-group{background:var(--white);border:1px solid var(--line);border-radius:11px;margin-bottom:12px;overflow:hidden}
+  .pd-init-head{padding:10px 16px;background:var(--sand);font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center}
+  .pd-action-row{display:flex;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid #f2f0ea;flex-wrap:wrap}
+  .pd-action-row:last-child{border-bottom:none}
+  .pd-action-text{flex:1;min-width:200px;font-size:13px;color:var(--ink)}
+  .pd-action-edit-input{flex:1;min-width:200px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;font:inherit;font-size:13px}
+  .pd-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .pd-small-btn{width:auto;padding:6px 12px;font-size:11px}
   #printAreaPD{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
@@ -66,7 +85,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let PROJECTS=[], ROWS=[], PICKED_RESP_STAFF_ID=null;
+let PROJECTS=[], INITIATIVES=[], CUR_INITIATIVE=null, ACTIONS=[], PICKED_RESP_STAFF_ID=null;
 
 async function initDept(){
   if($('pdAddBtn').dataset.ready) return;
@@ -76,14 +95,17 @@ async function initDept(){
   PROJECTS=projects||[];
   $('pdProjectPick').innerHTML='<option value="">اختاري المشروع…</option>'+PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   $('pdFilterProject').innerHTML='<option value="">كل المشاريع</option>'+PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  $('pdProjectPick').addEventListener('change',loadInitiativesForProject);
+  $('pdNewInitBtn').addEventListener('click',createInitiative);
+  $('pdInitPick').addEventListener('change',onInitPick);
   bindRespSearch();
-  $('pdAddBtn').addEventListener('click',addInitiative);
-  $('pdFilterProject').addEventListener('change',render);
-  $('pdFilterMonth').addEventListener('change',render);
-  $('pdFilterStatus').addEventListener('change',render);
+  $('pdAddBtn').addEventListener('click',addActions);
+  $('pdFilterProject').addEventListener('change',renderGroups);
+  $('pdFilterMonth').addEventListener('change',renderGroups);
+  $('pdFilterStatus').addEventListener('change',renderGroups);
   $('pdPrintByProject').addEventListener('click',printByProject);
   $('pdPrintFlow').addEventListener('click',printFlow);
-  await loadInitiatives();
+  await loadAllDeptActions();
 }
 
 function bindRespSearch(){
@@ -106,17 +128,50 @@ function bindRespSearch(){
   });
 }
 
-async function loadInitiatives(){
-  if(!S.ME.department_id){ $('pdTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">حسابك غير مرتبط بقسم — راجعي الدعم الفني</td></tr>'; return; }
-  const {data,error}=await db.from('plan_initiatives').select('*, plan_projects(name)').eq('department_id',S.ME.department_id).order('created_at');
-  if(error){ toast('تعذر التحميل: '+error.message); return; }
-  ROWS=(data||[]).map(r=>({...r, projectName:r.plan_projects?.name||'—'}));
-  render();
+async function loadInitiativesForProject(){
+  const projectId=$('pdProjectPick').value;
+  $('pdActionsPanel').style.display='none'; CUR_INITIATIVE=null;
+  if(!projectId){ $('pdInitPick').innerHTML='<option value="">اختاري مشروعاً أولاً…</option>'; return; }
+  const {data}=await db.from('plan_initiatives').select('id,name').eq('project_id',projectId).order('created_at');
+  INITIATIVES=data||[];
+  $('pdInitPick').innerHTML='<option value="">اختاري مبادرة من هذا المشروع…</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
 }
 
-async function addInitiative(){
+async function createInitiative(){
   const projectId=$('pdProjectPick').value;
-  if(!projectId){ toast('اختاري المشروع'); return; }
+  if(!projectId){ toast('اختاري المشروع أولاً'); return; }
+  const name=clean($('pdNewInitName').value);
+  if(!name){ toast('اكتبي اسم المبادرة'); return; }
+  const {data,error}=await db.from('plan_initiatives').insert({project_id:projectId, name, created_by:S.ME.id}).select('id,name').single();
+  if(error){ toast('تعذر الإنشاء: '+error.message); return; }
+  $('pdNewInitName').value='';
+  toast('تم إنشاء المبادرة');
+  await loadInitiativesForProject();
+  $('pdInitPick').value=data.id;
+  onInitPick();
+}
+
+function onInitPick(){
+  const id=$('pdInitPick').value;
+  CUR_INITIATIVE = INITIATIVES.find(i=>i.id===id)||null;
+  if(CUR_INITIATIVE){
+    $('pdActionsPanel').style.display='block';
+    $('pdCurInitName').textContent=CUR_INITIATIVE.name;
+  }else{
+    $('pdActionsPanel').style.display='none';
+  }
+}
+
+async function loadAllDeptActions(){
+  if(!S.ME.department_id){ $('pdGroups').innerHTML='<div class="empty-day">حسابك غير مرتبط بقسم — راجعي الدعم الفني</div>'; return; }
+  const {data,error}=await db.from('plan_actions').select('*, plan_initiatives(name, project_id, plan_projects(name))').eq('department_id',S.ME.department_id).order('created_at');
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  ACTIONS=(data||[]).map(a=>({...a, initName:a.plan_initiatives?.name||'—', projectName:a.plan_initiatives?.plan_projects?.name||'—', project_id:a.plan_initiatives?.project_id}));
+  renderGroups();
+}
+
+async function addActions(){
+  if(!CUR_INITIATIVE){ toast('اختاري أو أنشئي مبادرة أولاً'); return; }
   if(!S.ME.department_id){ toast('حسابك غير مرتبط بقسم'); return; }
   const raw=$('pdNewText').value;
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
@@ -124,58 +179,86 @@ async function addInitiative(){
   const resp=clean($('pdNewResp').value)||null;
   const month=$('pdNewMonth').value;
   const rows=lines.map(text=>({
-    project_id:projectId, text, responsible:resp, responsible_staff_id:PICKED_RESP_STAFF_ID,
+    initiative_id:CUR_INITIATIVE.id, text, responsible:resp, responsible_staff_id:PICKED_RESP_STAFF_ID,
     department_id:S.ME.department_id, month, status:'not_started', created_by:S.ME.id
   }));
-  const {error}=await db.from('plan_initiatives').insert(rows);
+  const {error}=await db.from('plan_actions').insert(rows);
   if(error){ toast('تعذر الإضافة: '+error.message); return; }
-  $('pdFilterProject').value=projectId; $('pdFilterMonth').value=''; $('pdFilterStatus').value='';
-  $('pdNewText').value=''; $('pdNewResp').value=''; $('pdProjectPick').value=''; PICKED_RESP_STAFF_ID=null;
-  toast(lines.length>1?`تمت إضافة ${lines.length} إجراءات`:'تمت الإضافة'); loadInitiatives();
+  $('pdFilterProject').value=$('pdProjectPick').value; $('pdFilterMonth').value=''; $('pdFilterStatus').value='';
+  $('pdNewText').value=''; $('pdNewResp').value=''; PICKED_RESP_STAFF_ID=null;
+  toast(lines.length>1?`تمت إضافة ${lines.length} إجراءات`:'تمت الإضافة');
+  loadAllDeptActions();
 }
+
+function monthLabel(id){ return MONTHS.find(m=>m.id===id)?.label||id; }
 
 function getFiltered(){
   const pf=$('pdFilterProject').value, mf=$('pdFilterMonth').value, sf=$('pdFilterStatus').value;
-  return ROWS.filter(r=>(!pf||r.project_id===pf) && (!mf||r.month===mf) && (!sf||r.status===sf));
+  return ACTIONS.filter(a=>(!pf||a.project_id===pf) && (!mf||a.month===mf) && (!sf||a.status===sf));
 }
 
-function render(){
-  const rows=getFiltered();
-  if(!rows.length){ $('pdTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا إجراءات ضمن هذا الفلتر</td></tr>'; return; }
-  const monthLabel=id=>MONTHS.find(m=>m.id===id)?.label||id;
-  $('pdTable').innerHTML='<tr><th>المشروع</th><th>الشهر</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th><th></th></tr>'+
-    rows.map((r,i)=>`<tr data-i="${i}">
-      <td class="c">${r.projectName}</td>
-      <td class="c">${monthLabel(r.month)}</td>
-      <td>${r.text}</td>
-      <td class="c">${r.responsible||'—'}</td>
-      <td><select class="pd-status" data-f="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td>
-      <td><button class="btn ghost" data-del="${i}" style="width:auto;padding:6px 12px;font-size:11px;color:var(--err);border-color:var(--err)">✕ حذف</button></td>
-    </tr>`).join('');
-  $('pdTable').querySelectorAll('select[data-f]').forEach(sel=>sel.addEventListener('change', async ()=>{
-    const tr=sel.closest('tr'); const i=+tr.dataset.i; const r=rows[i];
-    const {error}=await db.from('plan_initiatives').update({status:sel.value, updated_at:new Date().toISOString()}).eq('id',r.id);
-    if(error){ toast('تعذر الحفظ: '+error.message); return; }
-    r.status=sel.value; toast('تم الحفظ');
-  }));
-  $('pdTable').querySelectorAll('button[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('حذف هذا الإجراء؟')) return;
-    const r=rows[+b.dataset.del];
-    await db.from('plan_initiatives').delete().eq('id',r.id);
-    toast('تم الحذف'); loadInitiatives();
-  }));
+function renderGroups(){
+  const filtered=getFiltered();
+  if(!filtered.length){ $('pdGroups').innerHTML='<div class="empty-day">لا إجراءات ضمن هذا الفلتر</div>'; return; }
+  const byInit={};
+  for(const a of filtered){ (byInit[a.initiative_id] ??= {name:a.initName, project:a.projectName, items:[]}).items.push(a); }
+  $('pdGroups').innerHTML=Object.entries(byInit).map(([initId,g])=>{
+    const done=g.items.filter(a=>a.status==='done').length;
+    return `<div class="pd-init-group">
+      <div class="pd-init-head"><span>📌 ${g.name} <small style="font-weight:400;color:#8a93a0">(${g.project})</small></span><span>${done}/${g.items.length}</span></div>
+      ${g.items.map(a=>`<div class="pd-action-row" data-id="${a.id}">
+        <span class="pd-action-text" data-role="text">${a.text}</span>
+        <span style="font-size:12px;color:#8a93a0">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
+        <select class="pd-status" data-role="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}</select>
+        <button class="btn ghost pd-small-btn" data-role="edit">✎ تعديل</button>
+        <button class="btn ghost pd-small-btn" data-role="del" style="color:var(--err);border-color:var(--err)">✕ حذف</button>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  $('pdGroups').querySelectorAll('.pd-action-row').forEach(row=>{
+    const id=row.dataset.id;
+    const action=ACTIONS.find(a=>a.id===id);
+    row.querySelector('[data-role="status"]').addEventListener('change', async (e)=>{
+      const {error}=await db.from('plan_actions').update({status:e.target.value, updated_at:new Date().toISOString()}).eq('id',id);
+      if(error){ toast('تعذر الحفظ: '+error.message); return; }
+      action.status=e.target.value; toast('تم الحفظ');
+    });
+    row.querySelector('[data-role="del"]').addEventListener('click', async ()=>{
+      if(!confirm('حذف هذا الإجراء؟')) return;
+      await db.from('plan_actions').delete().eq('id',id);
+      toast('تم الحذف'); loadAllDeptActions();
+    });
+    row.querySelector('[data-role="edit"]').addEventListener('click', ()=>{
+      const textSpan=row.querySelector('[data-role="text"]');
+      const input=document.createElement('textarea');
+      input.className='pd-action-edit-input'; input.value=action.text; input.rows=2;
+      textSpan.replaceWith(input); input.focus();
+      const save=async ()=>{
+        const newText=input.value.trim();
+        if(newText && newText!==action.text){
+          const {error}=await db.from('plan_actions').update({text:newText, updated_at:new Date().toISOString()}).eq('id',id);
+          if(error){ toast('تعذر الحفظ: '+error.message); return; }
+          action.text=newText; toast('تم الحفظ');
+        }
+        renderGroups();
+      };
+      input.addEventListener('blur',save);
+      input.addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); input.blur(); } });
+    });
+  });
 }
 
 /* ============ الطباعة ============ */
 function printByProject(){
-  if(!ROWS.length){ toast('لا إجراءات بعد'); return; }
+  if(!ACTIONS.length){ toast('لا إجراءات بعد'); return; }
   const byProject={};
-  for(const r of ROWS) (byProject[r.project_id] ??= {name:r.projectName, items:[]}).items.push(r);
+  for(const a of ACTIONS) (byProject[a.project_id] ??= {name:a.projectName, items:[]}).items.push(a);
   let body='';
   Object.values(byProject).forEach(g=>{
     body+=`<div class="pd-head2">📁 ${g.name}</div>
-      <table class="pd-tbl"><tr><th>#</th><th>الشهر</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th></tr>
-      ${g.items.map((r,n)=>`<tr class="${r.status}"><td>${n+1}</td><td>${MONTHS.find(m=>m.id===r.month)?.label||r.month}</td><td>${r.text}</td><td>${r.responsible||'-'}</td><td>${STATUS_LABEL[r.status]}</td></tr>`).join('')}
+      <table class="pd-tbl"><tr><th>#</th><th>المبادرة</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th></tr>
+      ${g.items.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${a.initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
       </table>`;
   });
   $('printAreaPD').innerHTML=`
@@ -186,14 +269,14 @@ function printByProject(){
 }
 
 function printFlow(){
-  if(!ROWS.length){ toast('لا إجراءات بعد'); return; }
+  if(!ACTIONS.length){ toast('لا إجراءات بعد'); return; }
   let body='';
   MONTHS.forEach(m=>{
-    const inMonth=ROWS.filter(r=>r.month===m.id);
+    const inMonth=ACTIONS.filter(a=>a.month===m.id);
     if(!inMonth.length) return;
     body+=`<div class="pd-mhead">📅 ${m.label}</div>
-      <table class="pd-tbl"><tr><th>#</th><th>المشروع</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th></tr>
-      ${inMonth.map((r,n)=>`<tr class="${r.status}"><td>${n+1}</td><td>${r.projectName}</td><td>${r.text}</td><td>${r.responsible||'-'}</td><td>${STATUS_LABEL[r.status]}</td></tr>`).join('')}
+      <table class="pd-tbl"><tr><th>#</th><th>المشروع</th><th>المبادرة</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th></tr>
+      ${inMonth.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${a.projectName}</td><td>${a.initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
       </table>`;
   });
   $('printAreaPD').innerHTML=`

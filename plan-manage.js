@@ -1,7 +1,8 @@
 /* plan-manage.js — متابعة مشروعي (تحت مجموعة "الخطة الاستراتيجية")
-   لمن لها صلاحية "مسؤولة مشروع" — تُقيَّد تلقائياً بمشروعها المحدد عبر
-   staff_project_leads. تضيف/تعدّل مبادرات وإجراءات، تحدّث الحالة
-   الثلاثية، وتطبع/تصدّر بنفس قالب موقع الخطة القديم. */
+   لمن لها صلاحية "مسؤولة مشروع" — تُقيَّد تلقائياً بمشروعها المحدد.
+   البنية الصحيحة: مشروع ← مبادرة ← إجراءات (متعددة، كل واحد بتوقيته
+   وحالته ومسؤوله الخاص). تُنشأ المبادرة أولاً، ثم تُضاف إجراءاتها —
+   سطر واحد في مربع النص = إجراء واحد تحت نفس المبادرة. */
 import { db, $, S, clean, toast, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 const MONTHS=[
@@ -16,8 +17,20 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>متابعة مشروعي</h3>
     <select id="pmProjectPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:220px"></select>
   </div>
+
   <div class="panel">
-    <h3>إضافة إجراء جديد</h3>
+    <h3>المبادرة</h3>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <select id="pmInitPick" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)"><option value="">اختاري مبادرة موجودة…</option></select>
+      <span style="color:#8a93a0;font-size:13px">أو</span>
+      <input type="text" id="pmNewInitName" placeholder="اسم مبادرة جديدة" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <button class="btn gold" id="pmNewInitBtn" style="width:auto;padding:9px 20px">إنشاء المبادرة</button>
+    </div>
+  </div>
+
+  <div class="panel" id="pmActionsPanel" style="display:none">
+    <h3>إضافة إجراء / إجراءات — <span id="pmCurInitName" style="color:var(--gold)">—</span></h3>
+    <div class="sub">سطر واحد في مربع النص = إجراء واحد مستقل بتوقيته وحالته الخاصة.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <textarea id="pmNewText" placeholder="نص الإجراء — سطر واحد = إجراء واحد" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
       <div style="position:relative;min-width:180px">
@@ -30,8 +43,10 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn gold" id="pmAddBtn" style="width:auto;padding:9px 20px">إضافة</button>
     </div>
   </div>
+
   <div class="panel">
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="pmFilterInit"><option value="">كل المبادرات</option></select>
       <select id="pmFilterMonth"><option value="">كل الأشهر</option>${MONTHS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</select>
       <select id="pmFilterStatus"><option value="">كل الحالات</option>${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
     </div>
@@ -40,14 +55,21 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="pmPrintAll">🖨️ طباعة كل الأشهر</button>
       <button class="btn ghost" id="pmXls">⬇ تصدير Excel</button>
     </div>
-    <div class="board-wrap"><table class="board" id="pmTable"></table></div>
+    <div id="pmGroups"></div>
   </div>
 </div>
 <div id="printAreaPM"></div>
 <style>
   #planManage.wide{max-width:1500px}
   #planManage select{padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)}
-  #pmTable select.pm-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .pm-init-group{background:var(--white);border:1px solid var(--line);border-radius:11px;margin-bottom:12px;overflow:hidden}
+  .pm-init-head{padding:10px 16px;background:var(--sand);font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center}
+  .pm-action-row{display:flex;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid #f2f0ea;flex-wrap:wrap}
+  .pm-action-row:last-child{border-bottom:none}
+  .pm-action-text{flex:1;min-width:200px;font-size:13px;color:var(--ink)}
+  .pm-action-edit-input{flex:1;min-width:200px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;font:inherit;font-size:13px}
+  .pm-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
+  .pm-small-btn{width:auto;padding:6px 12px;font-size:11px}
   #printAreaPM{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
@@ -64,7 +86,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let MY_PROJECTS=[], CUR_PROJECT=null, ROWS=[];
+let MY_PROJECTS=[], CUR_PROJECT=null, INITIATIVES=[], CUR_INITIATIVE=null, ACTIONS=[], PICKED_RESP_STAFF_ID=null;
 
 async function initManage(){
   if($('pmProjectPick').dataset.ready) return;
@@ -75,30 +97,24 @@ async function initManage(){
   $('pmProjectPick').innerHTML=MY_PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   CUR_PROJECT=MY_PROJECTS[0];
   $('pmProjectPick').addEventListener('change',()=>{ CUR_PROJECT=MY_PROJECTS.find(p=>p.id===$('pmProjectPick').value); loadInitiatives(); });
-  $('pmAddBtn').addEventListener('click',addInitiative);
+  $('pmNewInitBtn').addEventListener('click',createInitiative);
+  $('pmInitPick').addEventListener('change',onInitPick);
   bindRespSearch();
-  $('pmFilterMonth').addEventListener('change',render);
-  $('pmFilterStatus').addEventListener('change',render);
+  $('pmAddBtn').addEventListener('click',addActions);
+  $('pmFilterInit').addEventListener('change',renderGroups);
+  $('pmFilterMonth').addEventListener('change',renderGroups);
+  $('pmFilterStatus').addEventListener('change',renderGroups);
   $('pmPrintMonth').addEventListener('click',()=>printPlan(false));
   $('pmPrintAll').addEventListener('click',()=>printPlan(true));
   $('pmXls').addEventListener('click',exportXls);
   await loadInitiatives();
 }
 
-async function loadInitiatives(){
-  if(!CUR_PROJECT) return;
-  const {data,error}=await db.from('plan_initiatives').select('*').eq('project_id',CUR_PROJECT.id).order('created_at');
-  if(error){ toast('تعذر التحميل: '+error.message); return; }
-  ROWS=data||[];
-  render();
-}
-
-let PICKED_RESP_STAFF_ID=null;
 function bindRespSearch(){
   const inp=$('pmNewResp'), box=$('pmRespSugg');
   let deb=null;
   inp.addEventListener('input',()=>{
-    PICKED_RESP_STAFF_ID=null; // أي تعديل يدوي يلغي الربط السابق حتى تُختار منتسبة من جديد
+    PICKED_RESP_STAFF_ID=null;
     clearTimeout(deb);
     deb=setTimeout(async ()=>{
       const q=inp.value.trim();
@@ -114,67 +130,143 @@ function bindRespSearch(){
   });
 }
 
-async function addInitiative(){
+async function loadInitiatives(){
+  if(!CUR_PROJECT) return;
+  const {data,error}=await db.from('plan_initiatives').select('id,name').eq('project_id',CUR_PROJECT.id).order('created_at');
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  INITIATIVES=data||[];
+  $('pmInitPick').innerHTML='<option value="">اختاري مبادرة موجودة…</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  $('pmFilterInit').innerHTML='<option value="">كل المبادرات</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  CUR_INITIATIVE=null; $('pmActionsPanel').style.display='none';
+  await loadAllActions();
+}
+
+async function createInitiative(){
   if(!CUR_PROJECT){ toast('لا مشروع محدَّد'); return; }
+  const name=clean($('pmNewInitName').value);
+  if(!name){ toast('اكتبي اسم المبادرة'); return; }
+  const {data,error}=await db.from('plan_initiatives').insert({project_id:CUR_PROJECT.id, name, created_by:S.ME.id}).select('id,name').single();
+  if(error){ toast('تعذر الإنشاء: '+error.message); return; }
+  $('pmNewInitName').value='';
+  toast('تم إنشاء المبادرة');
+  await loadInitiatives();
+  $('pmInitPick').value=data.id;
+  onInitPick();
+}
+
+function onInitPick(){
+  const id=$('pmInitPick').value;
+  CUR_INITIATIVE = INITIATIVES.find(i=>i.id===id)||null;
+  if(CUR_INITIATIVE){
+    $('pmActionsPanel').style.display='block';
+    $('pmCurInitName').textContent=CUR_INITIATIVE.name;
+  }else{
+    $('pmActionsPanel').style.display='none';
+  }
+}
+
+async function loadAllActions(){
+  if(!INITIATIVES.length){ ACTIONS=[]; renderGroups(); return; }
+  const initIds=INITIATIVES.map(i=>i.id);
+  const {data,error}=await db.from('plan_actions').select('*').in('initiative_id',initIds).order('created_at');
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  ACTIONS=data||[];
+  renderGroups();
+}
+
+async function addActions(){
+  if(!CUR_INITIATIVE){ toast('اختاري أو أنشئي مبادرة أولاً'); return; }
   const raw=$('pmNewText').value;
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   if(!lines.length){ toast('اكتبي نص الإجراء'); return; }
   const resp=clean($('pmNewResp').value)||null;
   const month=$('pmNewMonth').value;
   const rows=lines.map(text=>({
-    project_id:CUR_PROJECT.id, text, responsible:resp, responsible_staff_id:PICKED_RESP_STAFF_ID, month, status:'not_started', created_by:S.ME.id
+    initiative_id:CUR_INITIATIVE.id, text, responsible:resp, responsible_staff_id:PICKED_RESP_STAFF_ID, month, status:'not_started', created_by:S.ME.id
   }));
-  const {error}=await db.from('plan_initiatives').insert(rows);
+  const {error}=await db.from('plan_actions').insert(rows);
   if(error){ toast('تعذر الإضافة: '+error.message); return; }
   $('pmNewText').value=''; $('pmNewResp').value=''; PICKED_RESP_STAFF_ID=null;
   toast(lines.length>1?`تمت إضافة ${lines.length} إجراءات`:'تمت إضافة الإجراء');
-  loadInitiatives();
+  loadAllActions();
 }
 
-function getFiltered(){
-  const mf=$('pmFilterMonth').value, sf=$('pmFilterStatus').value;
-  return ROWS.filter(r=>(!mf||r.month===mf) && (!sf||r.status===sf));
+function getFilteredActions(){
+  const inf=$('pmFilterInit').value, mf=$('pmFilterMonth').value, sf=$('pmFilterStatus').value;
+  return ACTIONS.filter(a=>(!inf||a.initiative_id===inf) && (!mf||a.month===mf) && (!sf||a.status===sf));
 }
 
-function render(){
-  const rows=getFiltered();
-  if(!rows.length){ $('pmTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا إجراءات ضمن هذا الفلتر</td></tr>'; return; }
-  const monthLabel=id=>MONTHS.find(m=>m.id===id)?.label||id;
-  $('pmTable').innerHTML='<tr><th>الشهر</th><th>الإجراء</th><th>المسؤول</th><th>الحالة</th><th></th></tr>'+
-    rows.map((r,i)=>`<tr data-i="${i}">
-      <td class="c">${monthLabel(r.month)}</td>
-      <td>${r.text}</td>
-      <td class="c">${r.responsible||'—'}</td>
-      <td><select class="pm-status" data-f="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v}</option>`).join('')}</select></td>
-      <td><button class="btn ghost" data-del="${i}" style="width:auto;padding:6px 12px;font-size:11px;color:var(--err);border-color:var(--err)">✕ حذف</button></td>
-    </tr>`).join('');
-  $('pmTable').querySelectorAll('select[data-f]').forEach(sel=>sel.addEventListener('change', async ()=>{
-    const tr=sel.closest('tr'); const i=+tr.dataset.i; const r=rows[i];
-    const {error}=await db.from('plan_initiatives').update({status:sel.value, updated_at:new Date().toISOString()}).eq('id',r.id);
-    if(error){ toast('تعذر الحفظ: '+error.message); return; }
-    r.status=sel.value; toast('تم الحفظ');
-  }));
-  $('pmTable').querySelectorAll('button[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('حذف هذا الإجراء؟')) return;
-    const r=rows[+b.dataset.del];
-    await db.from('plan_initiatives').delete().eq('id',r.id);
-    toast('تم الحذف'); loadInitiatives();
-  }));
+function monthLabel(id){ return MONTHS.find(m=>m.id===id)?.label||id; }
+
+function renderGroups(){
+  const filtered=getFilteredActions();
+  const initById={}; for(const i of INITIATIVES) initById[i.id]=i.name;
+  const byInit={};
+  for(const a of filtered){ (byInit[a.initiative_id] ??= []).push(a); }
+  const groupIds=Object.keys(byInit);
+  if(!groupIds.length){ $('pmGroups').innerHTML='<div class="empty-day">لا إجراءات ضمن هذا الفلتر</div>'; return; }
+  $('pmGroups').innerHTML=groupIds.map(initId=>{
+    const actions=byInit[initId];
+    const done=actions.filter(a=>a.status==='done').length;
+    return `<div class="pm-init-group">
+      <div class="pm-init-head"><span>📌 ${initById[initId]||'—'}</span><span>${done}/${actions.length}</span></div>
+      ${actions.map(a=>`<div class="pm-action-row" data-id="${a.id}">
+        <span class="pm-action-text" data-role="text">${a.text}</span>
+        <span style="font-size:12px;color:#8a93a0">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
+        <select class="pm-status" data-role="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}</select>
+        <button class="btn ghost pm-small-btn" data-role="edit">✎ تعديل</button>
+        <button class="btn ghost pm-small-btn" data-role="del" style="color:var(--err);border-color:var(--err)">✕ حذف</button>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  $('pmGroups').querySelectorAll('.pm-action-row').forEach(row=>{
+    const id=row.dataset.id;
+    const action=ACTIONS.find(a=>a.id===id);
+    row.querySelector('[data-role="status"]').addEventListener('change', async (e)=>{
+      const {error}=await db.from('plan_actions').update({status:e.target.value, updated_at:new Date().toISOString()}).eq('id',id);
+      if(error){ toast('تعذر الحفظ: '+error.message); return; }
+      action.status=e.target.value; toast('تم الحفظ');
+    });
+    row.querySelector('[data-role="del"]').addEventListener('click', async ()=>{
+      if(!confirm('حذف هذا الإجراء؟')) return;
+      await db.from('plan_actions').delete().eq('id',id);
+      toast('تم الحذف'); loadAllActions();
+    });
+    row.querySelector('[data-role="edit"]').addEventListener('click', ()=>{
+      const textSpan=row.querySelector('[data-role="text"]');
+      const input=document.createElement('textarea');
+      input.className='pm-action-edit-input'; input.value=action.text; input.rows=2;
+      textSpan.replaceWith(input); input.focus();
+      const save=async ()=>{
+        const newText=input.value.trim();
+        if(newText && newText!==action.text){
+          const {error}=await db.from('plan_actions').update({text:newText, updated_at:new Date().toISOString()}).eq('id',id);
+          if(error){ toast('تعذر الحفظ: '+error.message); return; }
+          action.text=newText; toast('تم الحفظ');
+        }
+        renderGroups();
+      };
+      input.addEventListener('blur',save);
+      input.addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); input.blur(); } });
+    });
+  });
 }
 
-/* ============ الطباعة (مطابقة لقالب موقع الخطة القديم) ============ */
+/* ============ الطباعة ============ */
 function printPlan(allMonths){
-  if(!CUR_PROJECT || !ROWS.length){ toast('لا إجراءات لهذا المشروع بعد'); return; }
-  const monthsToShow = allMonths ? MONTHS : MONTHS.filter(m=>m.id===$('pmFilterMonth').value || (!$('pmFilterMonth').value));
+  const filtered = allMonths ? ACTIONS : ACTIONS.filter(a=>a.month===$('pmFilterMonth').value || !$('pmFilterMonth').value);
+  if(!filtered.length){ toast('لا إجراءات لهذا المشروع بعد'); return; }
+  const initById={}; for(const i of INITIATIVES) initById[i.id]=i.name;
   let body='';
-  const list = allMonths ? MONTHS : (($('pmFilterMonth').value ? MONTHS.filter(m=>m.id===$('pmFilterMonth').value) : MONTHS));
+  const list = allMonths ? MONTHS : ($('pmFilterMonth').value ? MONTHS.filter(m=>m.id===$('pmFilterMonth').value) : MONTHS);
   list.forEach(m=>{
-    const inits=ROWS.filter(r=>r.month===m.id);
-    if(!inits.length) return;
-    const done=inits.filter(r=>r.status==='done').length;
-    body+=`<div class="pm-mhead">📅 ${m.label} (${done}/${inits.length} منجز)</div>
-      <table class="pm-tbl"><tr><th>#</th><th>الإجراء</th><th>المنفذون</th><th>الحالة</th></tr>
-      ${inits.map((r,n)=>`<tr class="${r.status}"><td>${n+1}</td><td>${r.text}</td><td>${r.responsible||'-'}</td><td>${STATUS_LABEL[r.status]}</td></tr>`).join('')}
+    const inMonth=filtered.filter(a=>a.month===m.id);
+    if(!inMonth.length) return;
+    const done=inMonth.filter(a=>a.status==='done').length;
+    body+=`<div class="pm-mhead">📅 ${m.label} (${done}/${inMonth.length} منجز)</div>
+      <table class="pm-tbl"><tr><th>#</th><th>المبادرة</th><th>الإجراء</th><th>المنفذون</th><th>الحالة</th></tr>
+      ${inMonth.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${initById[a.initiative_id]||'—'}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
       </table>`;
   });
   $('printAreaPM').innerHTML=`
@@ -186,12 +278,13 @@ function printPlan(allMonths){
 
 /* ============ تصدير Excel ============ */
 async function exportXls(){
-  if(!CUR_PROJECT || !ROWS.length){ toast('لا إجراءات لهذا المشروع بعد'); return; }
+  if(!ACTIONS.length){ toast('لا إجراءات لهذا المشروع بعد'); return; }
+  const initById={}; for(const i of INITIATIVES) initById[i.id]=i.name;
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet(CUR_PROJECT.name.substring(0,28),{views:[{rightToLeft:true}]});
   const NAVY='FF1A3A6B', WHITE='FFFFFFFF', DONE='FFD8F3DC', PROG='FFFFF3CD';
   const addTitle=(text,size,bold,fill,color)=>{
-    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,4);
+    const row=ws.addRow([text]); ws.mergeCells(row.number,1,row.number,5);
     const cell=row.getCell(1); cell.font={name:'Arial',size,bold,color:{argb:color}};
     cell.alignment={horizontal:'center',vertical:'middle'}; if(fill) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};
     row.height=size>=16?26:20;
@@ -200,21 +293,21 @@ async function exportXls(){
   addTitle(S.SETTINGS.school_name||'المدرسة',11,false,null,'FF444444');
   ws.addRow([]);
   MONTHS.forEach(m=>{
-    const inits=ROWS.filter(r=>r.month===m.id);
+    const inits=ACTIONS.filter(a=>a.month===m.id);
     if(!inits.length) return;
-    const done=inits.filter(r=>r.status==='done').length;
-    const mrow=ws.addRow([`📅 ${m.label}`,'','',`${done}/${inits.length} منجز`]);
+    const done=inits.filter(a=>a.status==='done').length;
+    const mrow=ws.addRow([`📅 ${m.label}`,'','','',`${done}/${inits.length} منجز`]);
     mrow.eachCell(c=>{ c.font={bold:true,color:{argb:WHITE}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1D4ED8'}}; c.alignment={horizontal:'center'}; });
-    const hdr=ws.addRow(['#','الإجراء','المسؤول','الحالة']);
+    const hdr=ws.addRow(['#','المبادرة','الإجراء','المسؤول','الحالة']);
     hdr.eachCell(c=>{ c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD0E8D8'}}; c.alignment={horizontal:'center'}; });
-    inits.forEach((r,n)=>{
-      const bg = r.status==='done'?DONE : r.status==='in_progress'?PROG : 'FFFFFFFF';
-      const row=ws.addRow([n+1, r.text, r.responsible||'-', STATUS_LABEL[r.status]]);
-      row.eachCell((c,colNo)=>{ c.alignment={horizontal:colNo===2?'right':'center'}; c.font={size:10}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg}}; });
+    inits.forEach((a,n)=>{
+      const bg = a.status==='done'?DONE : a.status==='in_progress'?PROG : 'FFFFFFFF';
+      const row=ws.addRow([n+1, initById[a.initiative_id]||'—', a.text, a.responsible||'-', STATUS_LABEL[a.status]]);
+      row.eachCell((c,colNo)=>{ c.alignment={horizontal:colNo===3?'right':'center'}; c.font={size:10}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg}}; });
     });
     ws.addRow([]);
   });
-  ws.columns=[{width:6},{width:55},{width:30},{width:16}];
+  ws.columns=[{width:6},{width:26},{width:45},{width:26},{width:16}];
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);

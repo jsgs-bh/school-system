@@ -165,15 +165,18 @@ async function createCommittee(){
     if(SELECTED_BENEFICIARIES.size){
       await db.from('committee_beneficiary_projects').insert([...SELECTED_BENEFICIARIES].map(pid=>({committee_id:committee.id, project_id:pid})));
     }
-    // اللجنة تُمثَّل كمبادرة ضمن إجراءات مشروعها الأم — نفس بنية القالب المعتمد
+    // اللجنة تُمثَّل كمبادرة ضمن خطة مشروعها الأم، ولها إجراء أول (تشكيلها)
     const now=new Date(); const jsMonth=now.getMonth(); // 0=يناير
     const monthMap={8:'sep',9:'oct',10:'nov',11:'dec',0:'jan',1:'feb',2:'mar',3:'apr',4:'may',5:'jun'};
     const curMonth = monthMap[jsMonth] || 'sep';
     const {data:initiative,error:initErr}=await db.from('plan_initiatives').insert({
-      project_id:homeProjectId, text:`تشكيل ومتابعة لجنة: ${name}`, responsible:S.ME.full_name,
-      responsible_staff_id:S.ME.id, month:curMonth, status:'not_started', created_by:S.ME.id
+      project_id:homeProjectId, name:`لجنة: ${name}`, created_by:S.ME.id
     }).select('id').single();
     if(!initErr && initiative){
+      await db.from('plan_actions').insert({
+        initiative_id:initiative.id, text:`تشكيل ومتابعة لجنة: ${name}`, responsible:S.ME.full_name,
+        responsible_staff_id:S.ME.id, month:curMonth, status:'not_started', created_by:S.ME.id
+      });
       await db.from('committees').update({initiative_id:initiative.id}).eq('id',committee.id);
     }
     toast('تم إنشاء اللجنة وربطها كمبادرة في خطة المشروع');
@@ -211,14 +214,16 @@ async function openCommittee(id){
   $('cmDetailName').textContent=c.name;
   $('cmDetailMeta').textContent=`المشروع الأم: ${c.plan_projects?.name||'—'} — نوع اللجنة: ${TYPE_LABEL[c.type]||c.type}`;
   if(c.initiative_id){
-    const {data:init}=await db.from('plan_initiatives').select('status').eq('id',c.initiative_id).maybeSingle();
-    if(init){
+    const {data:action}=await db.from('plan_actions').select('id,status').eq('initiative_id',c.initiative_id).order('created_at').limit(1).maybeSingle();
+    if(action){
       $('cmInitiativeStatusBox').style.display='flex';
-      $('cmInitiativeStatus').value=init.status;
+      $('cmInitiativeStatus').value=action.status;
       $('cmInitiativeStatus').onchange=async ()=>{
-        await db.from('plan_initiatives').update({status:$('cmInitiativeStatus').value, updated_at:new Date().toISOString()}).eq('id',c.initiative_id);
+        await db.from('plan_actions').update({status:$('cmInitiativeStatus').value, updated_at:new Date().toISOString()}).eq('id',action.id);
         toast('تم تحديث حالة اللجنة كمبادرة');
       };
+    }else{
+      $('cmInitiativeStatusBox').style.display='none';
     }
   }else{
     $('cmInitiativeStatusBox').style.display='none';
