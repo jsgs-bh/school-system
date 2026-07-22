@@ -10,7 +10,7 @@ const MONTHS=[
 ];
 
 $('appView').insertAdjacentHTML('beforeend', `
-<div class="app-main wide" id="planView" style="display:none;background:#f0f4f8;padding:1.25rem;border-radius:12px">
+<div class="app-main wide" id="planView" style="display:none;background:var(--sand);padding:1.25rem;border-radius:12px">
   <div id="pvDeptNote"></div>
   <div class="pv-statsbar" id="pvStats"></div>
   <div class="pv-toprow">
@@ -20,38 +20,37 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="pv-mgrid" id="pvGrid"></div>
 </div>
 <style>
-  :root{--pv-primary:#1a3a6b;--pv-pl:#1d4ed8;--pv-pa:#3b82f6;--pv-acc:#0ea5e9;--pv-border:#bfdbfe;--pv-muted:#6c757d}
   #planView.wide{max-width:1400px}
-  .pv-statsbar{background:#fff;padding:.6rem 1.25rem;display:flex;gap:1.25rem;border-radius:12px;border:1px solid var(--pv-border);flex-wrap:wrap;align-items:center;margin-bottom:1rem}
+  .pv-statsbar{background:var(--white);padding:.6rem 1.25rem;display:flex;gap:1.25rem;border-radius:12px;border:1px solid var(--line);flex-wrap:wrap;align-items:center;margin-bottom:1rem}
   .pv-stat{text-align:center;min-width:70px}
-  .pv-stat b{display:block;font-size:1.3rem;font-weight:700;color:var(--pv-pl);line-height:1}
-  .pv-stat span{font-size:.68rem;color:var(--pv-muted);margin-top:2px;display:block}
+  .pv-stat b{display:block;font-size:1.3rem;font-weight:700;color:var(--gold);line-height:1}
+  .pv-stat span{font-size:.68rem;color:#8a93a0;margin-top:2px;display:block}
   .pv-toprow{display:flex;justify-content:flex-end;margin-bottom:.75rem}
-  .pv-toprow select{padding:.5rem .9rem;border-radius:8px;border:1px solid var(--pv-border);background:#fff;color:var(--pv-primary);font:inherit;font-weight:600;font-size:.85rem}
-  .pv-month-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-bottom:1rem;padding:.75rem;background:#fff;border-radius:12px;border:1px solid var(--pv-border)}
+  .pv-toprow select{padding:.5rem .9rem;border-radius:8px;border:1px solid var(--line);background:var(--white);color:var(--navy);font:inherit;font-weight:600;font-size:.85rem}
+  .pv-month-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-bottom:1rem;padding:.75rem;background:var(--white);border-radius:12px;border:1px solid var(--line)}
   @media (max-width:820px){.pv-month-tabs{grid-template-columns:repeat(2,1fr)}}
-  .pv-mtab{padding:.6rem .4rem;border-radius:12px;border:1.5px solid var(--pv-border);background:#f0f9ff;color:var(--pv-pl);font-size:.85rem;font-weight:500;cursor:pointer;text-align:center;font-family:inherit}
-  .pv-mtab:hover{background:#dbeafe;border-color:var(--pv-pa)}
-  .pv-mtab.active{background:var(--pv-pl);color:#fff;border-color:var(--pv-pl)}
+  .pv-mtab{padding:.6rem .4rem;border-radius:12px;border:1.5px solid var(--line);background:var(--sand);color:var(--navy);font-size:.85rem;font-weight:500;cursor:pointer;text-align:center;font-family:inherit}
+  .pv-mtab:hover{background:var(--gold-soft);border-color:var(--gold)}
+  .pv-mtab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
   .pv-mtab .cnt{font-size:.7rem;font-weight:700;margin-inline-start:4px}
   .pv-mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:.9rem}
-  .pv-card{background:#fff;border-radius:12px;border:1px solid var(--pv-border);overflow:hidden}
+  .pv-card{background:var(--white);border-radius:12px;border:1px solid var(--line);overflow:hidden}
   .pv-card-head{padding:.65rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
-  .pv-card-head .pv-name{font-weight:600;font-size:.9rem;color:var(--pv-primary)}
-  .pv-badge{border-radius:20px;padding:.15rem .55rem;font-size:.72rem;font-weight:700;color:#fff;background:var(--pv-pl)}
-  .pv-badge.full{background:#198754}
+  .pv-card-head .pv-name{font-weight:600;font-size:.9rem;color:var(--navy)}
+  .pv-badge{border-radius:20px;padding:.15rem .55rem;font-size:.72rem;font-weight:700;color:#fff;background:var(--navy)}
+  .pv-badge.full{background:var(--ok)}
   .pv-progress{height:4px;background:#e9ecef}
-  .pv-progress-fill{height:100%;background:var(--pv-pa)}
+  .pv-progress-fill{height:100%;background:var(--gold)}
   .pv-card-body{padding:.5rem .9rem .9rem}
-  .pv-initname{font-size:.72rem;font-weight:700;color:var(--pv-acc);margin:.4rem 0 .15rem;border-bottom:1px solid #f0f0f0;padding-bottom:.2rem}
+  .pv-initname{font-size:.72rem;font-weight:700;color:var(--navy);margin:.4rem 0 .15rem;border-bottom:1px solid #f0f0f0;padding-bottom:.2rem}
   .pv-init{display:flex;align-items:flex-start;gap:.45rem;padding:.3rem 0;border-bottom:1px solid #fafafa}
   .pv-init:last-child{border-bottom:none}
   .pv-dot{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:1px}
-  .pv-dot.not_started{background:#f8f9fa;border:1px solid var(--pv-border)}
-  .pv-dot.in_progress{background:#fff3cd;border:1px solid #f0b429;color:#8a6100;font-weight:700}
-  .pv-dot.done{background:#d8f3dc;color:#2d6a4f;font-weight:700}
+  .pv-dot.not_started{background:#f8f9fa;border:1px solid var(--line)}
+  .pv-dot.in_progress{background:var(--gold-soft);border:1px solid var(--gold);color:var(--warn);font-weight:700}
+  .pv-dot.done{background:var(--ok-soft);color:var(--ok);font-weight:700}
   .pv-text{font-size:.78rem;color:#2d3748;line-height:1.45;flex:1}
-  .pv-resp{font-size:.68rem;color:var(--pv-muted);margin-top:2px}
+  .pv-resp{font-size:.68rem;color:#8a93a0;margin-top:2px}
 </style>`);
 
 let ALL_ACTIONS=[], ACTIVE_MONTH='sep';
@@ -121,7 +120,7 @@ function renderMonthTabs(){
 
 function renderMonth(monthId){
   const actions=scopedActions().filter(a=>a.month===monthId);
-  if(!actions.length){ $('pvGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:2.5rem;color:var(--pv-muted);background:#fff;border-radius:12px;border:1px solid var(--pv-border)">لا إجراءات لهذا الشهر.</div>'; return; }
+  if(!actions.length){ $('pvGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:2.5rem;color:#8a93a0;background:#fff;border-radius:12px;border:1px solid var(--line)">لا إجراءات لهذا الشهر.</div>'; return; }
   const byProject={};
   for(const a of actions){ (byProject[a.project_id] ??= {name:a.projectName, byInit:{}}); (byProject[a.project_id].byInit[a.initiative_id] ??= {name:a.initName, items:[]}).items.push(a); }
   $('pvGrid').innerHTML=Object.values(byProject).map(g=>{
