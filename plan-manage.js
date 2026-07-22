@@ -44,11 +44,22 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
   </div>
 
+  <div class="panel" id="pmMergePanel" style="display:none">
+    <h3>دمج مبادرات مكرَّرة</h3>
+    <div class="sub">لو عندك عدة "مبادرات" فعلياً كلها إجراءات تابعة لنفس المبادرة الحقيقية (مثل بيانات مستوردة قديمة)، اختاريها هنا وادمجيها في مبادرة واحدة — كل إجراءاتها تنتقل للمبادرة المستهدفة، وتُحذف البقية.</div>
+    <div class="field"><label>المبادرة المستهدفة (يبقى اسمها، تنتقل لها كل الإجراءات)</label><select id="pmMergeTarget"></select></div>
+    <div class="field"><label>المبادرات المطلوب دمجها فيها (اختاري أكثر من واحدة)</label>
+      <select id="pmMergeSources" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></select>
+    </div>
+    <button class="btn ghost" id="pmMergeBtn" style="width:auto;padding:9px 20px;color:var(--err);border-color:var(--err)">دمج المحدَّد في المبادرة المستهدفة</button>
+  </div>
+
   <div class="panel">
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="pmFilterInit"><option value="">كل المبادرات</option></select>
       <select id="pmFilterMonth"><option value="">كل الأشهر</option>${MONTHS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</select>
       <select id="pmFilterStatus"><option value="">كل الحالات</option>${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+      <button class="btn ghost" id="pmToggleMerge" style="width:auto;padding:9px 20px;margin-inline-start:auto">دمج مبادرات مكرَّرة</button>
     </div>
     <div class="actions" style="margin-bottom:14px">
       <button class="btn ghost" id="pmPrintMonth">🖨️ طباعة الشهر المحدَّد</button>
@@ -104,6 +115,11 @@ async function initManage(){
   $('pmFilterInit').addEventListener('change',renderGroups);
   $('pmFilterMonth').addEventListener('change',renderGroups);
   $('pmFilterStatus').addEventListener('change',renderGroups);
+  $('pmToggleMerge').addEventListener('click',()=>{
+    const box=$('pmMergePanel');
+    box.style.display = box.style.display==='none' ? 'block' : 'none';
+  });
+  $('pmMergeBtn').addEventListener('click',mergeInitiatives);
   $('pmPrintMonth').addEventListener('click',()=>printPlan(false));
   $('pmPrintAll').addEventListener('click',()=>printPlan(true));
   $('pmXls').addEventListener('click',exportXls);
@@ -137,9 +153,30 @@ async function loadInitiatives(){
   INITIATIVES=data||[];
   $('pmInitPick').innerHTML='<option value="">اختاري مبادرة موجودة…</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
   $('pmFilterInit').innerHTML='<option value="">كل المبادرات</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  $('pmMergeTarget').innerHTML=INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  $('pmMergeSources').innerHTML=INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
   CUR_INITIATIVE=null; $('pmActionsPanel').style.display='none';
   await loadAllActions();
 }
+
+async function mergeInitiatives(){
+  const targetId=$('pmMergeTarget').value;
+  const sourceIds=[...$('pmMergeSources').selectedOptions].map(o=>o.value).filter(id=>id!==targetId);
+  if(!targetId){ toast('اختاري المبادرة المستهدفة'); return; }
+  if(!sourceIds.length){ toast('اختاري مبادرة واحدة على الأقل للدمج'); return; }
+  const targetName=INITIATIVES.find(i=>i.id===targetId)?.name||'';
+  if(!confirm(`دمج ${sourceIds.length} مبادرة في "${targetName}"؟ كل إجراءاتها تنتقل لها، وتُحذف المبادرات الفارغة بعد الدمج.`)) return;
+  const btn=$('pmMergeBtn'); btn.disabled=true;
+  try{
+    const {error:moveErr}=await db.from('plan_actions').update({initiative_id:targetId}).in('initiative_id',sourceIds);
+    if(moveErr) throw moveErr;
+    const {error:delErr}=await db.from('plan_initiatives').delete().in('id',sourceIds);
+    if(delErr) throw delErr;
+    toast('تم الدمج بنجاح');
+    await loadInitiatives();
+    $('pmMergePanel').style.display='none';
+  }catch(err){ toast('تعذر الدمج: '+(err.message||err)); }
+  finally{ btn.disabled=false; }
 
 async function createInitiative(){
   if(!CUR_PROJECT){ toast('لا مشروع محدَّد'); return; }

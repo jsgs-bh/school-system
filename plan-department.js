@@ -43,11 +43,22 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
   </div>
 
+  <div class="panel" id="pdMergePanel" style="display:none">
+    <h3>دمج مبادرات مكرَّرة (ضمن المشروع المختار أعلاه)</h3>
+    <div class="sub">لو عندك عدة "مبادرات" فعلياً كلها إجراءات تابعة لنفس المبادرة الحقيقية، اختاريها هنا وادمجيها في واحدة.</div>
+    <div class="field"><label>المبادرة المستهدفة</label><select id="pdMergeTarget"></select></div>
+    <div class="field"><label>المبادرات المطلوب دمجها فيها</label>
+      <select id="pdMergeSources" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></select>
+    </div>
+    <button class="btn ghost" id="pdMergeBtn" style="width:auto;padding:9px 20px;color:var(--err);border-color:var(--err)">دمج المحدَّد في المبادرة المستهدفة</button>
+  </div>
+
   <div class="panel">
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="pdFilterProject"><option value="">كل المشاريع</option></select>
       <select id="pdFilterMonth"><option value="">كل الأشهر</option>${MONTHS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</select>
       <select id="pdFilterStatus"><option value="">كل الحالات</option>${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+      <button class="btn ghost" id="pdToggleMerge" style="width:auto;padding:9px 20px;margin-inline-start:auto">دمج مبادرات مكرَّرة</button>
     </div>
     <div class="actions" style="margin-bottom:14px">
       <button class="btn ghost" id="pdPrintByProject">🖨️ طباعة خطة القسم حسب المشاريع</button>
@@ -103,6 +114,11 @@ async function initDept(){
   $('pdFilterProject').addEventListener('change',renderGroups);
   $('pdFilterMonth').addEventListener('change',renderGroups);
   $('pdFilterStatus').addEventListener('change',renderGroups);
+  $('pdToggleMerge').addEventListener('click',()=>{
+    const box=$('pdMergePanel');
+    box.style.display = box.style.display==='none' ? 'block' : 'none';
+  });
+  $('pdMergeBtn').addEventListener('click',mergeInitiatives);
   $('pdPrintByProject').addEventListener('click',printByProject);
   $('pdPrintFlow').addEventListener('click',printFlow);
   await loadAllDeptActions();
@@ -135,7 +151,29 @@ async function loadInitiativesForProject(){
   const {data}=await db.from('plan_initiatives').select('id,name').eq('project_id',projectId).order('created_at');
   INITIATIVES=data||[];
   $('pdInitPick').innerHTML='<option value="">اختاري مبادرة من هذا المشروع…</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  $('pdMergeTarget').innerHTML=INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  $('pdMergeSources').innerHTML=INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
 }
+
+async function mergeInitiatives(){
+  const targetId=$('pdMergeTarget').value;
+  const sourceIds=[...$('pdMergeSources').selectedOptions].map(o=>o.value).filter(id=>id!==targetId);
+  if(!targetId){ toast('اختاري المبادرة المستهدفة'); return; }
+  if(!sourceIds.length){ toast('اختاري مبادرة واحدة على الأقل للدمج'); return; }
+  const targetName=INITIATIVES.find(i=>i.id===targetId)?.name||'';
+  if(!confirm(`دمج ${sourceIds.length} مبادرة في "${targetName}"؟ كل إجراءاتها تنتقل لها، وتُحذف المبادرات الفارغة.`)) return;
+  const btn=$('pdMergeBtn'); btn.disabled=true;
+  try{
+    const {error:moveErr}=await db.from('plan_actions').update({initiative_id:targetId}).in('initiative_id',sourceIds);
+    if(moveErr) throw moveErr;
+    const {error:delErr}=await db.from('plan_initiatives').delete().in('id',sourceIds);
+    if(delErr) throw delErr;
+    toast('تم الدمج بنجاح');
+    await loadInitiativesForProject();
+    await loadAllDeptActions();
+    $('pdMergePanel').style.display='none';
+  }catch(err){ toast('تعذر الدمج: '+(err.message||err)); }
+  finally{ btn.disabled=false; }
 
 async function createInitiative(){
   const projectId=$('pdProjectPick').value;
