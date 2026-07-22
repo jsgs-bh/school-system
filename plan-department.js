@@ -20,7 +20,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>إضافة إجراء / مبادرة</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <select id="pdProjectPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:180px"></select>
-      <textarea id="pdNewText" placeholder="نص الإجراء" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
+      <textarea id="pdNewText" placeholder="نص الإجراء — سطر واحد = إجراء واحد" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
       <div style="position:relative;min-width:180px">
         <input type="text" id="pdNewResp" placeholder="المسؤولة (ابحثي)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
         <div class="sugg" id="pdRespSugg"></div>
@@ -118,18 +118,20 @@ async function addInitiative(){
   const projectId=$('pdProjectPick').value;
   if(!projectId){ toast('اختاري المشروع'); return; }
   if(!S.ME.department_id){ toast('حسابك غير مرتبط بقسم'); return; }
-  const text=clean($('pdNewText').value);
-  if(!text){ toast('اكتبي نص الإجراء'); return; }
+  const raw=$('pdNewText').value;
+  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ toast('اكتبي نص الإجراء'); return; }
   const resp=clean($('pdNewResp').value)||null;
   const month=$('pdNewMonth').value;
-  const {error}=await db.from('plan_initiatives').insert({
+  const rows=lines.map(text=>({
     project_id:projectId, text, responsible:resp, responsible_staff_id:PICKED_RESP_STAFF_ID,
     department_id:S.ME.department_id, month, status:'not_started', created_by:S.ME.id
-  });
+  }));
+  const {error}=await db.from('plan_initiatives').insert(rows);
   if(error){ toast('تعذر الإضافة: '+error.message); return; }
   $('pdFilterProject').value=projectId; $('pdFilterMonth').value=''; $('pdFilterStatus').value='';
   $('pdNewText').value=''; $('pdNewResp').value=''; $('pdProjectPick').value=''; PICKED_RESP_STAFF_ID=null;
-  toast('تمت الإضافة'); loadInitiatives();
+  toast(lines.length>1?`تمت إضافة ${lines.length} إجراءات`:'تمت الإضافة'); loadInitiatives();
 }
 
 function getFiltered(){

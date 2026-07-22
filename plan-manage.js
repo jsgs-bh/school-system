@@ -19,7 +19,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="panel">
     <h3>إضافة إجراء جديد</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <textarea id="pmNewText" placeholder="نص الإجراء" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
+      <textarea id="pmNewText" placeholder="نص الإجراء — سطر واحد = إجراء واحد" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
       <div style="position:relative;min-width:180px">
         <input type="text" id="pmNewResp" placeholder="المسؤول (ابحثي عن منتسبة)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
         <div class="sugg" id="pmRespSugg"></div>
@@ -116,16 +116,18 @@ function bindRespSearch(){
 
 async function addInitiative(){
   if(!CUR_PROJECT){ toast('لا مشروع محدَّد'); return; }
-  const text=clean($('pmNewText').value);
-  if(!text){ toast('اكتبي نص الإجراء'); return; }
+  const raw=$('pmNewText').value;
+  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ toast('اكتبي نص الإجراء'); return; }
   const resp=clean($('pmNewResp').value)||null;
   const month=$('pmNewMonth').value;
-  const {error}=await db.from('plan_initiatives').insert({
+  const rows=lines.map(text=>({
     project_id:CUR_PROJECT.id, text, responsible:resp, responsible_staff_id:PICKED_RESP_STAFF_ID, month, status:'not_started', created_by:S.ME.id
-  });
+  }));
+  const {error}=await db.from('plan_initiatives').insert(rows);
   if(error){ toast('تعذر الإضافة: '+error.message); return; }
   $('pmNewText').value=''; $('pmNewResp').value=''; PICKED_RESP_STAFF_ID=null;
-  toast('تمت إضافة الإجراء');
+  toast(lines.length>1?`تمت إضافة ${lines.length} إجراءات`:'تمت إضافة الإجراء');
   loadInitiatives();
 }
 
