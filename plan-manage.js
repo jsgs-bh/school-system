@@ -177,7 +177,7 @@ async function mergeInitiatives(){
     $('pmMergePanel').style.display='none';
   }catch(err){ toast('تعذر الدمج: '+(err.message||err)); }
   finally{ btn.disabled=false; }
-
+}
 async function createInitiative(){
   if(!CUR_PROJECT){ toast('لا مشروع محدَّد'); return; }
   const name=clean($('pmNewInitName').value);
