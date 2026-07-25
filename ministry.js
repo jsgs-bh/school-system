@@ -37,9 +37,6 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="board-wrap"><table class="board min-tbl" id="minTable"></table></div>
   </div>
 </div>
-<datalist id="dlStatus">${OPT.status.map(v=>`<option value="${v}">`).join('')}</datalist>
-<datalist id="dlAction">${OPT.action.map(v=>`<option value="${v}">`).join('')}</datalist>
-<datalist id="dlResponse">${OPT.response.map(v=>`<option value="${v}">`).join('')}</datalist>
 <div id="printArea"></div>
 <style>
   #ministryMain.wide{max-width:1400px}
@@ -53,10 +50,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printArea{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printArea, #printArea *{visibility:visible}
-    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .p-head{text-align:center;margin-bottom:14px}
     .p-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:8px}
     .p-head p{font-size:12px;color:#333}
@@ -154,9 +151,9 @@ async function loadMinistry(){
     ROWS.map((r,i)=>`<tr data-id="${r.id}" class="${r.fu.absence_status||r.fu.action_taken?'saved':''}">
       <td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td><b>${r.full_name}</b></td>
       <td class="c">${r.sec}</td><td class="c" dir="ltr">${fmtPhone(r.contact1)}</td><td class="c" dir="ltr">${fmtPhone(r.contact2)}</td>
-      <td><input list="dlStatus"   data-f="absence_status"  value="${r.fu.absence_status||''}"></td>
-      <td><input list="dlAction"   data-f="action_taken"    value="${r.fu.action_taken||''}"></td>
-      <td><input list="dlResponse" data-f="response_status" value="${r.fu.response_status||''}"></td>
+      <td><select data-f="absence_status">${OPT.status.map(v=>`<option value="${v}" ${(r.fu.absence_status||OPT.status[0])===v?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td><select data-f="action_taken">${OPT.action.map(v=>`<option value="${v}" ${(r.fu.action_taken||OPT.action[0])===v?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td><select data-f="response_status">${OPT.response.map(v=>`<option value="${v}" ${(r.fu.response_status||OPT.response[0])===v?'selected':''}>${v}</option>`).join('')}</select></td>
       <td><input                   data-f="reason"          value="${r.fu.reason||''}"></td>
     </tr>`).join('');
 }
@@ -175,7 +172,7 @@ async function saveFollowup(){
     $('minTable').querySelectorAll('tr[data-id]').forEach(tr=>{
       const row={student_id:tr.dataset.id, date:dstr(MIN_DATE), recorded_by:S.ME.id, updated_at:new Date().toISOString()};
       let any=false;
-      tr.querySelectorAll('input').forEach(inp=>{ const v=inp.value.trim(); row[inp.dataset.f]=v||null; if(v) any=true; });
+      tr.querySelectorAll('input,select').forEach(inp=>{ const v=inp.value.trim(); row[inp.dataset.f]=v||null; if(v) any=true; });
       if(any) ups.push(row);
     });
     for(const c of chunk(ups,200)){
