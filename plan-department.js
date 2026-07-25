@@ -174,6 +174,7 @@ async function mergeInitiatives(){
     $('pdMergePanel').style.display='none';
   }catch(err){ toast('تعذر الدمج: '+(err.message||err)); }
   finally{ btn.disabled=false; }
+}
 
 async function createInitiative(){
   const projectId=$('pdProjectPick').value;
