@@ -2,7 +2,7 @@
    معدل الحضور الفصلي والشهري لكل طالبات المدرسة، محسوب تلقائياً شهراً
    بشهر لكلا الفصلين، بنفس منطق "الغياب الرسمي اليومي" المعتمد في بقية
    النظام (period.js's collectRange) — بلا أي إدخال يدوي. */
-import { db, $, S, dstr, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, dstr, clean, toast, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 import { collectRange } from './period.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
@@ -37,7 +37,13 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
   <div class="actions" style="margin-bottom:14px">
     <button class="btn ghost" id="sarXls">⬇ إكسل</button>
-    <button class="btn ghost" id="sarPdf">⬇ PDF</button>
+    <button class="btn ghost" id="sarPdf">⬇ PDF (الكل)</button>
+  </div>
+  <div class="panel">
+    <h3>طباعة تقرير طالبة محددة</h3>
+    <div class="search-row" style="position:relative"><input type="text" id="sarStudentSearch" placeholder="ابحثي عن اسم طالبة…"></div>
+    <div class="sugg" id="sarStudentSugg"></div>
+    <button class="btn gold" id="sarStudentPrint" style="width:auto;padding:9px 20px;margin-top:10px" disabled>🖨️ طباعة تقرير الطالبة المحددة</button>
   </div>
   <div class="result" id="sarStatus" style="display:none"></div>
   <div class="board-wrap"><table class="board" id="sarTable"></table></div>
@@ -51,7 +57,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaSAR{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0;size:portrait}
+    @page{margin:0.22in;size:portrait}
     body *{visibility:hidden}
     #printAreaSAR, #printAreaSAR *{visibility:visible}
     #printAreaSAR{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:10mm}
@@ -73,7 +79,55 @@ async function initSAR(){
   $('sarRefresh').addEventListener('click',runReport);
   $('sarXls').addEventListener('click',exportXls);
   $('sarPdf').addEventListener('click',exportPdf);
+  bindStudentSearch();
+  $('sarStudentPrint').addEventListener('click',printSingleStudent);
   await runReport();
+}
+
+let PICKED_STUDENT=null;
+function bindStudentSearch(){
+  const inp=$('sarStudentSearch'), box=$('sarStudentSugg');
+  let deb=null;
+  inp.addEventListener('input',()=>{
+    PICKED_STUDENT=null; $('sarStudentPrint').disabled=true;
+    clearTimeout(deb);
+    deb=setTimeout(()=>{
+      const q=clean(inp.value).toLowerCase();
+      if(q.length<2){ box.style.display='none'; return; }
+      const matches=REPORT_ROWS.filter(r=>r.name.toLowerCase().includes(q)).slice(0,8);
+      if(!matches.length){ box.style.display='none'; return; }
+      box.innerHTML=matches.map((r,i)=>`<div data-i="${i}">${r.name} <small>${r.acad}</small></div>`).join('');
+      box.style.display='block';
+      box.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click',()=>{
+        inp.value=matches[i].name; PICKED_STUDENT=matches[i]; box.style.display='none'; $('sarStudentPrint').disabled=false;
+      }));
+    },250);
+  });
+}
+
+function buildRowsHtml(rows){
+  return rows.map(r=>{
+    const sem1Cells=r.monthly.slice(0,SEM1_MONTHS.length).map(m=>`<td class="c">${m.total?m.abs:'—'}</td>`).join('');
+    const sem2Cells=r.monthly.slice(SEM1_MONTHS.length).map(m=>`<td class="c">${m.total?m.abs:'—'}</td>`).join('');
+    return `<tr><td class="c">${r.acad}</td><td>${r.name}</td><td class="c">${r.sec}</td><td class="c">${r.contact}</td>
+      ${sem1Cells}<td class="c">${r.sem1Totals.abs}</td><td class="c">${r.sem1Totals.present}</td><td class="${pctClass(r.sem1Pct)}">${pctText(r.sem1Pct)}</td>
+      ${sem2Cells}<td class="c">${r.sem2Totals.abs}</td><td class="c">${r.sem2Totals.present}</td><td class="${pctClass(r.sem2Pct)}">${pctText(r.sem2Pct)}</td></tr>`;
+  }).join('');
+}
+function tableHeadHtml(){
+  const sem1Heads=SEM1_MONTHS.map(m=>`<th>${m.label}</th>`).join('')+'<th>مجموع غياب</th><th>مجموع حضور</th><th>نسبة الحضور</th>';
+  const sem2Heads=SEM2_MONTHS.map(m=>`<th>${m.label}</th>`).join('')+'<th>مجموع غياب</th><th>مجموع حضور</th><th>نسبة الحضور</th>';
+  return `<tr><th rowspan="2">الرقم الأكاديمي</th><th rowspan="2">اسم الطالبة</th><th rowspan="2">الصف</th><th rowspan="2">رقم التواصل</th>
+    <th colspan="${SEM1_MONTHS.length+3}">الفصل الدراسي الأول</th><th colspan="${SEM2_MONTHS.length+3}">الفصل الدراسي الثاني</th></tr>
+    <tr>${sem1Heads}${sem2Heads}</tr>`;
+}
+function printSingleStudent(){
+  if(!PICKED_STUDENT){ toast('اختاري طالبة أولاً'); return; }
+  $('printAreaSAR').innerHTML=`
+    ${printHeaderHtml(`معدل الحضور — ${PICKED_STUDENT.name} (${PICKED_STUDENT.acad})`)}
+    <table class="sar-tbl">${tableHeadHtml()}${buildRowsHtml([PICKED_STUDENT])}</table>
+    ${printFooterHtml('مكتب الإرشاد الاجتماعي', S.ME.full_name)}`;
+  printWithTitle(`غياب_${PICKED_STUDENT.name}`,'printAreaSAR');
 }
 
 async function runReport(){
@@ -193,9 +247,11 @@ async function exportXls(){
 }
 function exportPdf(){
   if(!REPORT_ROWS.length){ toast('لا بيانات بعد'); return; }
-  $('printAreaSAR').innerHTML=`<div class="sar-head"><h2>${schoolName()} — معدل الحضور الفصلي والشهري لجميع طالبات المدرسة</h2></div>
-    <table class="sar-tbl">${$('sarTable').innerHTML}</table>`;
-  printWithTitle('غياب_الطالبات');
+  $('printAreaSAR').innerHTML=`
+    ${printHeaderHtml('معدل الحضور الفصلي والشهري لجميع طالبات المدرسة')}
+    <table class="sar-tbl">${$('sarTable').innerHTML}</table>
+    ${printFooterHtml('مكتب الإرشاد الاجتماعي', S.ME.full_name)}`;
+  printWithTitle('غياب_الطالبات','printAreaSAR');
 }
 
 registerTab({id:'studentAttReport', label:'غياب الطالبات', group:'attendance', groupLabel:'متابعة الغياب',

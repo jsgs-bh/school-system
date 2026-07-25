@@ -81,10 +81,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaCM{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaCM, #printAreaCM *{visibility:visible}
-    #printAreaCM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaCM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .cm-print-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:14px}
     .cm-print-tbl th,.cm-print-tbl td{border:1px solid #ccc;padding:8px;text-align:center}
     .cm-print-tbl th{background:#1d3d5c;color:#fff}
@@ -190,10 +190,22 @@ async function createCommittee(){
 const TYPE_LABEL={teachers:'معلمات', students:'طالبات', mixed:'معلمات وطالبات'};
 async function loadCommittees(){
   const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isStrategicPlanLead || S.FLAGS.isLead;
+  let allowedIds=null;
+  if(!canSeeAll && S.FLAGS.isSeniorTeacher && S.ME.department_id){
+    // المعلمة الأولى: كل لجان قسمها (اللي فيها عضوة واحدة على الأقل من قسمها) + لجانها هي
+    const {data:deptStaff}=await db.from('staff').select('id').eq('department_id',S.ME.department_id);
+    const deptStaffIds=(deptStaff||[]).map(s=>s.id);
+    const {data:deptMemberships}=deptStaffIds.length
+      ? await db.from('committee_members').select('committee_id').in('staff_id',deptStaffIds)
+      : {data:[]};
+    allowedIds=[...new Set([...(deptMemberships||[]).map(m=>m.committee_id), ...S.MY_COMMITTEE_IDS])];
+  }else if(!canSeeAll){
+    allowedIds=S.MY_COMMITTEE_IDS;
+  }
   let query = db.from('committees')
     .select('id,name,type,home_project_id, plan_projects(name), committee_beneficiary_projects(plan_projects(name))')
     .eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false});
-  if(!canSeeAll) query = query.in('id', S.MY_COMMITTEE_IDS.length ? S.MY_COMMITTEE_IDS : ['00000000-0000-0000-0000-000000000000']);
+  if(allowedIds!==null) query = query.in('id', allowedIds.length ? allowedIds : ['00000000-0000-0000-0000-000000000000']);
   const {data,error}=await query;
   if(error){ $('cmList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   if(!data?.length){ $('cmList').innerHTML='<div class="empty-day">لا لجان بعد.</div>'; return; }
@@ -360,5 +372,5 @@ async function printAttendance(){
   printWithTitle(`استمارة_حضور_${CUR_COMMITTEE.name}`,'printAreaCM');
 }
 
-registerTab({id:'committeesMain', label:'اللجان', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isAdmin||f.isStrategicPlanLead||f.isLead||f.isCommitteeMember, init:initCommittees});
+registerTab({id:'committeesMain', label:'اللجان والمبادرات', group:'plan', groupLabel:'الخطة الاستراتيجية',
+  show:f=>f.isAdmin||f.isStrategicPlanLead||f.isLead||f.isSeniorTeacher||f.isCommitteeMember, init:initCommittees});

@@ -61,6 +61,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="pdToggleMerge" style="width:auto;padding:9px 20px;margin-inline-start:auto">دمج مبادرات مكرَّرة</button>
     </div>
     <div class="actions" style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer"><input type="checkbox" id="pdBlankStatus"> عمود حالة فاضٍ (للتعبئة اليدوية)</label>
       <button class="btn ghost" id="pdPrintByProject">🖨️ طباعة خطة القسم حسب المشاريع</button>
       <button class="btn ghost" id="pdPrintFlow">🖨️ طباعة الخطة التدفقية للقسم</button>
     </div>
@@ -82,10 +83,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaPD{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaPD, #printAreaPD *{visibility:visible}
-    #printAreaPD{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaPD{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .pd-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:14px}
     .pd-tbl th{background:#1a3a6b;color:#fff;padding:6px 5px}
     .pd-tbl td{border:1px solid #dee2e6;padding:5px;text-align:right}
@@ -247,7 +248,7 @@ function renderGroups(){
       <div class="pd-init-head"><span>📌 ${g.name} <small style="font-weight:400;color:#8a93a0">(${g.project})</small></span><span>${done}/${g.items.length}</span></div>
       ${g.items.map(a=>`<div class="pd-action-row" data-id="${a.id}">
         <span class="pd-action-text" data-role="text">${a.text}</span>
-        <span style="font-size:12px;color:#8a93a0">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
+        <span class="pd-action-meta" data-role="meta">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
         <select class="pd-status" data-role="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}</select>
         <button class="btn ghost pd-small-btn" data-role="edit">✎ تعديل</button>
         <button class="btn ghost pd-small-btn" data-role="del" style="color:var(--err);border-color:var(--err)">✕ حذف</button>
@@ -270,20 +271,27 @@ function renderGroups(){
     });
     row.querySelector('[data-role="edit"]').addEventListener('click', ()=>{
       const textSpan=row.querySelector('[data-role="text"]');
-      const input=document.createElement('textarea');
-      input.className='pd-action-edit-input'; input.value=action.text; input.rows=2;
-      textSpan.replaceWith(input); input.focus();
-      const save=async ()=>{
-        const newText=input.value.trim();
-        if(newText && newText!==action.text){
-          const {error}=await db.from('plan_actions').update({text:newText, updated_at:new Date().toISOString()}).eq('id',id);
-          if(error){ toast('تعذر الحفظ: '+error.message); return; }
-          action.text=newText; toast('تم الحفظ');
-        }
-        renderGroups();
-      };
-      input.addEventListener('blur',save);
-      input.addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); input.blur(); } });
+      const metaSpan=row.querySelector('[data-role="meta"]');
+      const textInput=document.createElement('textarea');
+      textInput.className='pd-action-edit-input'; textInput.value=action.text; textInput.rows=2;
+      const monthSel=document.createElement('select'); monthSel.className='pd-status';
+      monthSel.innerHTML=MONTHS.map(m=>`<option value="${m.id}" ${m.id===action.month?'selected':''}>${m.label}</option>`).join('');
+      const respInput=document.createElement('input'); respInput.type='text'; respInput.className='pd-action-edit-input';
+      respInput.placeholder='المسؤولة'; respInput.value=action.responsible||''; respInput.style.minWidth='140px';
+      const saveBtn=document.createElement('button'); saveBtn.className='btn gold pd-small-btn'; saveBtn.textContent='✓ حفظ';
+      textSpan.replaceWith(textInput); metaSpan.replaceWith(monthSel);
+      row.querySelector('[data-role="edit"]').replaceWith(saveBtn);
+      textInput.after(respInput);
+      textInput.focus();
+      saveBtn.addEventListener('click', async ()=>{
+        const newText=textInput.value.trim();
+        if(!newText){ toast('نص الإجراء لا يمكن أن يكون فاضياً'); return; }
+        const payload={text:newText, month:monthSel.value, responsible:respInput.value.trim()||null, updated_at:new Date().toISOString()};
+        const {error}=await db.from('plan_actions').update(payload).eq('id',id);
+        if(error){ toast('تعذر الحفظ: '+error.message); return; }
+        Object.assign(action,payload); toast('تم الحفظ');
+        loadAllDeptActions();
+      });
     });
   });
 }
@@ -291,13 +299,14 @@ function renderGroups(){
 /* ============ الطباعة ============ */
 function printByProject(){
   if(!ACTIONS.length){ toast('لا إجراءات بعد'); return; }
+  const blank=$('pdBlankStatus').checked;
   const byProject={};
   for(const a of ACTIONS) (byProject[a.project_id] ??= {name:a.projectName, items:[]}).items.push(a);
   let body='';
   Object.values(byProject).forEach(g=>{
     body+=`<div class="pd-head2">📁 ${g.name}</div>
       <table class="pd-tbl"><tr><th>#</th><th>المبادرة</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th></tr>
-      ${g.items.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${a.initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
+      ${g.items.map((a,n)=>`<tr class="${blank?'':a.status}"><td>${n+1}</td><td>${a.initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${blank?'':STATUS_LABEL[a.status]}</td></tr>`).join('')}
       </table>`;
   });
   $('printAreaPD').innerHTML=`
@@ -309,13 +318,14 @@ function printByProject(){
 
 function printFlow(){
   if(!ACTIONS.length){ toast('لا إجراءات بعد'); return; }
+  const blank=$('pdBlankStatus').checked;
   let body='';
   MONTHS.forEach(m=>{
     const inMonth=ACTIONS.filter(a=>a.month===m.id);
     if(!inMonth.length) return;
     body+=`<div class="pd-mhead">📅 ${m.label}</div>
       <table class="pd-tbl"><tr><th>#</th><th>المشروع</th><th>المبادرة</th><th>الإجراء</th><th>المسؤولة</th><th>الحالة</th></tr>
-      ${inMonth.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${a.projectName}</td><td>${a.initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
+      ${inMonth.map((a,n)=>`<tr class="${blank?'':a.status}"><td>${n+1}</td><td>${a.projectName}</td><td>${a.initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${blank?'':STATUS_LABEL[a.status]}</td></tr>`).join('')}
       </table>`;
   });
   $('printAreaPD').innerHTML=`
@@ -326,4 +336,4 @@ function printFlow(){
 }
 
 registerTab({id:'planDept', label:'الخطة التشغيلية', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isSeniorTeacher||f.isAdmin, init:initDept});
+  show:f=>f.isSeniorTeacher||f.isProjectLead||f.isAdmin, init:initDept});

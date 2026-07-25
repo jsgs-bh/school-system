@@ -62,6 +62,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="pmToggleMerge" style="width:auto;padding:9px 20px;margin-inline-start:auto">دمج مبادرات مكرَّرة</button>
     </div>
     <div class="actions" style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer"><input type="checkbox" id="pmBlankStatus"> عمود حالة فاضٍ (للتعبئة اليدوية)</label>
       <button class="btn ghost" id="pmPrintMonth">🖨️ طباعة الشهر المحدَّد</button>
       <button class="btn ghost" id="pmPrintAll">🖨️ طباعة كل الأشهر</button>
       <button class="btn ghost" id="pmXls">⬇ تصدير Excel</button>
@@ -84,10 +85,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaPM{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaPM, #printAreaPM *{visibility:visible}
-    #printAreaPM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaPM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .pm-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:14px}
     .pm-tbl th{background:#1a3a6b;color:#fff;padding:6px 5px}
     .pm-tbl td{border:1px solid #dee2e6;padding:5px;text-align:right}
@@ -178,6 +179,7 @@ async function mergeInitiatives(){
   }catch(err){ toast('تعذر الدمج: '+(err.message||err)); }
   finally{ btn.disabled=false; }
 }
+
 async function createInitiative(){
   if(!CUR_PROJECT){ toast('لا مشروع محدَّد'); return; }
   const name=clean($('pmNewInitName').value);
@@ -249,7 +251,7 @@ function renderGroups(){
       <div class="pm-init-head"><span>📌 ${initById[initId]||'—'}</span><span>${done}/${actions.length}</span></div>
       ${actions.map(a=>`<div class="pm-action-row" data-id="${a.id}">
         <span class="pm-action-text" data-role="text">${a.text}</span>
-        <span style="font-size:12px;color:#8a93a0">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
+        <span class="pm-action-meta" data-role="meta">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
         <select class="pm-status" data-role="status">${Object.entries(STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}</select>
         <button class="btn ghost pm-small-btn" data-role="edit">✎ تعديل</button>
         <button class="btn ghost pm-small-btn" data-role="del" style="color:var(--err);border-color:var(--err)">✕ حذف</button>
@@ -272,28 +274,37 @@ function renderGroups(){
     });
     row.querySelector('[data-role="edit"]').addEventListener('click', ()=>{
       const textSpan=row.querySelector('[data-role="text"]');
-      const input=document.createElement('textarea');
-      input.className='pm-action-edit-input'; input.value=action.text; input.rows=2;
-      textSpan.replaceWith(input); input.focus();
-      const save=async ()=>{
-        const newText=input.value.trim();
-        if(newText && newText!==action.text){
-          const {error}=await db.from('plan_actions').update({text:newText, updated_at:new Date().toISOString()}).eq('id',id);
-          if(error){ toast('تعذر الحفظ: '+error.message); return; }
-          action.text=newText; toast('تم الحفظ');
-        }
+      const metaSpan=row.querySelector('[data-role="meta"]');
+      const textInput=document.createElement('textarea');
+      textInput.className='pm-action-edit-input'; textInput.value=action.text; textInput.rows=2;
+      const monthSel=document.createElement('select'); monthSel.className='pm-status';
+      monthSel.innerHTML=MONTHS.map(m=>`<option value="${m.id}" ${a_month_selected(m.id,action.month)}>${m.label}</option>`).join('');
+      const respInput=document.createElement('input'); respInput.type='text'; respInput.className='pm-action-edit-input';
+      respInput.placeholder='المسؤول'; respInput.value=action.responsible||''; respInput.style.minWidth='140px';
+      const saveBtn=document.createElement('button'); saveBtn.className='btn gold pm-small-btn'; saveBtn.textContent='✓ حفظ';
+      textSpan.replaceWith(textInput); metaSpan.replaceWith(monthSel);
+      row.querySelector('[data-role="edit"]').replaceWith(saveBtn);
+      textInput.after(respInput);
+      textInput.focus();
+      saveBtn.addEventListener('click', async ()=>{
+        const newText=textInput.value.trim();
+        if(!newText){ toast('نص الإجراء لا يمكن أن يكون فاضياً'); return; }
+        const payload={text:newText, month:monthSel.value, responsible:respInput.value.trim()||null, updated_at:new Date().toISOString()};
+        const {error}=await db.from('plan_actions').update(payload).eq('id',id);
+        if(error){ toast('تعذر الحفظ: '+error.message); return; }
+        Object.assign(action,payload); toast('تم الحفظ');
         renderGroups();
-      };
-      input.addEventListener('blur',save);
-      input.addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); input.blur(); } });
+      });
     });
   });
 }
+function a_month_selected(optId,curId){ return optId===curId?'selected':''; }
 
 /* ============ الطباعة ============ */
 function printPlan(allMonths){
   const filtered = allMonths ? ACTIONS : ACTIONS.filter(a=>a.month===$('pmFilterMonth').value || !$('pmFilterMonth').value);
   if(!filtered.length){ toast('لا إجراءات لهذا المشروع بعد'); return; }
+  const blank=$('pmBlankStatus').checked;
   const initById={}; for(const i of INITIATIVES) initById[i.id]=i.name;
   let body='';
   const list = allMonths ? MONTHS : ($('pmFilterMonth').value ? MONTHS.filter(m=>m.id===$('pmFilterMonth').value) : MONTHS);
@@ -301,9 +312,9 @@ function printPlan(allMonths){
     const inMonth=filtered.filter(a=>a.month===m.id);
     if(!inMonth.length) return;
     const done=inMonth.filter(a=>a.status==='done').length;
-    body+=`<div class="pm-mhead">📅 ${m.label} (${done}/${inMonth.length} منجز)</div>
+    body+=`<div class="pm-mhead">📅 ${m.label}${blank?'':` (${done}/${inMonth.length} منجز)`}</div>
       <table class="pm-tbl"><tr><th>#</th><th>المبادرة</th><th>الإجراء</th><th>المنفذون</th><th>الحالة</th></tr>
-      ${inMonth.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${initById[a.initiative_id]||'—'}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
+      ${inMonth.map((a,n)=>`<tr class="${blank?'':a.status}"><td>${n+1}</td><td>${initById[a.initiative_id]||'—'}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${blank?'':STATUS_LABEL[a.status]}</td></tr>`).join('')}
       </table>`;
   });
   $('printAreaPM').innerHTML=`

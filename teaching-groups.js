@@ -180,9 +180,18 @@ function renderGroups(){
   }));
 }
 
-function addGroup(){
+async function addGroup(){
   const n=GROUPS.length+1;
-  GROUPS.push({id:null, name:`المجموعة ${n===1?'الأولى':n===2?'الثانية':n}`, teacher_id:null, teacher_name:'', memberIds:new Set()});
+  const usedTeacherIds=new Set(GROUPS.map(g=>g.teacher_id).filter(Boolean));
+  let suggestedId=null, suggestedName='';
+  if(CUR_SEC && CUR_SUBJ){
+    const {data:ents}=await db.from('entry_teachers')
+      .select('staff_id, staff(full_name), timetable_entries!inner(section_id,subject_id)')
+      .eq('timetable_entries.section_id',CUR_SEC.id).eq('timetable_entries.subject_id',CUR_SUBJ.id);
+    const candidate=(ents||[]).find(e=>e.staff_id && !usedTeacherIds.has(e.staff_id));
+    if(candidate){ suggestedId=candidate.staff_id; suggestedName=candidate.staff?.full_name||''; }
+  }
+  GROUPS.push({id:null, name:`المجموعة ${n===1?'الأولى':n===2?'الثانية':n}`, teacher_id:suggestedId, teacher_name:suggestedName, memberIds:new Set()});
   renderGroups(); renderMembers();
 }
 
