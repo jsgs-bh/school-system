@@ -81,12 +81,19 @@ async function runSemesterPromotion(){
         target=newSec; createdSections++;
       }
       const {data:enr}=await db.from('enrollments').select('id,student_id').eq('section_id',sec.id).is('to_date',null);
+      const {data:oldGroups}=await db.from('teaching_groups').select('id').eq('section_id',sec.id);
+      const oldGroupIds=(oldGroups||[]).map(g=>g.id);
       for(const e of enr||[]){
         const {data:already}=await db.from('enrollments').select('id').eq('section_id',target.id).eq('student_id',e.student_id).is('to_date',null).maybeSingle();
-        if(already) continue;
-        await db.from('enrollments').insert({section_id:target.id, student_id:e.student_id, from_date:dstr(new Date())});
-        await db.from('enrollments').update({to_date:dstr(new Date())}).eq('id',e.id);
-        movedStudents++;
+        if(!already){
+          await db.from('enrollments').insert({section_id:target.id, student_id:e.student_id, from_date:dstr(new Date())});
+          await db.from('enrollments').update({to_date:dstr(new Date())}).eq('id',e.id);
+          movedStudents++;
+        }
+        // إزالتها من مجموعات تدريس شعبتها القديمة — كانت هذي الثغرة تُبقي طالبات "مرحَّلات" ظاهرات في رصد درجات شعبة انتقلن منها فعلياً
+        if(oldGroupIds.length){
+          await db.from('teaching_group_members').delete().eq('student_id',e.student_id).in('group_id',oldGroupIds);
+        }
       }
     }
     await logAction('promotion','sections',{type:'semester', createdSections, movedStudents, year:S.YEAR.name});
@@ -123,9 +130,14 @@ async function runYearPromotion(){
         target=newSec; targetSections.push(newSec); createdSections++;
       }
       const {data:enr}=await db.from('enrollments').select('id,student_id').eq('section_id',sec.id).is('to_date',null);
+      const {data:oldGroups}=await db.from('teaching_groups').select('id').eq('section_id',sec.id);
+      const oldGroupIds=(oldGroups||[]).map(g=>g.id);
       for(const e of enr||[]){
         await db.from('enrollments').insert({section_id:target.id, student_id:e.student_id, from_date:dstr(new Date())});
         await db.from('enrollments').update({to_date:dstr(new Date())}).eq('id',e.id);
+        if(oldGroupIds.length){
+          await db.from('teaching_group_members').delete().eq('student_id',e.student_id).in('group_id',oldGroupIds);
+        }
         movedStudents++;
       }
     }
