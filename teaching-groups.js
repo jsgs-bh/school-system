@@ -14,6 +14,10 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>مجموعات التدريس</h3>
     <div class="sub">المقرر غير المنقسم لا يحتاج أي إعداد هنا (مجموعة واحدة تلقائية). استخدمي هذي الشاشة فقط عندما يُدرّس مقرر لشعبة بأكثر من معلمة.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="tgSemesterFilter" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+        <option value="1">الفصل الأول</option>
+        <option value="2">الفصل الثاني</option>
+      </select>
       <select id="tgSection" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"></select>
       <select id="tgSubject" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"></select>
       <button class="btn gold" id="tgGo" style="width:auto;padding:10px 24px">فتح</button>
@@ -51,6 +55,12 @@ $('appView').insertAdjacentHTML('beforeend', `
 
 let SECTIONS=[], SUBJECTS=[], GROUPS=[], ALL_STUDENTS=[], CUR_SEC=null, CUR_SUBJ=null;
 
+function renderSectionOptions(){
+  const sem=+$('tgSemesterFilter').value;
+  const filtered=SECTIONS.filter(s=>s.semester===sem);
+  $('tgSection').innerHTML='<option value="">اختاري الشعبة…</option>'+filtered.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+}
+
 async function initTG(){
   if($('tgGo').dataset.ready) return;
   $('tgGo').dataset.ready='1';
@@ -59,8 +69,9 @@ async function initTG(){
     db.from('subjects').select('id,code').order('code'),
   ]);
   SECTIONS=secs||[]; SUBJECTS=subs||[];
-  $('tgSection').innerHTML='<option value="">اختاري الشعبة…</option>'+SECTIONS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+  renderSectionOptions();
   $('tgSubject').innerHTML='<option value="">اختاري المقرر…</option>'+SUBJECTS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+  $('tgSemesterFilter').addEventListener('change',renderSectionOptions);
   $('tgGo').addEventListener('click',loadGroups);
   $('tgAddGroup').addEventListener('click',addGroup);
   $('tgSave').addEventListener('click',saveAll);

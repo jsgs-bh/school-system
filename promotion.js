@@ -10,7 +10,7 @@
      إلى «متخرجة» وإغلاق قيدهن.
    المستوى الأول إلى الثاني بين السنوات لا يُؤتمت — يحتاج ملف توزيع
    جديد (استيراد عادي) حسب الوثيقة المعتمدة. */
-import { db, $, S, dstr, toast, logAction, registerTab } from './core.js';
+import { db, $, S, dstr, toast, logAction } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="promotion" style="display:none">
@@ -173,5 +173,6 @@ async function runGraduation(){
   finally{ btn.disabled=false; btn.textContent='تخريج طالبات المستوى الثالث'; }
 }
 
-registerTab({id:'promotion', label:'الترحيل', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:initPromotion});
+/* تبويب "الترحيل" أُلغي بطلب المستخدمة — استُبدل بنقل يدوي لكل طالبة
+   من شاشة "طالبات المدرسة" (admin-students.js)، لتجنّب أخطاء الترحيل
+   الجماعي التلقائي. الدوال هنا باقية غير مستخدَمة احتياطاً. */
