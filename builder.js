@@ -63,10 +63,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaBuilder{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaBuilder, #printAreaBuilder *{visibility:visible}
-    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .bd-head{text-align:center;margin-bottom:12px}
     .bd-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .bd-head p{font-size:11.5px;color:#333}
@@ -244,7 +244,7 @@ function exportPdf(){
     <div class="bd-head"><h2>${LEVELS[LEVEL].title}</h2>
       <p>من ${$('bFrom').value} إلى ${$('bTo').value} — ${ROWS.length} صف</p></div>
     <table class="bd-tbl"><tr>${fields.map(k=>`<th>${fieldLabel(k)}</th>`).join('')}</tr>${rows}</table>`;
-  printWithTitle(`${LEVELS[LEVEL].title}_${$('bFrom').value}_${$('bTo').value}`);
+  printWithTitle(`${LEVELS[LEVEL].title}_${$('bFrom').value}_${$('bTo').value}`,'printAreaBuilder');
 }
 
 registerTab({id:'builderMain', label:'إنشاء تقارير الغياب', group:'attendance', groupLabel:'متابعة الغياب',

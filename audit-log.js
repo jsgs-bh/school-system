@@ -29,10 +29,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaAL{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaAL, #printAreaAL *{visibility:visible}
-    #printAreaAL{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaAL{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .al-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .al-tbl th,.al-tbl td{border:1px solid #ccc;padding:6px;text-align:center}
     .al-tbl th{background:#1d3d5c;color:#fff}
@@ -46,8 +46,10 @@ async function initAL(){
   if($('alApply').dataset.ready) return;
   $('alApply').dataset.ready='1';
   const today=new Date().toISOString().slice(0,10);
-  $('alTo').value=today; $('alFrom').value=today.slice(0,8)+'01';
+  $('alTo').value=today; $('alFrom').value=S.YEAR?.start_date||today.slice(0,8)+'01';
   $('alApply').addEventListener('click',load);
+  let deb=null;
+  $('alSearch').addEventListener('input',()=>{ clearTimeout(deb); deb=setTimeout(load,350); });
   $('alXls').addEventListener('click',exportXls);
   $('alPdf').addEventListener('click',exportPdf);
   await load();

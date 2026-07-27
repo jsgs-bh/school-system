@@ -82,11 +82,11 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaPeriod{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaPeriod, #printAreaPeriod *{visibility:visible}
     #printAreaPeriod{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
-    .pr-page{page-break-after:always;padding:14mm 12mm}
+    .pr-page{page-break-after:always;padding:0 0 18mm 0}
     .pr-page:last-child{page-break-after:auto}
     .pr-head{text-align:center;margin-bottom:12px}
     .pr-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
@@ -256,7 +256,7 @@ function exportCountPdf(){
         <p>من ${$('cntFrom').value} إلى ${$('cntTo').value} — العدد: ${CURRENT_COUNT.length}</p></div>
       <table class="pr-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>عدد أيام الغياب</th></tr>${rows}</table>
     </div>`;
-  printWithTitle(`غياب_${n}_مرة_${$('cntFrom').value}_${$('cntTo').value}`);
+  printWithTitle(`غياب_${n}_مرة_${$('cntFrom').value}_${$('cntTo').value}`,'printAreaPeriod');
 }
 
 /* ============ الأداة ٢ — تقرير فترة شامل ============ */
@@ -408,7 +408,7 @@ function exportPdf(){
     </div>`;
   }).join('');
   $('printAreaPeriod').innerHTML = summaryPage + dayPages;
-  printWithTitle(`تقرير_فترة_${s.from}_${s.to}`);
+  printWithTitle(`تقرير_فترة_${s.from}_${s.to}`,'printAreaPeriod');
 }
 
 /* لم تعد هذي الأداة تُسجَّل كتبويب مستقل — دُمجت داخل "إنشاء تقارير الغياب"
