@@ -169,3 +169,12 @@ $('saveAtt').addEventListener('click', async ()=>{
 
 registerTab({id:'teacherMain', label:'رصد الغياب', group:'teacherArea', groupLabel:'حصصي',
   show:f=>f.isTeacher, init:initTeacher});
+
+export async function jumpToEntryToday(entryId){
+  CUR_DATE = new Date();
+  $('dayPick').value = dstr(CUR_DATE);
+  await loadDay();
+  const lesson = MY_LESSONS.find(l=>l.entry_id===entryId);
+  if(!lesson){ toast('لم يُعثر على هذي الحصة ضمن جدول اليوم'); return; }
+  openRoster({...lesson, label:'الحصة '+PERIOD_NAMES[lesson.period_no], isMine:true});
+}

@@ -247,8 +247,13 @@ function renderGroups(){
   $('pmGroups').innerHTML=groupIds.map(initId=>{
     const actions=byInit[initId];
     const done=actions.filter(a=>a.status==='done').length;
+    const otherProjects=MY_PROJECTS.filter(p=>p.id!==CUR_PROJECT.id);
     return `<div class="pm-init-group">
-      <div class="pm-init-head"><span>📌 ${initById[initId]||'—'}</span><span>${done}/${actions.length}</span></div>
+      <div class="pm-init-head"><span>📌 ${initById[initId]||'—'}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span>${done}/${actions.length}</span>
+          ${otherProjects.length?`<select class="pm-move-init" data-init="${initId}" style="font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid var(--line)"><option value="">نقل لمشروع آخر…</option>${otherProjects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>`:''}
+        </span></div>
       ${actions.map(a=>`<div class="pm-action-row" data-id="${a.id}">
         <span class="pm-action-text" data-role="text">${a.text}</span>
         <span class="pm-action-meta" data-role="meta">${monthLabel(a.month)}${a.responsible?' — '+a.responsible:''}</span>
@@ -258,6 +263,15 @@ function renderGroups(){
       </div>`).join('')}
     </div>`;
   }).join('');
+
+  $('pmGroups').querySelectorAll('.pm-move-init').forEach(sel=>sel.addEventListener('change', async ()=>{
+    const targetId=sel.value; if(!targetId) return;
+    const targetName=MY_PROJECTS.find(p=>p.id===targetId)?.name||'';
+    if(!confirm(`نقل هذي المبادرة بكل إجراءاتها إلى مشروع "${targetName}"؟`)){ sel.value=''; return; }
+    const {error}=await db.from('plan_initiatives').update({project_id:targetId}).eq('id',sel.dataset.init);
+    if(error){ toast('تعذر النقل: '+error.message); return; }
+    toast('تم نقل المبادرة بلا فقدان بيانات'); loadInitiatives();
+  }));
 
   $('pmGroups').querySelectorAll('.pm-action-row').forEach(row=>{
     const id=row.dataset.id;

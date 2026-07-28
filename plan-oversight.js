@@ -12,6 +12,14 @@ const STATUS_LABEL={not_started:'لم يبدأ', in_progress:'جاري التن�
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="planOversight" style="display:none">
+  <div class="panel">
+    <h3>نقل مبادرة إلى مشروع آخر</h3>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <select id="poMoveInit" style="flex:1;min-width:220px"><option value="">اختاري المبادرة…</option></select>
+      <select id="poMoveTarget" style="min-width:180px"><option value="">إلى مشروع…</option></select>
+      <button class="btn ghost" id="poMoveBtn" style="width:auto;padding:9px 20px;color:var(--err);border-color:var(--err)">نقل</button>
+    </div>
+  </div>
   <div class="stats" id="poKpis"></div>
   <div class="panel">
     <h3>نسبة الإنجاز حسب الفصل الدراسي</h3>
@@ -59,10 +67,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaPO{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaPO, #printAreaPO *{visibility:visible}
-    #printAreaPO{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaPO{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .po-tbl{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px}
     .po-tbl th{background:#1a3a6b;color:#fff;padding:5px}
     .po-tbl td{border:1px solid #dee2e6;padding:4px;text-align:right}
@@ -83,17 +91,35 @@ async function initOversight(){
   $('poFilterStatus').addEventListener('change',renderTable);
   $('poPrint').addEventListener('click',printWhole);
   $('poXls').addEventListener('click',exportXls);
+  $('poMoveBtn').addEventListener('click',moveInitiative);
   await loadAll();
+}
+
+let ALL_INITIATIVES=[];
+async function moveInitiative(){
+  const initId=$('poMoveInit').value, targetId=$('poMoveTarget').value;
+  if(!initId||!targetId){ toast('اختاري المبادرة والمشروع الهدف'); return; }
+  const initName=ALL_INITIATIVES.find(i=>i.id===initId)?.name||'';
+  const targetName=PROJECTS.find(p=>p.id===targetId)?.name||'';
+  if(!confirm(`نقل "${initName}" بكل إجراءاتها إلى مشروع "${targetName}"؟`)) return;
+  const {error}=await db.from('plan_initiatives').update({project_id:targetId}).eq('id',initId);
+  if(error){ toast('تعذر النقل: '+error.message); return; }
+  toast('تم نقل المبادرة بلا فقدان بيانات');
+  $('poMoveInit').value=''; $('poMoveTarget').value='';
+  loadAll();
 }
 
 async function loadAll(){
   const {data:projects}=await db.from('plan_projects').select('id,name,sort_order').eq('academic_year_id',S.YEAR.id).order('sort_order');
   PROJECTS=projects||[];
   $('poFilterProject').innerHTML='<option value="">كل المشاريع</option>'+PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  $('poMoveTarget').innerHTML='<option value="">إلى مشروع…</option>'+PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   const projectIds=PROJECTS.map(p=>p.id);
   if(!projectIds.length){ ALL=[]; renderAll(); return; }
 
   const {data:initiatives}=await db.from('plan_initiatives').select('id,name,project_id').in('project_id',projectIds);
+  ALL_INITIATIVES=initiatives||[];
+  $('poMoveInit').innerHTML='<option value="">اختاري المبادرة…</option>'+ALL_INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
   const initIds=(initiatives||[]).map(i=>i.id);
   const initById={}; for(const i of initiatives||[]) initById[i.id]=i;
   const projById={}; for(const p of PROJECTS) projById[p.id]=p;
