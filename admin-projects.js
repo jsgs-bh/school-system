@@ -72,7 +72,11 @@ async function loadProjects(){
   $('apList').innerHTML=PROJECTS.map(p=>{
     const projLeads=(leads||[]).filter(l=>l.project_id===p.id);
     return `<div class="ap-row" data-project="${p.id}" data-chain="${p.chain_id||''}">
-      <div class="ap-row-head"><b>${p.name}</b><button class="btn ghost ap-chain-btn" style="width:auto;padding:6px 14px;font-size:12px">📈 سلسلة المشروع (عبر السنوات)</button></div>
+      <div class="ap-row-head"><b>${p.name}</b>
+        <span style="display:flex;gap:8px">
+          <button class="btn ghost ap-chain-btn" style="width:auto;padding:6px 14px;font-size:12px">📈 سلسلة المشروع (عبر السنوات)</button>
+          <button class="btn ghost ap-delete-btn" style="width:auto;padding:6px 14px;font-size:12px;color:var(--err);border-color:var(--err)">🗑 حذف</button>
+        </span></div>
       <div class="ap-chain-panel" style="display:none;margin:8px 0;padding:10px;background:var(--sand);border-radius:8px"></div>
       <div class="ap-subgoal-row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
         <span style="font-size:12px;color:#8a93a0;min-width:110px">الهدف الفرعي:</span>
@@ -99,6 +103,24 @@ async function loadProjects(){
   $('apList').querySelectorAll('.ap-row').forEach(row=>{
     const projectId=row.dataset.project;
     row.querySelector('.ap-chain-btn').addEventListener('click', ()=>toggleChainPanel(row));
+    row.querySelector('.ap-delete-btn').addEventListener('click', async ()=>{
+      const {data:inits}=await db.from('plan_initiatives').select('id').eq('project_id',projectId).limit(1);
+      if(inits && inits.length){
+        toast('لا يمكن حذف هذا المشروع — فيه مبادرات وإجراءات مسجَّلة عليه. احذفي مبادراته أولاً من "متابعة الخطة الشاملة"، أو انقليها لمشروع آخر.');
+        return;
+      }
+      const {data:homedCommittees}=await db.from('committees').select('id').eq('home_project_id',projectId).limit(1);
+      if(homedCommittees && homedCommittees.length){
+        toast('لا يمكن حذف هذا المشروع — فيه لجنة (أو أكثر) بيتها الأم هذا المشروع. غيّري بيتها الأم أولاً.');
+        return;
+      }
+      const projName=PROJECTS.find(p=>p.id===projectId)?.name||'';
+      if(!confirm(`حذف مشروع "${projName}" نهائياً؟ هذا لا يمكن التراجع عنه.`)) return;
+      await db.from('staff_project_leads').delete().eq('project_id',projectId);
+      const {error}=await db.from('plan_projects').delete().eq('id',projectId);
+      if(error){ toast('تعذر الحذف: '+error.message); return; }
+      toast('تم حذف المشروع'); loadProjects();
+    });
     row.querySelector('.ap-subgoal-pick').addEventListener('change', async (e)=>{
       const {error}=await db.from('plan_projects').update({subgoal_id:e.target.value||null}).eq('id',projectId);
       if(error){ toast('تعذر الحفظ: '+error.message); return; }
