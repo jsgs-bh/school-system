@@ -5,6 +5,7 @@ import { db, $, S, clean, toast, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="adminProjects" style="display:none">
+  <div id="apUnlinkedWarn" style="display:none"></div>
   <div class="panel">
     <h3>إنشاء مشروع جديد</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
@@ -19,6 +20,8 @@ $('appView').insertAdjacentHTML('beforeend', `
 </div>
 <style>
   #adminProjects.wide{max-width:1300px}
+  .ap-warn-banner{background:var(--err-soft);border:1.5px solid var(--err);color:var(--err);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;font-weight:600}
+  .ap-warn-banner ul{margin:6px 0 0;padding-inline-start:20px;font-weight:400}
   .ap-row{background:var(--white);border:1px solid var(--line);border-radius:11px;padding:14px 16px;margin-bottom:10px}
   .ap-row-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   .ap-leads{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
@@ -51,6 +54,14 @@ async function loadProjects(){
   const {data,error}=await db.from('plan_projects').select('id,name,chain_id,subgoal_id').eq('academic_year_id',S.YEAR.id).order('sort_order');
   if(error){ $('apList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   PROJECTS=data||[];
+  const unlinked=PROJECTS.filter(p=>!p.subgoal_id);
+  if(unlinked.length){
+    $('apUnlinkedWarn').style.display='block';
+    $('apUnlinkedWarn').innerHTML=`<div class="ap-warn-banner">⚠️ يوجد ${unlinked.length} مشروع غير مربوط بأي هدف فرعي في الشجرة الاستراتيجية:
+      <ul>${unlinked.map(p=>`<li>${p.name}</li>`).join('')}</ul></div>`;
+  }else{
+    $('apUnlinkedWarn').style.display='none'; $('apUnlinkedWarn').innerHTML='';
+  }
   if(!PROJECTS.length){ $('apList').innerHTML='<div class="empty-day">لا مشاريع بعد.</div>'; return; }
 
   const {data:subgoals}=await db.from('strategic_subgoals').select('id,name, strategic_indicators(name)').order('name');
