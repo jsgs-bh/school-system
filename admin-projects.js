@@ -30,7 +30,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ap-add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:relative}
 </style>`);
 
-let PROJECTS=[], ALL_SUBGOALS=[];
+let PROJECTS=[], ALL_SUBGOALS=[], PREV_PROJECTS=[];
 
 async function initAdminProjects(){
   if($('apCreateBtn').dataset.ready) return;
@@ -51,10 +51,17 @@ async function createProject(){
 }
 
 async function loadProjects(){
-  const {data,error}=await db.from('plan_projects').select('id,name,chain_id,subgoal_id').eq('academic_year_id',S.YEAR.id).order('sort_order');
+  const {data,error}=await db.from('plan_projects').select('id,name,chain_id').eq('academic_year_id',S.YEAR.id).order('sort_order');
   if(error){ $('apList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   PROJECTS=data||[];
-  const unlinked=PROJECTS.filter(p=>!p.subgoal_id);
+  if(!PROJECTS.length){ $('apList').innerHTML='<div class="empty-day">لا مشاريع بعد.</div>'; return; }
+
+  const {data:pLinks}=await db.from('plan_project_subgoals').select('project_id,subgoal_id').in('project_id',PROJECTS.map(p=>p.id));
+  const linksByProject={};
+  for(const l of pLinks||[]) (linksByProject[l.project_id] ??= new Set()).add(l.subgoal_id);
+  for(const p of PROJECTS) p.subgoalIds = linksByProject[p.id] || new Set();
+
+  const unlinked=PROJECTS.filter(p=>!p.subgoalIds.size);
   if(unlinked.length){
     $('apUnlinkedWarn').style.display='block';
     $('apUnlinkedWarn').innerHTML=`<div class="ap-warn-banner">⚠️ يوجد ${unlinked.length} مشروع غير مربوط بأي هدف فرعي في الشجرة الاستراتيجية:
@@ -62,10 +69,12 @@ async function loadProjects(){
   }else{
     $('apUnlinkedWarn').style.display='none'; $('apUnlinkedWarn').innerHTML='';
   }
-  if(!PROJECTS.length){ $('apList').innerHTML='<div class="empty-day">لا مشاريع بعد.</div>'; return; }
 
   const {data:subgoals}=await db.from('strategic_subgoals').select('id,name, strategic_indicators(name)').order('name');
   ALL_SUBGOALS=subgoals||[];
+
+  const {data:otherYearProjects}=await db.from('plan_projects').select('id,name,chain_id,academic_years(name)').neq('academic_year_id',S.YEAR.id).order('name');
+  PREV_PROJECTS=otherYearProjects||[];
 
   const {data:leads}=await db.from('staff_project_leads').select('id,staff_id,project_id, staff(full_name)').in('project_id',PROJECTS.map(p=>p.id));
 
@@ -78,17 +87,26 @@ async function loadProjects(){
           <button class="btn ghost ap-delete-btn" style="width:auto;padding:6px 14px;font-size:12px;color:var(--err);border-color:var(--err)">🗑 حذف</button>
         </span></div>
       <div class="ap-chain-panel" style="display:none;margin:8px 0;padding:10px;background:var(--sand);border-radius:8px"></div>
-      <div class="ap-subgoal-row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:12px;color:#8a93a0;min-width:110px">الهدف الفرعي:</span>
-        <select class="ap-subgoal-pick" style="flex:1;min-width:220px;font-size:12.5px">
-          <option value="">— غير مربوط —</option>
-          ${ALL_SUBGOALS.map(sg=>`<option value="${sg.id}" ${sg.id===p.subgoal_id?'selected':''}>[${sg.strategic_indicators?.name||''}] ${sg.name}</option>`).join('')}
-        </select>
+      <div class="ap-subgoal-row" style="margin-bottom:8px">
+        <span style="font-size:12px;color:#8a93a0">الأهداف الفرعية (يمكن اختيار أكثر من واحد):</span>
+        <div class="ap-subgoal-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-height:140px;overflow-y:auto;padding:8px;background:var(--sand);border-radius:8px">
+          ${ALL_SUBGOALS.map(sg=>`<label style="display:flex;align-items:center;gap:5px;background:var(--white);border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:11.5px;cursor:pointer">
+            <input type="checkbox" class="ap-subgoal-check" value="${sg.id}" ${p.subgoalIds.has(sg.id)?'checked':''}> [${sg.strategic_indicators?.name||''}] ${sg.name}
+          </label>`).join('')}
+        </div>
       </div>
       <div class="ap-link-row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
         <span style="font-size:12px;color:#8a93a0;min-width:110px">ربط بمشروع سابق:</span>
-        <input type="text" class="ap-prev-search" placeholder="ابحثي عن مشروع من سنة سابقة (حتى لو الاسم مختلف)…" style="flex:1;min-width:220px;padding:7px 10px;font-size:12.5px;border:1.5px solid var(--line);border-radius:7px">
-        <div class="sugg ap-prev-sugg" style="display:none"></div>
+        ${(()=>{
+          const linkedPrev = p.chain_id ? PREV_PROJECTS.find(pp=>pp.chain_id===p.chain_id) : null;
+          return linkedPrev
+            ? `<span style="font-size:12.5px;color:var(--ok);font-weight:600">✓ مرتبط بـ "${linkedPrev.name}" (${linkedPrev.academic_years?.name||'—'})</span>`
+            : `<span style="font-size:12.5px;color:var(--err)">✕ غير مرتبط بأي مشروع من سنة سابقة${PREV_PROJECTS.length?'':' — لا توجد مشاريع من سنوات سابقة بعد بقاعدة البيانات'}</span>`;
+        })()}
+        ${PREV_PROJECTS.length ? `<select class="ap-prev-pick" style="min-width:220px;font-size:12.5px">
+          <option value="">اختاري مشروعاً من سنة سابقة للربط…</option>
+          ${PREV_PROJECTS.map(pp=>`<option value="${pp.id}">${pp.name} (${pp.academic_years?.name||'—'})</option>`).join('')}
+        </select>` : ''}
       </div>
       <div class="ap-leads">
         ${projLeads.length ? projLeads.map(l=>`<span class="ap-lead-chip">${l.staff?.full_name||'—'}<button data-lead-id="${l.id}">✕</button></span>`).join('') : '<span style="color:#8a93a0;font-size:12.5px">لا رئيسة معيَّنة بعد</span>'}
@@ -121,32 +139,28 @@ async function loadProjects(){
       if(error){ toast('تعذر الحذف: '+error.message); return; }
       toast('تم حذف المشروع'); loadProjects();
     });
-    row.querySelector('.ap-subgoal-pick').addEventListener('change', async (e)=>{
-      const {error}=await db.from('plan_projects').update({subgoal_id:e.target.value||null}).eq('id',projectId);
-      if(error){ toast('تعذر الحفظ: '+error.message); return; }
-      toast('تم حفظ الربط بالهدف الفرعي');
-    });
-    const prevInp=row.querySelector('.ap-prev-search'), prevBox=row.querySelector('.ap-prev-sugg');
-    let prevDeb=null;
-    prevInp.addEventListener('input',()=>{
-      clearTimeout(prevDeb);
-      prevDeb=setTimeout(async ()=>{
-        const q=clean(prevInp.value);
-        if(q.length<2){ prevBox.style.display='none'; return; }
-        const {data:matches}=await db.from('plan_projects').select('id,name,chain_id,academic_years(name)').ilike('name',`%${q}%`).neq('id',projectId).limit(8);
-        if(!(matches||[]).length){ prevBox.style.display='none'; return; }
-        prevBox.innerHTML=matches.map((m,i)=>`<div data-i="${i}">${m.name} <small>(${m.academic_years?.name||'—'})</small></div>`).join('');
-        prevBox.style.display='block';
-        prevBox.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click', async ()=>{
-          const target=matches[i];
-          if(!confirm(`ربط هذا المشروع بنفس سلسلة "${target.name}" (${target.academic_years?.name||'—'})؟`)){ return; }
-          const chainId = target.chain_id || crypto.randomUUID();
-          if(!target.chain_id) await db.from('plan_projects').update({chain_id:chainId}).eq('id',target.id);
-          await db.from('plan_projects').update({chain_id:chainId}).eq('id',projectId);
-          toast('تم الربط اليدوي بنجاح'); prevBox.style.display='none'; prevInp.value=''; loadProjects();
-        }));
-      },300);
-    });
+    row.querySelectorAll('.ap-subgoal-check').forEach(cb=>cb.addEventListener('change', async ()=>{
+      if(cb.checked){
+        const {error}=await db.from('plan_project_subgoals').insert({project_id:projectId, subgoal_id:cb.value});
+        if(error){ toast('تعذر الربط: '+error.message); cb.checked=false; return; }
+      }else{
+        const {error}=await db.from('plan_project_subgoals').delete().eq('project_id',projectId).eq('subgoal_id',cb.value);
+        if(error){ toast('تعذر إلغاء الربط: '+error.message); cb.checked=true; return; }
+      }
+      toast('تم الحفظ'); loadProjects();
+    }));
+    const prevPick=row.querySelector('.ap-prev-pick');
+    if(prevPick){
+      prevPick.addEventListener('change', async ()=>{
+        if(!prevPick.value) return;
+        const target=PREV_PROJECTS.find(pp=>pp.id===prevPick.value);
+        if(!confirm(`ربط هذا المشروع بنفس سلسلة "${target.name}" (${target.academic_years?.name||'—'})؟`)){ prevPick.value=''; return; }
+        const chainId = target.chain_id || crypto.randomUUID();
+        if(!target.chain_id) await db.from('plan_projects').update({chain_id:chainId}).eq('id',target.id);
+        await db.from('plan_projects').update({chain_id:chainId}).eq('id',projectId);
+        toast('تم الربط اليدوي بنجاح'); loadProjects();
+      });
+    }
     row.querySelectorAll('button[data-lead-id]').forEach(b=>b.addEventListener('click', async ()=>{
       if(!confirm('إزالة هذي الرئيسة عن المشروع؟')) return;
       await db.from('staff_project_leads').delete().eq('id',b.dataset.leadId);
