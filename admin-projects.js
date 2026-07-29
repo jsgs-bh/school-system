@@ -39,13 +39,16 @@ async function initAdminProjects(){
 async function createProject(){
   const name=clean($('apNewName').value);
   if(!name){ toast('اكتبي اسم المشروع'); return; }
-  const {error}=await db.from('plan_projects').insert({academic_year_id:S.YEAR.id, name, sort_order:PROJECTS.length});
+  // سلسلة المشروع: لو فيه مشروع بنفس الاسم تماماً بسنة سابقة، نربطه تلقائياً بنفس سلسلته
+  const {data:existing}=await db.from('plan_projects').select('chain_id').eq('name',name).not('chain_id','is',null).limit(1).maybeSingle();
+  const chainId = existing?.chain_id || crypto.randomUUID();
+  const {error}=await db.from('plan_projects').insert({academic_year_id:S.YEAR.id, name, sort_order:PROJECTS.length, chain_id:chainId});
   if(error){ toast('تعذر الإنشاء: '+error.message); return; }
-  $('apNewName').value=''; toast('تم إنشاء المشروع'); loadProjects();
+  $('apNewName').value=''; toast(existing?'تم الإنشاء والربط بسلسلة المشروع من سنة سابقة':'تم إنشاء المشروع'); loadProjects();
 }
 
 async function loadProjects(){
-  const {data,error}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
+  const {data,error}=await db.from('plan_projects').select('id,name,chain_id').eq('academic_year_id',S.YEAR.id).order('sort_order');
   if(error){ $('apList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   PROJECTS=data||[];
   if(!PROJECTS.length){ $('apList').innerHTML='<div class="empty-day">لا مشاريع بعد.</div>'; return; }
@@ -54,8 +57,9 @@ async function loadProjects(){
 
   $('apList').innerHTML=PROJECTS.map(p=>{
     const projLeads=(leads||[]).filter(l=>l.project_id===p.id);
-    return `<div class="ap-row" data-project="${p.id}">
-      <div class="ap-row-head"><b>${p.name}</b></div>
+    return `<div class="ap-row" data-project="${p.id}" data-chain="${p.chain_id||''}">
+      <div class="ap-row-head"><b>${p.name}</b><button class="btn ghost ap-chain-btn" style="width:auto;padding:6px 14px;font-size:12px">📈 سلسلة المشروع (عبر السنوات)</button></div>
+      <div class="ap-chain-panel" style="display:none;margin:8px 0;padding:10px;background:var(--sand);border-radius:8px"></div>
       <div class="ap-leads">
         ${projLeads.length ? projLeads.map(l=>`<span class="ap-lead-chip">${l.staff?.full_name||'—'}<button data-lead-id="${l.id}">✕</button></span>`).join('') : '<span style="color:#8a93a0;font-size:12.5px">لا رئيسة معيَّنة بعد</span>'}
       </div>
@@ -68,6 +72,7 @@ async function loadProjects(){
 
   $('apList').querySelectorAll('.ap-row').forEach(row=>{
     const projectId=row.dataset.project;
+    row.querySelector('.ap-chain-btn').addEventListener('click', ()=>toggleChainPanel(row));
     row.querySelectorAll('button[data-lead-id]').forEach(b=>b.addEventListener('click', async ()=>{
       if(!confirm('إزالة هذي الرئيسة عن المشروع؟')) return;
       await db.from('staff_project_leads').delete().eq('id',b.dataset.leadId);
@@ -102,6 +107,28 @@ async function assignLead(projectId,staffMember,inp,box){
     if(error){ toast(/duplicate|unique/i.test(error.message)?'هذي المنتسبة مُعيَّنة على هذا المشروع مسبقاً':'تعذر التعيين: '+error.message); return; }
     toast('تم التعيين'); loadProjects();
   }catch(err){ toast('تعذر التعيين: '+(err.message||err)); }
+}
+
+async function toggleChainPanel(row){
+  const panel=row.querySelector('.ap-chain-panel');
+  if(panel.style.display==='block'){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  const chainId=row.dataset.chain;
+  if(!chainId){ panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">هذا المشروع غير مربوط بسلسلة (أنشئ قبل تفعيل هذي الميزة).</div>'; return; }
+  panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">جارٍ التحميل…</div>';
+  const {data:chainProjects}=await db.from('plan_projects').select('id,name,academic_years(name)').eq('chain_id',chainId).order('created_at');
+  if(!chainProjects || chainProjects.length<2){ panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">لا توجد سنوات سابقة مرتبطة بهذا المشروع بعد.</div>'; return; }
+
+  const rows=[];
+  for(const p of chainProjects){
+    const {data:inits}=await db.from('plan_initiatives').select('id').eq('project_id',p.id);
+    const initIds=(inits||[]).map(i=>i.id);
+    const {data:acts}= initIds.length ? await db.from('plan_actions').select('status').in('initiative_id',initIds) : {data:[]};
+    const total=(acts||[]).length, done=(acts||[]).filter(a=>a.status==='done').length;
+    rows.push({year:p.academic_years?.name||'—', total, done, pct: total?Math.round(done/total*100):0});
+  }
+  panel.innerHTML=rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px">
+    <span><b>${r.year}</b></span><span>${r.done}/${r.total} إجراء — ${r.pct}٪ إنجاز</span></div>`).join('');
 }
 
 registerTab({id:'adminProjects', label:'المشاريع', group:'plan', groupLabel:'الخطة الاستراتيجية',
