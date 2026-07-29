@@ -30,7 +30,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ap-add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:relative}
 </style>`);
 
-let PROJECTS=[], ALL_SUBGOALS=[], PREV_PROJECTS=[];
+let PROJECTS=[], ALL_INDICATORS=[], PREV_PROJECTS=[];
 
 async function initAdminProjects(){
   if($('apCreateBtn').dataset.ready) return;
@@ -56,22 +56,22 @@ async function loadProjects(){
   PROJECTS=data||[];
   if(!PROJECTS.length){ $('apList').innerHTML='<div class="empty-day">لا مشاريع بعد.</div>'; return; }
 
-  const {data:pLinks}=await db.from('plan_project_subgoals').select('project_id,subgoal_id').in('project_id',PROJECTS.map(p=>p.id));
+  const {data:pLinks}=await db.from('plan_project_indicators').select('project_id,indicator_id').in('project_id',PROJECTS.map(p=>p.id));
   const linksByProject={};
-  for(const l of pLinks||[]) (linksByProject[l.project_id] ??= new Set()).add(l.subgoal_id);
-  for(const p of PROJECTS) p.subgoalIds = linksByProject[p.id] || new Set();
+  for(const l of pLinks||[]) (linksByProject[l.project_id] ??= new Set()).add(l.indicator_id);
+  for(const p of PROJECTS) p.indicatorIds = linksByProject[p.id] || new Set();
 
-  const unlinked=PROJECTS.filter(p=>!p.subgoalIds.size);
+  const unlinked=PROJECTS.filter(p=>!p.indicatorIds.size);
   if(unlinked.length){
     $('apUnlinkedWarn').style.display='block';
-    $('apUnlinkedWarn').innerHTML=`<div class="ap-warn-banner">⚠️ يوجد ${unlinked.length} مشروع غير مربوط بأي هدف فرعي في الشجرة الاستراتيجية:
+    $('apUnlinkedWarn').innerHTML=`<div class="ap-warn-banner">⚠️ يوجد ${unlinked.length} مشروع غير مربوط بأي مؤشر في الشجرة الاستراتيجية:
       <ul>${unlinked.map(p=>`<li>${p.name}</li>`).join('')}</ul></div>`;
   }else{
     $('apUnlinkedWarn').style.display='none'; $('apUnlinkedWarn').innerHTML='';
   }
 
-  const {data:subgoals}=await db.from('strategic_subgoals').select('id,name, strategic_indicators(name)').order('name');
-  ALL_SUBGOALS=subgoals||[];
+  const {data:indicators}=await db.from('strategic_indicators').select('id,name, strategic_standards(name)').order('name');
+  ALL_INDICATORS=indicators||[];
 
   const {data:otherYearProjects}=await db.from('plan_projects').select('id,name,chain_id,academic_years(name)').neq('academic_year_id',S.YEAR.id).order('name');
   PREV_PROJECTS=otherYearProjects||[];
@@ -88,10 +88,10 @@ async function loadProjects(){
         </span></div>
       <div class="ap-chain-panel" style="display:none;margin:8px 0;padding:10px;background:var(--sand);border-radius:8px"></div>
       <div class="ap-subgoal-row" style="margin-bottom:8px">
-        <span style="font-size:12px;color:#8a93a0">الأهداف الفرعية (يمكن اختيار أكثر من واحد):</span>
+        <span style="font-size:12px;color:#8a93a0">المؤشرات (يمكن اختيار أكثر من واحد):</span>
         <div class="ap-subgoal-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-height:140px;overflow-y:auto;padding:8px;background:var(--sand);border-radius:8px">
-          ${ALL_SUBGOALS.map(sg=>`<label style="display:flex;align-items:center;gap:5px;background:var(--white);border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:11.5px;cursor:pointer">
-            <input type="checkbox" class="ap-subgoal-check" value="${sg.id}" ${p.subgoalIds.has(sg.id)?'checked':''}> [${sg.strategic_indicators?.name||''}] ${sg.name}
+          ${ALL_INDICATORS.map(ind=>`<label style="display:flex;align-items:center;gap:5px;background:var(--white);border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:11.5px;cursor:pointer">
+            <input type="checkbox" class="ap-subgoal-check" value="${ind.id}" ${p.indicatorIds.has(ind.id)?'checked':''}> [${ind.strategic_standards?.name||''}] ${ind.name}
           </label>`).join('')}
         </div>
       </div>
@@ -141,10 +141,10 @@ async function loadProjects(){
     });
     row.querySelectorAll('.ap-subgoal-check').forEach(cb=>cb.addEventListener('change', async ()=>{
       if(cb.checked){
-        const {error}=await db.from('plan_project_subgoals').insert({project_id:projectId, subgoal_id:cb.value});
+        const {error}=await db.from('plan_project_indicators').insert({project_id:projectId, indicator_id:cb.value});
         if(error){ toast('تعذر الربط: '+error.message); cb.checked=false; return; }
       }else{
-        const {error}=await db.from('plan_project_subgoals').delete().eq('project_id',projectId).eq('subgoal_id',cb.value);
+        const {error}=await db.from('plan_project_indicators').delete().eq('project_id',projectId).eq('indicator_id',cb.value);
         if(error){ toast('تعذر إلغاء الربط: '+error.message); cb.checked=true; return; }
       }
       toast('تم الحفظ'); loadProjects();
