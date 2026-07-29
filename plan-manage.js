@@ -6,8 +6,8 @@
 import { db, $, S, clean, toast, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 const MONTHS=[
-  {id:'sep',label:'سبتمبر'},{id:'oct',label:'أكتوبر'},{id:'nov',label:'نوفمبر'},{id:'dec',label:'ديسمبر'},{id:'jan',label:'يناير'},
-  {id:'feb',label:'فبراير'},{id:'mar',label:'مارس'},{id:'apr',label:'أبريل'},{id:'may',label:'مايو'},{id:'jun',label:'يونيو'},
+  {id:'sep',label:'سبتمبر',sem:1},{id:'oct',label:'أكتوبر',sem:1},{id:'nov',label:'نوفمبر',sem:1},{id:'dec',label:'ديسمبر',sem:1},{id:'jan',label:'يناير',sem:1},
+  {id:'feb',label:'فبراير',sem:2},{id:'mar',label:'مارس',sem:2},{id:'apr',label:'أبريل',sem:2},{id:'may',label:'مايو',sem:2},{id:'jun',label:'يونيو',sem:2},
 ];
 const STATUS_LABEL={not_started:'لم يبدأ', in_progress:'جاري التنفيذ', done:'تم التنفيذ'};
 
@@ -63,6 +63,11 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
     <div class="actions" style="margin-bottom:14px">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer"><input type="checkbox" id="pmBlankStatus"> عمود حالة فاضٍ (للتعبئة اليدوية)</label>
+      <select id="pmSemesterPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+        <option value="1">الفصل الأول</option>
+        <option value="2">الفصل الثاني</option>
+      </select>
+      <button class="btn gold" id="pmPrintSemester">📋 التقرير الختامي للفصل</button>
       <button class="btn ghost" id="pmPrintMonth">🖨️ طباعة الشهر المحدَّد</button>
       <button class="btn ghost" id="pmPrintAll">🖨️ طباعة كل الأشهر</button>
       <button class="btn ghost" id="pmXls">⬇ تصدير Excel</button>
@@ -123,6 +128,7 @@ async function initManage(){
   $('pmMergeBtn').addEventListener('click',mergeInitiatives);
   $('pmPrintMonth').addEventListener('click',()=>printPlan(false));
   $('pmPrintAll').addEventListener('click',()=>printPlan(true));
+  $('pmPrintSemester').addEventListener('click',printSemesterReport);
   $('pmXls').addEventListener('click',exportXls);
   await loadInitiatives();
 }
@@ -336,6 +342,34 @@ function printPlan(allMonths){
     ${body}
     ${printFooterHtml('رئيسة المشروع', S.ME.full_name)}`;
   printWithTitle(`الخطة_${CUR_PROJECT.name}`,'printAreaPM');
+}
+
+/* ============ التقرير الختامي للفصل ============ */
+function printSemesterReport(){
+  const sem=+$('pmSemesterPick').value;
+  const semMonths=MONTHS.filter(m=>m.sem===sem);
+  const semActions=ACTIONS.filter(a=>semMonths.some(m=>m.id===a.month));
+  if(!semActions.length){ toast('لا إجراءات مسجَّلة لهذا الفصل بعد'); return; }
+  const initById={}; for(const i of INITIATIVES) initById[i.id]=i.name;
+  const done=semActions.filter(a=>a.status==='done').length;
+  const pct=Math.round(done/semActions.length*100);
+  const semLabel = sem===1?'الفصل الأول':'الفصل الثاني';
+
+  let body=`<div class="pm-mhead" style="font-size:13px">📊 ملخص عام: ${semActions.length} إجراء إجمالاً — ${done} تم تنفيذه — نسبة الإنجاز ${pct}٪</div>`;
+  semMonths.forEach(m=>{
+    const inMonth=semActions.filter(a=>a.month===m.id);
+    if(!inMonth.length) return;
+    const mdone=inMonth.filter(a=>a.status==='done').length;
+    body+=`<div class="pm-mhead">📅 ${m.label} (${mdone}/${inMonth.length} منجز)</div>
+      <table class="pm-tbl"><tr><th>#</th><th>المبادرة</th><th>الإجراء</th><th>المنفذون</th><th>الحالة</th></tr>
+      ${inMonth.map((a,n)=>`<tr class="${a.status}"><td>${n+1}</td><td>${initById[a.initiative_id]||'—'}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
+      </table>`;
+  });
+  $('printAreaPM').innerHTML=`
+    ${printHeaderHtml(`التقرير الختامي — ${semLabel} — ${CUR_PROJECT.name}`)}
+    ${body}
+    ${printFooterHtml('رئيسة المشروع', S.ME.full_name)}`;
+  printWithTitle(`التقرير_الختامي_${semLabel}_${CUR_PROJECT.name}`,'printAreaPM');
 }
 
 /* ============ تصدير Excel ============ */
