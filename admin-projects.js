@@ -1,11 +1,19 @@
 /* admin-projects.js — المشاريع (تحت مجموعة "الخطة الاستراتيجية")
    للأدمن: إنشاء مشاريع جديدة، وتعيين رئيسة لكل مشروع مباشرة (تمنحها
    دور "مسؤولة مشروع" تلقائياً وتربطها بالمشروع عبر staff_project_leads). */
-import { db, $, S, clean, toast, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
+import { db, $, S, clean, toast, bindDrop, readSheet, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="adminProjects" style="display:none">
   <div id="apUnlinkedWarn" style="display:none"></div>
+  <div class="panel">
+    <h3>رفع ملف الخطة (بداية العام الدراسي)</h3>
+    <div class="sub">ملف إكسل بأربعة أعمدة بهذا الترتيب: <b>المشروع</b> — <b>المبادرة</b> — <b>الإجراء</b> — <b>الشهر</b> (بالعربي: سبتمبر..يونيو) — <b>المسؤول</b> (اختياري). كل صف = إجراء واحد. المشاريع والمبادرات تُنشأ تلقائياً لو ما كانت موجودة، وتُربط بالسنة الدراسية النشطة (${S.YEAR?.name||''}) — والمشاريع تلقائياً تنضم لسلسلتها لو فيه مشروع بنفس الاسم بسنة سابقة.</div>
+    <div class="dropzone" id="apPlanDrop"><b id="apPlanFileLabel">اسحبي ملف الإكسل هنا أو اضغطي للاختيار</b><p>xlsx أو xls</p>
+      <input type="file" id="apPlanFile" accept=".xlsx,.xls" hidden></div>
+    <button class="btn gold" id="apPlanImportBtn" style="width:auto;padding:9px 20px;margin-top:10px" disabled>استيراد الملف</button>
+    <div id="apPlanImportStatus" style="display:none;margin-top:12px"></div>
+  </div>
   <div class="panel" style="display:flex;justify-content:flex-end">
     <button class="btn ghost" id="apPrintReport" style="width:auto;padding:9px 20px">🖨️ طباعة قائمة (مجال ← مؤشر ← مشاريع ← رئيسة)</button>
   </div>
@@ -54,6 +62,9 @@ async function initAdminProjects(){
   $('apCreateBtn').dataset.ready='1';
   $('apCreateBtn').addEventListener('click',createProject);
   $('apPrintReport').addEventListener('click',printReport);
+  let planFile=null;
+  bindDrop($('apPlanDrop'),$('apPlanFile'), f=>{ planFile=f; $('apPlanFileLabel').textContent=`الملف: ${f.name}`; $('apPlanImportBtn').disabled=false; });
+  $('apPlanImportBtn').addEventListener('click', ()=>importPlanFile(planFile));
   await loadProjects();
 }
 
@@ -291,6 +302,77 @@ async function printReport(){
     ${body || '<p style="text-align:center;color:#8a93a0">لا مشاريع مربوطة بأي مؤشر بعد</p>'}
     ${printFooterHtml('', S.ME?.full_name||'')}`;
   printWithTitle('المشاريع_حسب_المجال_والمؤشر','printAreaAP');
+}
+
+const AR_MONTH_MAP={
+  'سبتمبر':'sep','أكتوبر':'oct','اكتوبر':'oct','نوفمبر':'nov','ديسمبر':'dec','يناير':'jan',
+  'فبراير':'feb','مارس':'mar','أبريل':'apr','ابريل':'apr','مايو':'may','يونيو':'jun',
+};
+
+async function importPlanFile(file){
+  if(!file){ toast('اختاري ملفاً أولاً'); return; }
+  const status=$('apPlanImportStatus'); status.style.display='block'; status.className='result';
+  status.textContent='جارٍ قراءة الملف…';
+  const btn=$('apPlanImportBtn'); btn.disabled=true;
+  try{
+    const rows=await readSheet(file);
+    const dataRows=rows.slice(1).filter(r=>r.some(c=>String(c||'').trim()));
+    if(!dataRows.length){ status.className='result err'; status.textContent='الملف فاضٍ أو بلا بيانات.'; return; }
+
+    const warns=[];
+    const parsed=[];
+    dataRows.forEach((r,i)=>{
+      const [projName,initName,actionText,monthRaw,resp]=r.map(c=>String(c||'').trim());
+      if(!projName||!initName||!actionText){ warns.push(`سطر ${i+2}: ناقص (مشروع/مبادرة/إجراء)`); return; }
+      const month=AR_MONTH_MAP[monthRaw];
+      if(!month){ warns.push(`سطر ${i+2}: اسم شهر غير معروف "${monthRaw}"`); return; }
+      parsed.push({projName,initName,actionText,month,resp:resp||null});
+    });
+    if(!parsed.length){ status.className='result err'; status.textContent='لا صفوف صالحة للاستيراد. راجعي التنبيهات: '+warns.join(' | '); return; }
+
+    status.textContent='جارٍ إنشاء المشاريع…';
+    const projectIdByName={};
+    for(const pName of [...new Set(parsed.map(p=>p.projName))]){
+      const {data:existingThisYear}=await db.from('plan_projects').select('id').eq('academic_year_id',S.YEAR.id).eq('name',pName).maybeSingle();
+      if(existingThisYear){ projectIdByName[pName]=existingThisYear.id; continue; }
+      const {data:existingPrev}=await db.from('plan_projects').select('chain_id').eq('name',pName).not('chain_id','is',null).limit(1).maybeSingle();
+      const chainId=existingPrev?.chain_id || crypto.randomUUID();
+      const {data:created,error}=await db.from('plan_projects').insert({academic_year_id:S.YEAR.id, name:pName, sort_order:999, chain_id:chainId}).select('id').single();
+      if(error){ warns.push(`تعذر إنشاء مشروع "${pName}": ${error.message}`); continue; }
+      projectIdByName[pName]=created.id;
+    }
+
+    status.textContent='جارٍ إنشاء المبادرات…';
+    const initIdByKey={};
+    const uniqueInitPairs=[...new Set(parsed.map(p=>`${p.projName}|||${p.initName}`))].map(k=>k.split('|||'));
+    for(const [projName,initName] of uniqueInitPairs){
+      const projectId=projectIdByName[projName];
+      if(!projectId) continue;
+      const {data:existing}=await db.from('plan_initiatives').select('id').eq('project_id',projectId).eq('name',initName).maybeSingle();
+      if(existing){ initIdByKey[`${projName}|||${initName}`]=existing.id; continue; }
+      const {data:created,error}=await db.from('plan_initiatives').insert({project_id:projectId, name:initName, created_by:S.ME.id}).select('id').single();
+      if(error){ warns.push(`تعذر إنشاء مبادرة "${initName}": ${error.message}`); continue; }
+      initIdByKey[`${projName}|||${initName}`]=created.id;
+    }
+
+    status.textContent='جارٍ إضافة الإجراءات…';
+    const actionRows=parsed.map(p=>{
+      const initId=initIdByKey[`${p.projName}|||${p.initName}`];
+      if(!initId) return null;
+      return {initiative_id:initId, text:p.actionText, responsible:p.resp, month:p.month, status:'not_started', created_by:S.ME.id};
+    }).filter(Boolean);
+    if(actionRows.length){
+      const {error}=await db.from('plan_actions').insert(actionRows);
+      if(error){ warns.push('تعذر حفظ بعض الإجراءات: '+error.message); }
+    }
+
+    status.className = warns.length ? 'result' : 'result ok';
+    status.innerHTML = `✅ تم استيراد ${actionRows.length} إجراء ضمن ${Object.keys(projectIdByName).length} مشروع للسنة ${S.YEAR.name}.`
+      + (warns.length ? `<br>⚠️ ${warns.length} تنبيه:<br>`+warns.slice(0,20).join('<br>') : '');
+    toast('تم الاستيراد'); loadProjects();
+  }catch(err){
+    status.className='result err'; status.textContent='خطأ غير متوقع: '+(err.message||err);
+  }finally{ btn.disabled=false; }
 }
 
 registerTab({id:'adminProjects', label:'المشاريع', group:'plan', groupLabel:'الخطة الاستراتيجية',
