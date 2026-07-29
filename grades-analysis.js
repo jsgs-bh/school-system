@@ -4,7 +4,7 @@
    ثلاث شاشات: متابعة الرصد (شعبة×اختبار) ← تحليل تفصيلي (تصنيف+ملاحظات+إجراءات)
    ومقارنة بين اختبارين أو أكثر لنفس الشعبة. تصدير إكسل وPDF لكل شاشة،
    وتصدير مجمّع لمقرر كامل أو لكل المقررات. */
-import { db, $, S, chunk, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, chunk, toast, printWithTitle, getSemesterSubjectIds, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const EXAM_NAMES = ['اختبار تشخيصي','الاختبار الأول','الاختبار الثاني'];
@@ -115,10 +115,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaGA{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaGA, #printAreaGA *{visibility:visible}
-    #printAreaGA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaGA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .ga-page{page-break-after:always;padding:6px}
     .ga-page:last-child{page-break-after:auto}
     .ga-head{text-align:center;margin-bottom:12px}
@@ -157,8 +157,9 @@ async function initAnalysis(){
     SUPERVISED=await getSupervisedTeacherIds();
   }else SUPERVISED=null;
 
+  const semSubjIds=await getSemesterSubjectIds();
   const {data:subs}=await db.from('subjects').select('id,code,exam_total').order('code');
-  SUBJECTS=subs||[];
+  SUBJECTS=(subs||[]).filter(s=>semSubjIds.includes(s.id));
   $('gaSubject').innerHTML=SUBJECTS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
   $('brSubjectList').innerHTML=SUBJECTS.map(s=>`<label class="ga-cmp-check"><input type="checkbox" value="${s.id}"> ${s.code}</label>`).join('')
     || '<span style="color:#8a93a0;font-size:13px">لا مقررات بعد.</span>';
@@ -193,8 +194,10 @@ async function getSupervisedTeacherIds(){
   return set;
 }
 
-/* ============ شاشة المتابعة: شعبة × اختبار ============ */
-async function fetchSectionsForSubject(subjectId){
+/* ============ شاشة المتابعة: مجموعة تدريس × اختبار ============ */
+/* نُبقي هذي بمستوى "الشعبة" (تُدمج كل مجموعاتها) للتقارير الإجمالية
+   (التغذية الراجعة، الكفايات، المقارنة الإجمالية للقسم الشامل). */
+async function fetchUniqueSectionsForSubject(subjectId){
   const {data:rows,error}=await db.from('entry_teachers')
     .select('staff_id, staff(full_name), timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code))')
     .eq('timetable_entries.subject_id',subjectId).eq('timetable_entries.academic_year_id',S.YEAR.id);
@@ -209,37 +212,58 @@ async function fetchSectionsForSubject(subjectId){
   }
   return {secMap};
 }
+/* بمستوى "مجموعة التدريس" الفعلية — تفصل كل معلمة عن الأخرى داخل نفس
+   الشعبة المنقسمة. تُستخدم في شاشة المتابعة التفاعلية والتحليل والمقارنة. */
+async function fetchGroupsForSubject(subjectId){
+  const {data:groups,error}=await db.from('teaching_groups')
+    .select('id,name,section_id,teacher_id,sections(code),staff:teacher_id(full_name)')
+    .eq('subject_id',subjectId);
+  if(error) return {error};
+  const filtered = SUPERVISED ? (groups||[]).filter(g=>SUPERVISED.has(g.teacher_id)) : (groups||[]);
+  const secMap={};
+  for(const g of filtered){
+    const code=g.sections?.code||'؟';
+    const label = g.name==='المجموعة الوحيدة' ? code : `${code} — ${g.name}`;
+    secMap[label]={group_id:g.id, section_id:g.section_id, section_code:code, teacher_name:g.staff?.full_name||'—'};
+  }
+  return {secMap};
+}
 async function loadGrid(){
   const tbl=$('gaTable');
   tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
   if(!CUR_SUBJECT){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا مقررات بعد.</td></tr>'; return; }
-  const {secMap,error}=await fetchSectionsForSubject(CUR_SUBJECT.id);
+  const {secMap,error}=await fetchGroupsForSubject(CUR_SUBJECT.id);
   if(error){ tbl.innerHTML=`<tr><td style="padding:30px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
-  const codes=Object.keys(secMap).sort((a,b)=>a.localeCompare(b,'ar'));
-  if(!codes.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا شعب ضمن نطاقك لهذا المقرر.</td></tr>'; return; }
+  const labels=Object.keys(secMap).sort((a,b)=>a.localeCompare(b,'ar'));
+  if(!labels.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا شعب ضمن نطاقك لهذا المقرر.</td></tr>'; return; }
+
+  const groupIds=labels.map(l=>secMap[l].group_id);
+  const {data:members}=await db.from('teaching_group_members').select('group_id,student_id').in('group_id',groupIds);
+  const groupOfStudent={}, totalByGroup={};
+  for(const m of members||[]){ groupOfStudent[m.student_id]=m.group_id; totalByGroup[m.group_id]=(totalByGroup[m.group_id]||0)+1; }
 
   const {data:exams}=await db.from('exams').select('id,name,section_id,exam_total').eq('subject_id',CUR_SUBJECT.id);
-  const {data:enr}=await db.from('enrollments').select('section_id').is('to_date',null);
-  const enrolledCount={}; for(const e of enr||[]) enrolledCount[e.section_id]=(enrolledCount[e.section_id]||0)+1;
-
   const examBySecName={};
   for(const ex of exams||[]) examBySecName[`${ex.section_id}|${ex.name}`]=ex;
   const examIds=(exams||[]).map(e=>e.id);
-  const countBy={};
+  const doneByGroupExam={};
   for(const c of chunk(examIds,200)){
-    const {data:recs}=await db.from('grade_records').select('exam_id').in('exam_id',c).not('score','is',null);
-    for(const r of recs||[]) countBy[r.exam_id]=(countBy[r.exam_id]||0)+1;
+    const {data:recs}=await db.from('grade_records').select('exam_id,student_id').in('exam_id',c).not('score','is',null);
+    for(const r of recs||[]){
+      const gid=groupOfStudent[r.student_id]; if(!gid) continue;
+      doneByGroupExam[gid] ??= {}; doneByGroupExam[gid][r.exam_id]=(doneByGroupExam[gid][r.exam_id]||0)+1;
+    }
   }
 
   let html='<tr><th>الشعبة</th><th>المعلمة</th>'+EXAM_NAMES.map(n=>`<th>${n}</th>`).join('')+'</tr>';
-  for(const code of codes){
-    const sec=secMap[code];
-    html+=`<tr><td class="sec">${code}</td><td style="font-size:12px">${[...sec.teachers].join(' / ')||'—'}</td>`;
+  for(const label of labels){
+    const g=secMap[label];
+    html+=`<tr><td class="sec">${label}</td><td style="font-size:12px">${g.teacher_name}</td>`;
     for(const name of EXAM_NAMES){
-      const ex=examBySecName[`${sec.section_id}|${name}`];
+      const ex=examBySecName[`${g.section_id}|${name}`];
       if(!ex){ html+='<td><div class="ga-cell empty">لم يُنشأ</div></td>'; continue; }
-      const done=countBy[ex.id]||0, total=enrolledCount[sec.section_id]||0;
-      html+=`<td><div class="ga-cell" data-exam="${ex.id}" data-sec="${code}" data-secid="${sec.section_id}" data-name="${name}" data-total="${ex.exam_total ?? CUR_SUBJECT.exam_total}">
+      const done=doneByGroupExam[g.group_id]?.[ex.id]||0, total=totalByGroup[g.group_id]||0;
+      html+=`<td><div class="ga-cell" data-exam="${ex.id}" data-sec="${label}" data-groupid="${g.group_id}" data-secid="${g.section_id}" data-name="${name}" data-total="${ex.exam_total ?? CUR_SUBJECT.exam_total}">
         <b>${done}/${total}</b><small>${done>=total&&total>0?'مكتمل ✓':'رصد جزئي'}</small></div></td>`;
     }
     html+='</tr>';
@@ -249,9 +273,9 @@ async function loadGrid(){
 }
 
 /* ============ شاشة التحليل التفصيلي ============ */
-async function buildDetail(secId,secCode,examId,examName,examTotal){
-  const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number,special_case)').eq('section_id',secId).is('to_date',null);
-  const students=(enr||[]).map(e=>e.students).filter(Boolean);
+async function buildDetail(groupId,secId,secCode,examId,examName,examTotal){
+  const {data:mem}=await db.from('teaching_group_members').select('students(id,full_name,academic_number,special_case)').eq('group_id',groupId);
+  const students=(mem||[]).map(m=>m.students).filter(Boolean);
   const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',examId);
   const scoreBy={}; for(const r of recs||[]) if(r.score!=null) scoreBy[r.student_id]=r.score;
   const {data:notes}=await db.from('grade_notes').select('*').eq('exam_id',examId);
@@ -272,7 +296,7 @@ async function buildDetail(secId,secCode,examId,examName,examTotal){
   const passCount=graded.filter(r=>r.pct>=THRESH.pass_pct).length;
   const masteryCount=graded.filter(r=>r.pct>=THRESH.mastery_pct).length;
   const failCount=graded.length-passCount;
-  return {secId,secCode,examId,examName,examTotal,students,rows,graded,passCount,masteryCount,failCount,generalNote};
+  return {groupId,secId,secCode,examId,examName,examTotal,students,rows,graded,passCount,masteryCount,failCount,generalNote};
 }
 
 async function openDetail(d){
@@ -284,7 +308,7 @@ async function openDetail(d){
   $('gaStudentTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
   $('gaGenNote').value=''; $('gaGenAction').value='';
 
-  const det=await buildDetail(d.secid,d.sec,d.exam,d.name,examTotal);
+  const det=await buildDetail(d.groupid,d.secid,d.sec,d.exam,d.name,examTotal);
   renderDetail(det);
   CUR_DETAIL=det;
 }
@@ -410,17 +434,17 @@ function exportPdf(){
 
 /* ============ تصدير مجمّع: مقرر كامل أو كل المقررات ============ */
 async function collectSubjectDetails(subject){
-  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const {secMap}=await fetchGroupsForSubject(subject.id);
   const details=[];
-  for(const code of Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar'))){
-    const sec=secMap[code];
-    const {data:exams}=await db.from('exams').select('id,name,exam_total').eq('subject_id',subject.id).eq('section_id',sec.section_id);
+  for(const label of Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar'))){
+    const g=secMap[label];
+    const {data:exams}=await db.from('exams').select('id,name,exam_total').eq('subject_id',subject.id).eq('section_id',g.section_id);
     for(const name of EXAM_NAMES){
       const ex=(exams||[]).find(e=>e.name===name);
       if(!ex) continue;
       const {data:recs}=await db.from('grade_records').select('id').eq('exam_id',ex.id).not('score','is',null);
       if(!(recs||[]).length) continue; // تجاهل الاختبارات غير المرصودة إطلاقاً
-      const det=await buildDetail(sec.section_id,code,ex.id,name, ex.exam_total ?? subject.exam_total);
+      const det=await buildDetail(g.group_id, g.section_id, label, ex.id, name, ex.exam_total ?? subject.exam_total);
       details.push(det);
     }
   }
@@ -481,8 +505,8 @@ async function runCompare(){
   const checked=[...$('gaCompareExamPick').querySelectorAll('input:checked')];
   if(checked.length<2){ toast('اختاري اختبارين على الأقل'); return; }
   const exams=checked.map(c=>({id:c.value,name:c.dataset.name,total:+c.dataset.total}));
-  const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',CUR_DETAIL.secId).is('to_date',null);
-  const students=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
+  const {data:mem}=await db.from('teaching_group_members').select('students(id,full_name,academic_number)').eq('group_id',CUR_DETAIL.groupId);
+  const students=(mem||[]).map(m=>m.students).filter(Boolean).sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
   const scoresByExam={};
   for(const ex of exams){
     const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',ex.id);
@@ -637,7 +661,7 @@ async function exportCompareWord(){
 async function fetchRemedialForBundle(subject){
   const {data:plans}=await db.from('remedial_plans').select('id,exam_name,goal').eq('subject_id',subject.id);
   if(!plans?.length) return [];
-  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const {secMap}=await fetchUniqueSectionsForSubject(subject.id);
   const sections=Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar')).map(code=>({code,id:secMap[code].section_id}));
   const {data:th}=await db.from('grade_settings').select('*').eq('id',1).maybeSingle();
   const THRESH=th||{pass_pct:50,mastery_pct:80};
@@ -667,7 +691,7 @@ async function fetchRemedialForBundle(subject){
   return out;
 }
 async function fetchCompetencyForBundle(subject){
-  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const {secMap}=await fetchUniqueSectionsForSubject(subject.id);
   const out=[];
   for(const code of Object.keys(secMap||{}).sort((a,b)=>a.localeCompare(b,'ar'))){
     const sec=secMap[code];
@@ -690,7 +714,7 @@ async function fetchCompetencyForBundle(subject){
   return out;
 }
 async function fetchComparisonForBundle(subject){
-  const {secMap}=await fetchSectionsForSubject(subject.id);
+  const {secMap}=await fetchUniqueSectionsForSubject(subject.id);
   const secIds=Object.values(secMap||{}).map(s=>s.section_id);
   if(!secIds.length) return [];
   const {data:th}=await db.from('grade_settings').select('*').eq('id',1).maybeSingle();

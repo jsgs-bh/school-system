@@ -98,9 +98,31 @@ export async function loadSettings(){
 }
 export function applySettingsToDom(){
   const name = S.SETTINGS.school_name || 'المدرسة';
-  document.title = 'نظام ' + name;
+  document.title = 'جدحفص التميز';
   const login=$('schoolNameLogin'); if(login) login.textContent = name;
   const foot=$('footerSchoolName'); if(foot) foot.textContent = name;
+}
+/* الفصل الدراسي الحالي: تلقائي حسب تاريخ اليوم مقارنة بتواريخ الفصلين في
+   السنة النشطة، إلا لو الأدمن حدَّد تجاوزاً يدوياً من الإعدادات. */
+export function getCurrentSemester(){
+  if(S.SETTINGS.semester_override===1 || S.SETTINGS.semester_override===2) return S.SETTINGS.semester_override;
+  if(!S.YEAR?.sem1_end || !S.YEAR?.sem2_start) return 1;
+  const today=new Date().toISOString().slice(0,10);
+  return today <= S.YEAR.sem1_end ? 1 : 2;
+}
+/* أكواد المقررات المجدولة فعلياً (عبر الجدول الدراسي) لشعب فصل وسنة
+   محدَّدين (الفصل الحالي والسنة النشطة افتراضياً) — تُستخدم لتصفية
+   القوائم المنسدلة بدل عرض كل المقررات دائماً بلا تمييز بين الفصلين.
+   المعيار دائماً هو الجدول الدراسي نفسه، لأنه هو المرتبط أساساً بالفصل —
+   نفس المقرر قد يظهر بالفصلين لشعب مختلفة، والجدول يحسم أيّهما. */
+export async function getSemesterSubjectIds(semester, yearId){
+  const sem = semester || getCurrentSemester();
+  const yid = yearId || S.YEAR?.id;
+  const {data:secs} = await db.from('sections').select('id').eq('academic_year_id', yid).eq('semester', sem);
+  const sectionIds = (secs||[]).map(s=>s.id);
+  if(!sectionIds.length) return [];
+  const {data:ents} = await db.from('timetable_entries').select('subject_id').in('section_id', sectionIds);
+  return [...new Set((ents||[]).map(e=>e.subject_id).filter(Boolean))];
 }
 /* رابط شعار المدرسة (لو مرفوع) — يُستخدم كهيدر في التقارير المصدَّرة. */
 export function getLogoUrl(){

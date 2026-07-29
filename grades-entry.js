@@ -2,7 +2,7 @@
    شاشة فرعية تحت "حصصي" بجانب رصد الغياب. تعرض مقررات المعلمة (شعبة×مقرر)،
    تفتح/تنشئ اختباراً، ثم تتيح إدخال الدرجات بطريقتين معاً من البداية:
    شبكة تفاعلية تدعم لصق عمود كامل من إكسل، أو رفع ملف إكسل جاهز. */
-import { db, $, S, toast, chunk, bindDrop, readSheet, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
+import { db, $, S, toast, chunk, bindDrop, readSheet, printWithTitle, printHeaderHtml, printFooterHtml, getCurrentSemester, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const EXAM_NAMES = ['اختبار تشخيصي','الاختبار الأول','الاختبار الثاني'];
@@ -202,10 +202,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *, #printAreaAlerts, #printAreaAlerts *, #printAreaRemedial, #printAreaRemedial *{visibility:visible}
-    #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .cp-head{text-align:center;margin-bottom:10px}
     .cp-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .cp-hdr{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px}
@@ -287,8 +287,8 @@ async function loadMySubjects(){
       section_code:e.sections?.code||'—',subject_code:e.subjects?.code||'—',exam_total:e.subjects?.exam_total||25,
       semester:e.sections?.semester});
   }
-  const timetablePairs=[...seen.values()];
-  if(!timetablePairs.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات مرتبطة باسمك في الجدول الدراسي.</div>'; return; }
+  const timetablePairs=[...seen.values()].filter(p=>p.semester===getCurrentSemester());
+  if(!timetablePairs.length){ $('gSubjList').innerHTML='<div class="empty-day">لا مقررات مرتبطة باسمك في الجدول الدراسي لهذا الفصل.</div>'; return; }
 
   /* لكل زوج (شعبة، مقرر): نجد مجموعة التدريس الخاصة بي — أو ننشئها تلقائياً
      أول مرة (مقرر غير منقسم = مجموعة واحدة بكل طالبات الشعبة، بلا أي إعداد). */

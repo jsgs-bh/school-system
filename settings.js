@@ -19,6 +19,16 @@ $('appView').insertAdjacentHTML('beforeend', `
     <button class="btn gold" id="setSaveName" style="width:auto;padding:11px 26px">حفظ بيانات المدرسة</button>
   </div>
   <div class="panel">
+    <h3>الفصل الدراسي النشط</h3>
+    <div class="sub">تلقائياً حسب تاريخ اليوم مقارنة بتواريخ الفصلين في السنة الدراسية. اختاري "تلقائي" للرجوع لهذا الافتراضي، أو حدّدي فصلاً يدوياً لتجاوزه مؤقتاً — هذا يتحكم بأي مقررات تظهر في كل شاشات الدرجات والقوائم.</div>
+    <select id="setSemesterOverride" style="max-width:260px">
+      <option value="">تلقائي (حسب التاريخ)</option>
+      <option value="1">تجاوز يدوي: الفصل الأول</option>
+      <option value="2">تجاوز يدوي: الفصل الثاني</option>
+    </select>
+    <button class="btn gold" id="setSemesterSave" style="width:auto;padding:9px 20px;margin-top:10px">حفظ</button>
+  </div>
+  <div class="panel">
     <h3>شعار المدرسة</h3>
     <div class="sub">يُستخدم كهيدر في التقارير المصدَّرة.</div>
     <div class="dropzone" id="setLogoDrop"><b id="setLogoCurrent">لا شعار مرفوع بعد</b><p>صورة PNG أو JPG</p>
@@ -93,6 +103,15 @@ function initData(){
     bindNameSearch('setPrincipal','setPrincipalSugg');
     bindNameSearch('setDeputy1','setDeputy1Sugg');
     bindNameSearch('setDeputy2','setDeputy2Sugg');
+    $('setSemesterOverride').value = S.SETTINGS.semester_override ? String(S.SETTINGS.semester_override) : '';
+    $('setSemesterSave').addEventListener('click', async ()=>{
+      const val=$('setSemesterOverride').value;
+      const override = val ? +val : null;
+      const {error}=await db.from('app_settings').upsert({id:1, semester_override:override},{onConflict:'id'});
+      if(error){ toast('تعذر الحفظ: '+error.message); return; }
+      S.SETTINGS.semester_override=override;
+      toast('تم الحفظ');
+    });
     $('setSaveName').addEventListener('click', async ()=>{
       const name=clean(el.value);
       if(!name){ toast('اكتبي اسم المدرسة'); return; }

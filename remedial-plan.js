@@ -3,7 +3,7 @@
    واختباراً، فتظهر مصفوفة: فئة × شعبة (الأعداد محسوبة تلقائياً من
    الدرجات دائماً)، بالإضافة لصفي الناجحات والمتقنات، مع عمودي
    "الإجراء" و"متابعة التنفيذ" لكل فئة — تُحفظ وتُصدَّر إكسل/PDF. */
-import { db, $, S, chunk, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, chunk, toast, printWithTitle, getSemesterSubjectIds, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const EXAM_NAMES = ['اختبار تشخيصي','الاختبار الأول','الاختبار الثاني'];
@@ -49,7 +49,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaRP{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaRP, #printAreaRP *{visibility:visible}
     #printAreaRP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:12mm 10mm}
@@ -78,8 +78,9 @@ async function initRP(){
     SUPERVISED=await getSupervisedTeacherIds();
   }else SUPERVISED=null;
 
+  const semSubjIds=await getSemesterSubjectIds();
   const {data:subs}=await db.from('subjects').select('id,code,exam_total').order('code');
-  let subjOptions=subs||[];
+  let subjOptions=(subs||[]).filter(s=>semSubjIds.includes(s.id));
   if(SUPERVISED){
     const {data:ents}=await db.from('entry_teachers').select('staff_id,timetable_entries!inner(subject_id,academic_year_id)').eq('timetable_entries.academic_year_id',S.YEAR.id);
     const allowed=new Set((ents||[]).filter(e=>SUPERVISED.has(e.staff_id)).map(e=>e.timetable_entries.subject_id));

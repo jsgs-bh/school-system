@@ -3,7 +3,7 @@
    أو مقرر — مع فلترة اختيارية بالمقرر والاختبار. نطاق الرؤية يتبع الدور:
    الأدمن/القيادة/رئيسة التحليل/الإرشاد الأكاديمي بلا قيد؛ المعلمة الأولى
    ضمن إشرافها؛ المعلمة على نطاقها فقط (ومستوى "مدرسة" مخفي عنها). */
-import { db, $, S, clean, chunk, toast, printWithTitle, registerTab } from './core.js';
+import { db, $, S, clean, chunk, toast, printWithTitle, getSemesterSubjectIds, registerTab } from './core.js';
 
 const schoolName = () => S.SETTINGS.school_name || 'المدرسة';
 const EXAM_NAMES = ['اختبار تشخيصي','الاختبار الأول','الاختبار الثاني'];
@@ -53,10 +53,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaSP{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaSP, #printAreaSP *{visibility:visible}
-    #printAreaSP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaSP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
     .sp-head{text-align:center;margin-bottom:12px}
     .sp-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .sp-tbl{width:100%;border-collapse:collapse;font-size:10px}
@@ -78,9 +78,10 @@ async function initSP(){
     $('spScope').querySelector('option[value="school"]').remove();
   }
 
+  const semSubjIds=await getSemesterSubjectIds();
   const {data:subs}=await db.from('subjects').select('id,code').order('code');
   const allowedSubjIds = SCOPE_PAIRS ? new Set([...SCOPE_PAIRS].map(p=>p.split('|')[0])) : null;
-  const subjOptions=(subs||[]).filter(s=>!allowedSubjIds || allowedSubjIds.has(s.id));
+  const subjOptions=(subs||[]).filter(s=>semSubjIds.includes(s.id) && (!allowedSubjIds || allowedSubjIds.has(s.id)));
   $('spSubjectFilter').innerHTML='<option value="">كل المقررات</option>'+subjOptions.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
 
   $('spExamFilter').innerHTML=EXAM_NAMES.map(n=>`<label class="sp-exam-check"><input type="checkbox" value="${n}"> ${n}</label>`).join('');
