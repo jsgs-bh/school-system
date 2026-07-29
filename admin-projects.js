@@ -1,11 +1,15 @@
 /* admin-projects.js — المشاريع (تحت مجموعة "الخطة الاستراتيجية")
    للأدمن: إنشاء مشاريع جديدة، وتعيين رئيسة لكل مشروع مباشرة (تمنحها
    دور "مسؤولة مشروع" تلقائياً وتربطها بالمشروع عبر staff_project_leads). */
-import { db, $, S, clean, toast, registerTab } from './core.js';
+import { db, $, S, clean, toast, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="adminProjects" style="display:none">
   <div id="apUnlinkedWarn" style="display:none"></div>
+  <div class="panel" style="display:flex;justify-content:flex-end">
+    <button class="btn ghost" id="apPrintReport" style="width:auto;padding:9px 20px">🖨️ طباعة قائمة (مجال ← مؤشر ← مشاريع ← رئيسة)</button>
+  </div>
+  <div id="printAreaAP"></div>
   <div class="panel">
     <h3>إنشاء مشروع جديد</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
@@ -19,6 +23,19 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 </div>
 <style>
+  #printAreaAP{display:none}
+  @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+    @page{margin:0.22in}
+    body *{visibility:hidden}
+    #printAreaAP, #printAreaAP *{visibility:visible}
+    #printAreaAP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+    .ap-print-domain{background:#1a3a6b;color:#fff;padding:8px 14px;font-weight:700;margin-top:14px}
+    .ap-print-ind{background:#f0faf5;border-right:3px solid #52b788;padding:5px 12px;font-weight:700;color:#2d6a4f;margin:8px 0 4px}
+    .ap-print-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:8px}
+    .ap-print-tbl th{background:#eef1f5;padding:5px}
+    .ap-print-tbl td{border:1px solid #dee2e6;padding:5px;text-align:right}
+  }
   #adminProjects.wide{max-width:1300px}
   .ap-warn-banner{background:var(--err-soft);border:1.5px solid var(--err);color:var(--err);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;font-weight:600}
   .ap-warn-banner ul{margin:6px 0 0;padding-inline-start:20px;font-weight:400}
@@ -36,6 +53,7 @@ async function initAdminProjects(){
   if($('apCreateBtn').dataset.ready) return;
   $('apCreateBtn').dataset.ready='1';
   $('apCreateBtn').addEventListener('click',createProject);
+  $('apPrintReport').addEventListener('click',printReport);
   await loadProjects();
 }
 
@@ -81,8 +99,9 @@ async function loadProjects(){
   $('apList').innerHTML=PROJECTS.map(p=>{
     const projLeads=(leads||[]).filter(l=>l.project_id===p.id);
     return `<div class="ap-row" data-project="${p.id}" data-chain="${p.chain_id||''}">
-      <div class="ap-row-head"><b>${p.name}</b>
+      <div class="ap-row-head"><b class="ap-name-display">${p.name}</b><input type="text" class="ap-name-edit" value="${p.name}" style="display:none;font-weight:700;font-size:inherit;padding:4px 8px;border:1.5px solid var(--gold);border-radius:6px">
         <span style="display:flex;gap:8px">
+          <button class="btn ghost ap-rename-btn" style="width:auto;padding:6px 14px;font-size:12px">✎ تعديل الاسم</button>
           <button class="btn ghost ap-chain-btn" style="width:auto;padding:6px 14px;font-size:12px">📈 سلسلة المشروع (عبر السنوات)</button>
           <button class="btn ghost ap-delete-btn" style="width:auto;padding:6px 14px;font-size:12px;color:var(--err);border-color:var(--err)">🗑 حذف</button>
         </span></div>
@@ -121,6 +140,18 @@ async function loadProjects(){
   $('apList').querySelectorAll('.ap-row').forEach(row=>{
     const projectId=row.dataset.project;
     row.querySelector('.ap-chain-btn').addEventListener('click', ()=>toggleChainPanel(row));
+    row.querySelector('.ap-rename-btn').addEventListener('click', async ()=>{
+      const disp=row.querySelector('.ap-name-display'), inp=row.querySelector('.ap-name-edit'), btn=row.querySelector('.ap-rename-btn');
+      if(inp.style.display==='none'){
+        disp.style.display='none'; inp.style.display='inline-block'; inp.focus(); btn.textContent='✓ حفظ';
+      }else{
+        const newName=inp.value.trim();
+        if(!newName){ toast('اكتبي اسم المشروع'); return; }
+        const {error}=await db.from('plan_projects').update({name:newName}).eq('id',projectId);
+        if(error){ toast('تعذر الحفظ: '+error.message); return; }
+        toast('تم تعديل الاسم'); loadProjects();
+      }
+    });
     row.querySelector('.ap-delete-btn').addEventListener('click', async ()=>{
       const {data:inits}=await db.from('plan_initiatives').select('id').eq('project_id',projectId).limit(1);
       if(inits && inits.length){
@@ -217,6 +248,49 @@ async function toggleChainPanel(row){
   }
   panel.innerHTML=rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px">
     <span><b>${r.year}</b></span><span>${r.done}/${r.total} إجراء — ${r.pct}٪ إنجاز</span></div>`).join('');
+}
+
+async function printReport(){
+  const {data:domains}=await db.from('strategic_domains').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
+  if(!domains?.length){ toast('لا توجد شجرة استراتيجية مبنية بعد'); return; }
+
+  const {data:pi}=await db.from('plan_project_indicators').select('project_id,indicator_id, plan_projects(name)');
+  const {data:leads}=await db.from('staff_project_leads').select('project_id, staff(full_name)');
+  const leadByProject={};
+  for(const l of leads||[]) if(l.staff?.full_name) (leadByProject[l.project_id] ??= []).push(l.staff.full_name);
+  const piFull={};
+  for(const l of pi||[]) (piFull[l.indicator_id] ??= []).push({name:l.plan_projects?.name||'—', leads:(leadByProject[l.project_id]||[]).join('، ')||'—'});
+
+  let body='';
+  for(const dom of domains){
+    const {data:programs}=await db.from('strategic_programs').select('id').eq('domain_id',dom.id);
+    let domainHasContent=false, domainBody='';
+    for(const prog of programs||[]){
+      const {data:goals}=await db.from('strategic_goals').select('id').eq('program_id',prog.id);
+      for(const goal of goals||[]){
+        const {data:standards}=await db.from('strategic_standards').select('id').eq('goal_id',goal.id);
+        for(const st of standards||[]){
+          const {data:indicators}=await db.from('strategic_indicators').select('id,name').eq('standard_id',st.id);
+          for(const ind of indicators||[]){
+            const projs=piFull[ind.id];
+            if(!projs?.length) continue;
+            domainHasContent=true;
+            domainBody+=`<div class="ap-print-ind">🔹 ${ind.name}</div>
+              <table class="ap-print-tbl"><tr><th>المشروع</th><th>رئيسة المشروع</th></tr>
+              ${projs.map(p=>`<tr><td>${p.name}</td><td>${p.leads}</td></tr>`).join('')}
+              </table>`;
+          }
+        }
+      }
+    }
+    if(domainHasContent) body+=`<div class="ap-print-domain">📁 ${dom.name}</div>${domainBody}`;
+  }
+
+  $('printAreaAP').innerHTML=`
+    ${printHeaderHtml('قائمة المشاريع حسب المجال والمؤشر')}
+    ${body || '<p style="text-align:center;color:#8a93a0">لا مشاريع مربوطة بأي مؤشر بعد</p>'}
+    ${printFooterHtml('', S.ME?.full_name||'')}`;
+  printWithTitle('المشاريع_حسب_المجال_والمؤشر','printAreaAP');
 }
 
 registerTab({id:'adminProjects', label:'المشاريع', group:'plan', groupLabel:'الخطة الاستراتيجية',

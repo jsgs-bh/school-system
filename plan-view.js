@@ -2,7 +2,7 @@
    مطابق بصرياً لموقع الخطة التدفقية القديم. يعرض الإجراءات (plan_actions)
    مجمَّعة حسب المبادرة داخل كل مشروع. عرض فقط — التعديل من "متابعة
    مشروعي" أو "متابعة الخطة الشاملة" أو "الخطة التشغيلية". */
-import { db, $, S, registerTab } from './core.js';
+import { db, $, S, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 const MONTHS=[
   {id:'sep',label:'سبتمبر'},{id:'oct',label:'أكتوبر'},{id:'nov',label:'نوفمبر'},{id:'dec',label:'ديسمبر'},{id:'jan',label:'يناير'},
@@ -15,17 +15,35 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="pv-statsbar" id="pvStats"></div>
   <div class="pv-toprow">
     <select id="pvProjectFilter"><option value="">كل المشاريع</option></select>
+    <button class="btn ghost" id="pvPrintMonth" style="width:auto;padding:.5rem 1rem;font-size:.85rem">🖨️ طباعة الشهر المعروض</button>
+    <button class="btn ghost" id="pvPrintAll" style="width:auto;padding:.5rem 1rem;font-size:.85rem">🖨️ طباعة كل الأشهر</button>
   </div>
   <div class="pv-month-tabs" id="pvMonthTabs"></div>
   <div class="pv-mgrid" id="pvGrid"></div>
 </div>
+<div id="printAreaPV"></div>
 <style>
   #planView.wide{max-width:1400px}
   .pv-statsbar{background:var(--white);padding:.6rem 1.25rem;display:flex;gap:1.25rem;border-radius:12px;border:1px solid var(--line);flex-wrap:wrap;align-items:center;margin-bottom:1rem}
   .pv-stat{text-align:center;min-width:70px}
   .pv-stat b{display:block;font-size:1.3rem;font-weight:700;color:var(--gold);line-height:1}
   .pv-stat span{font-size:.68rem;color:#8a93a0;margin-top:2px;display:block}
-  .pv-toprow{display:flex;justify-content:flex-end;margin-bottom:.75rem}
+  .pv-toprow{display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem}
+  #printAreaPV{display:none}
+  @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+    @page{margin:0.22in}
+    body *{visibility:hidden}
+    #printAreaPV, #printAreaPV *{visibility:visible}
+    #printAreaPV{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+    .pv-print-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:14px}
+    .pv-print-tbl th{background:#1a3a6b;color:#fff;padding:6px 5px}
+    .pv-print-tbl td{border:1px solid #dee2e6;padding:5px;text-align:right}
+    .pv-print-tbl tr.done td{background:#d8f3dc}
+    .pv-print-tbl tr.in_progress td{background:#fff3cd}
+    .pv-print-mhead{background:#f0faf5;border-right:3px solid #52b788;padding:5px 10px;font-weight:700;color:#2d6a4f;margin:10px 0 4px}
+    .pv-print-phead{background:#1a3a6b;color:#fff;padding:6px 10px;font-weight:700;margin-top:14px}
+  }
   .pv-toprow select{padding:.5rem .9rem;border-radius:8px;border:1px solid var(--line);background:var(--white);color:var(--navy);font:inherit;font-weight:600;font-size:.85rem}
   .pv-month-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin-bottom:1rem;padding:.75rem;background:var(--white);border-radius:12px;border:1px solid var(--line)}
   @media (max-width:820px){.pv-month-tabs{grid-template-columns:repeat(2,1fr)}}
@@ -63,6 +81,8 @@ async function initPlanView(){
     $('pvDeptNote').innerHTML=`<div class="sub" style="margin-bottom:10px">مقتصرة على قسمك: ${S.ME.departments?.name||'—'}</div>`;
   }
   $('pvProjectFilter').addEventListener('change',()=>{ renderMonthTabs(); renderMonth(ACTIVE_MONTH); });
+  $('pvPrintMonth').addEventListener('click',()=>printFlow(false));
+  $('pvPrintAll').addEventListener('click',()=>printFlow(true));
   await loadAll();
 }
 
@@ -140,6 +160,43 @@ function renderMonth(monthId){
       </div>
     </div>`;
   }).join('');
+}
+
+const STATUS_LABEL={not_started:'لم يبدأ', in_progress:'جاري التنفيذ', done:'تم التنفيذ'};
+function printFlow(allMonths){
+  const source=scopedActions();
+  const monthsToUse = allMonths ? MONTHS : MONTHS.filter(m=>m.id===ACTIVE_MONTH);
+  const printActions = source.filter(a=>monthsToUse.some(m=>m.id===a.month));
+  if(!printActions.length){ return; }
+  const byProject={};
+  for(const a of printActions){ (byProject[a.project_id] ??= {name:a.projectName, byInit:{}}); (byProject[a.project_id].byInit[a.initiative_id] ??= {name:a.initName, items:[]}).items.push(a); }
+
+  let body='';
+  Object.values(byProject).forEach(g=>{
+    const allItems=Object.values(g.byInit).flatMap(i=>i.items);
+    const done=allItems.filter(a=>a.status==='done').length;
+    body+=`<div class="pv-print-phead">📁 ${g.name} — ${done}/${allItems.length} منجز</div>`;
+    monthsToUse.forEach(m=>{
+      const monthItems=allItems.filter(a=>a.month===m.id);
+      if(!monthItems.length) return;
+      body+=`<div class="pv-print-mhead">📅 ${m.label}</div>
+        <table class="pv-print-tbl"><tr><th>#</th><th>المبادرة</th><th>الإجراء</th><th>المسؤول</th><th>الحالة</th></tr>
+        ${monthItems.map((a,n)=>{
+          const initName=Object.values(g.byInit).find(gi=>gi.items.includes(a))?.name||'—';
+          return `<tr class="${a.status}"><td>${n+1}</td><td>${initName}</td><td>${a.text}</td><td>${a.responsible||'-'}</td><td>${STATUS_LABEL[a.status]}</td></tr>`;
+        }).join('')}
+        </table>`;
+    });
+  });
+
+  const projFilter=$('pvProjectFilter');
+  const titleSuffix = projFilter.value ? ` — ${projFilter.selectedOptions[0].textContent}` : ' — كل المشاريع';
+  const monthSuffix = allMonths ? '' : ` — ${MONTHS.find(m=>m.id===ACTIVE_MONTH)?.label}`;
+  $('printAreaPV').innerHTML=`
+    ${printHeaderHtml(`الخطة التدفقية${titleSuffix}${monthSuffix}`)}
+    ${body}
+    ${printFooterHtml('', S.ME?.full_name||'')}`;
+  printWithTitle('الخطة_التدفقية','printAreaPV');
 }
 
 registerTab({id:'planView', label:'الخطة التدفقية', group:'plan', groupLabel:'الخطة الاستراتيجية',

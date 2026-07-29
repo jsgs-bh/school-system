@@ -34,10 +34,6 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="cmBack" style="width:auto;padding:8px 18px;margin-bottom:10px">→ رجوع لكل اللجان</button>
       <h3 id="cmDetailName">—</h3>
       <div class="sub" id="cmDetailMeta"></div>
-      <div id="cmInitiativeStatusBox" style="display:none;margin-top:10px;align-items:center;gap:10px">
-        <span style="font-size:13px;color:var(--navy);font-weight:600">حالة اللجنة كمبادرة في خطة المشروع:</span>
-        <select id="cmInitiativeStatus"><option value="not_started">لم يبدأ</option><option value="in_progress">جاري التنفيذ</option><option value="done">تم التنفيذ</option></select>
-      </div>
     </div>
     <div class="panel">
       <h3>الأعضاء</h3>
@@ -45,6 +41,23 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div class="sugg" id="cmMemberSugg"></div>
       <div id="cmMembersList" style="margin-top:12px"></div>
       <button class="btn ghost" id="cmPrintAssignment" style="width:auto;padding:9px 20px;margin-top:10px;display:none">🖨️ طباعة قرار التكليف (المعلمات)</button>
+    </div>
+    <div class="panel">
+      <h3>إجراءات اللجنة (تظهر تلقائياً في الخطة التدفقية للمشروع)</h3>
+      <div class="sub">سطر واحد في مربع النص = إجراء واحد مستقل بتوقيته وحالته الخاصة.</div>
+      <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <textarea id="cmActionText" placeholder="نص الإجراء — سطر واحد = إجراء واحد" rows="2" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
+        <div style="position:relative;min-width:180px">
+          <input type="text" id="cmActionResp" placeholder="المسؤولة (ابحثي)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+          <div class="sugg" id="cmActionRespSugg"></div>
+        </div>
+        <select id="cmActionMonth" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+          <option value="sep">سبتمبر</option><option value="oct">أكتوبر</option><option value="nov">نوفمبر</option><option value="dec">ديسمبر</option><option value="jan">يناير</option>
+          <option value="feb">فبراير</option><option value="mar">مارس</option><option value="apr">أبريل</option><option value="may">مايو</option><option value="jun">يونيو</option>
+        </select>
+        <button class="btn gold" id="cmActionAdd" style="width:auto;padding:9px 20px">إضافة</button>
+      </div>
+      <div id="cmActionsList"></div>
     </div>
     <div class="panel">
       <h3>المهام والتكليفات</h3>
@@ -92,6 +105,10 @@ $('appView').insertAdjacentHTML('beforeend', `
 </style>
 <style>
   #committeesMain.wide{max-width:1400px}
+  .cm-action-row{display:flex;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid #f2f0ea;flex-wrap:wrap;background:var(--white);border-radius:8px;margin-bottom:6px}
+  .cm-action-text{flex:1;min-width:200px;font-size:13px}
+  .cm-action-edit-input{flex:1;min-width:200px;padding:6px 8px;border:1.5px solid var(--gold);border-radius:6px;font:inherit;font-size:13px}
+  .cm-status{padding:6px 8px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12px;background:#fbfaf7}
   .cm-row{display:flex;justify-content:space-between;align-items:center;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:12px 16px;margin-bottom:8px;cursor:pointer}
   .cm-row:hover{border-color:var(--gold)}
   .cm-tag{font-size:11px;padding:3px 10px;border-radius:99px;background:#eef1f5;color:var(--navy);font-weight:700}
@@ -122,6 +139,8 @@ async function initCommittees(){
   $('cmBack').addEventListener('click',()=>{ $('cmDetailView').style.display='none'; $('cmListView').style.display='block'; loadCommittees(); });
   bindDrop($('cmMinuteDrop'),$('cmMinuteFile'), f=>{ CUR_MINUTE_FILE=f; $('cmMinuteFileLabel').textContent=`مرفق: ${f.name}`; });
   $('cmTaskAdd').addEventListener('click',addTask);
+  $('cmActionAdd').addEventListener('click',addCommitteeAction);
+  bindActionRespSearch();
   $('cmMinuteAdd').addEventListener('click',addMinute);
   $('cmPrintAssignment').addEventListener('click',printAssignment);
   $('cmPrintInvite').addEventListener('click',printInvite);
@@ -225,22 +244,7 @@ async function openCommittee(id){
   $('cmListView').style.display='none'; $('cmDetailView').style.display='block';
   $('cmDetailName').textContent=c.name;
   $('cmDetailMeta').textContent=`المشروع الأم: ${c.plan_projects?.name||'—'} — نوع اللجنة: ${TYPE_LABEL[c.type]||c.type}`;
-  if(c.initiative_id){
-    const {data:action}=await db.from('plan_actions').select('id,status').eq('initiative_id',c.initiative_id).order('created_at').limit(1).maybeSingle();
-    if(action){
-      $('cmInitiativeStatusBox').style.display='flex';
-      $('cmInitiativeStatus').value=action.status;
-      $('cmInitiativeStatus').onchange=async ()=>{
-        await db.from('plan_actions').update({status:$('cmInitiativeStatus').value, updated_at:new Date().toISOString()}).eq('id',action.id);
-        toast('تم تحديث حالة اللجنة كمبادرة');
-      };
-    }else{
-      $('cmInitiativeStatusBox').style.display='none';
-    }
-  }else{
-    $('cmInitiativeStatusBox').style.display='none';
-  }
-  await loadMembers(); await loadTasks(); await checkMinuteAccess(); await loadMinutes();
+  await loadMembers(); await loadCommitteeActions(); await loadTasks(); await checkMinuteAccess(); await loadMinutes();
 }
 
 async function checkMinuteAccess(){
@@ -278,6 +282,96 @@ async function addMember(item){
   const {error}=await db.from('committee_members').insert(payload);
   if(error){ toast(/duplicate|unique/i.test(error.message)?'العضوة مضافة مسبقاً':'تعذرت الإضافة'); return; }
   toast('تمت الإضافة'); loadMembers();
+}
+
+const CM_MONTH_LABELS={sep:'سبتمبر',oct:'أكتوبر',nov:'نوفمبر',dec:'ديسمبر',jan:'يناير',feb:'فبراير',mar:'مارس',apr:'أبريل',may:'مايو',jun:'يونيو'};
+const CM_STATUS_LABEL={not_started:'لم يبدأ', in_progress:'جاري التنفيذ', done:'تم التنفيذ'};
+let CM_PICKED_RESP_STAFF_ID=null;
+
+function bindActionRespSearch(){
+  const inp=$('cmActionResp'), box=$('cmActionRespSugg');
+  let deb=null;
+  inp.addEventListener('input',()=>{
+    CM_PICKED_RESP_STAFF_ID=null;
+    clearTimeout(deb);
+    deb=setTimeout(async ()=>{
+      const q=inp.value.trim();
+      if(q.length<2){ box.style.display='none'; return; }
+      const {data:st}=await db.from('staff').select('id,full_name').ilike('full_name',`%${q}%`).limit(6);
+      if(!(st||[]).length){ box.style.display='none'; return; }
+      box.innerHTML=st.map((s,i)=>`<div data-i="${i}">${s.full_name}</div>`).join('');
+      box.style.display='block';
+      box.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click',()=>{
+        inp.value=st[i].full_name; CM_PICKED_RESP_STAFF_ID=st[i].id; box.style.display='none';
+      }));
+    },250);
+  });
+}
+
+async function loadCommitteeActions(){
+  if(!CUR_COMMITTEE.initiative_id){ $('cmActionsList').innerHTML='<div class="empty-day">هذي اللجنة غير مربوطة بمبادرة (حالة استثنائية) — راجعي الدعم الفني.</div>'; return; }
+  const {data,error}=await db.from('plan_actions').select('*').eq('initiative_id',CUR_COMMITTEE.initiative_id).order('created_at');
+  if(error){ $('cmActionsList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  const actions=data||[];
+  if(!actions.length){ $('cmActionsList').innerHTML='<div class="empty-day">لا إجراءات بعد.</div>'; return; }
+  $('cmActionsList').innerHTML=actions.map(a=>`<div class="cm-action-row" data-id="${a.id}">
+    <span class="cm-action-text" data-role="text">${a.text}</span>
+    <span style="font-size:12px;color:#8a93a0" data-role="meta">${CM_MONTH_LABELS[a.month]||a.month}${a.responsible?' — '+a.responsible:''}</span>
+    <select class="cm-status" data-role="status">${Object.entries(CM_STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${a.status===k?'selected':''}>${v}</option>`).join('')}</select>
+    <button class="btn ghost cm-small-btn" data-role="edit" style="width:auto;padding:6px 12px;font-size:11px">✎ تعديل</button>
+    <button class="btn ghost cm-small-btn" data-role="del" style="width:auto;padding:6px 12px;font-size:11px;color:var(--err);border-color:var(--err)">✕ حذف</button>
+  </div>`).join('');
+
+  $('cmActionsList').querySelectorAll('.cm-action-row').forEach(row=>{
+    const id=row.dataset.id, action=actions.find(a=>a.id===id);
+    row.querySelector('[data-role="status"]').addEventListener('change', async (e)=>{
+      const {error}=await db.from('plan_actions').update({status:e.target.value, updated_at:new Date().toISOString()}).eq('id',id);
+      if(error){ toast('تعذر الحفظ: '+error.message); return; }
+      toast('تم الحفظ');
+    });
+    row.querySelector('[data-role="del"]').addEventListener('click', async ()=>{
+      if(!confirm('حذف هذا الإجراء؟')) return;
+      await db.from('plan_actions').delete().eq('id',id);
+      toast('تم الحذف'); loadCommitteeActions();
+    });
+    row.querySelector('[data-role="edit"]').addEventListener('click', ()=>{
+      const textSpan=row.querySelector('[data-role="text"]'), metaSpan=row.querySelector('[data-role="meta"]');
+      const textInput=document.createElement('textarea'); textInput.className='cm-action-edit-input'; textInput.value=action.text; textInput.rows=2;
+      const monthSel=document.createElement('select'); monthSel.className='cm-status';
+      monthSel.innerHTML=Object.entries(CM_MONTH_LABELS).map(([k,v])=>`<option value="${k}" ${k===action.month?'selected':''}>${v}</option>`).join('');
+      const respInput=document.createElement('input'); respInput.type='text'; respInput.className='cm-action-edit-input';
+      respInput.placeholder='المسؤولة'; respInput.value=action.responsible||''; respInput.style.minWidth='140px';
+      const saveBtn=document.createElement('button'); saveBtn.className='btn gold cm-small-btn'; saveBtn.style.cssText='width:auto;padding:6px 12px;font-size:11px'; saveBtn.textContent='✓ حفظ';
+      textSpan.replaceWith(textInput); metaSpan.replaceWith(monthSel);
+      row.querySelector('[data-role="edit"]').replaceWith(saveBtn);
+      textInput.after(respInput);
+      textInput.focus();
+      saveBtn.addEventListener('click', async ()=>{
+        const newText=textInput.value.trim();
+        if(!newText){ toast('نص الإجراء لا يمكن أن يكون فاضياً'); return; }
+        const {error}=await db.from('plan_actions').update({text:newText, month:monthSel.value, responsible:respInput.value.trim()||null, updated_at:new Date().toISOString()}).eq('id',id);
+        if(error){ toast('تعذر الحفظ: '+error.message); return; }
+        toast('تم الحفظ'); loadCommitteeActions();
+      });
+    });
+  });
+}
+
+async function addCommitteeAction(){
+  if(!CUR_COMMITTEE.initiative_id){ toast('هذي اللجنة غير مربوطة بمبادرة'); return; }
+  const raw=$('cmActionText').value;
+  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ toast('اكتبي نص الإجراء'); return; }
+  const resp=clean($('cmActionResp').value)||null;
+  const month=$('cmActionMonth').value;
+  const rows=lines.map(text=>({
+    initiative_id:CUR_COMMITTEE.initiative_id, text, responsible:resp, responsible_staff_id:CM_PICKED_RESP_STAFF_ID, month, status:'not_started', created_by:S.ME.id
+  }));
+  const {error}=await db.from('plan_actions').insert(rows);
+  if(error){ toast('تعذر الإضافة: '+error.message); return; }
+  $('cmActionText').value=''; $('cmActionResp').value=''; CM_PICKED_RESP_STAFF_ID=null;
+  toast(lines.length>1?`تمت إضافة ${lines.length} إجراءات`:'تمت الإضافة');
+  loadCommitteeActions();
 }
 
 async function loadTasks(){

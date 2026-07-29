@@ -336,4 +336,4 @@ function printFlow(){
 }
 
 registerTab({id:'planDept', label:'الخطة التشغيلية', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isSeniorTeacher||f.isProjectLead||f.isAdmin, init:initDept});
+  show:f=>f.isSeniorTeacher||f.isProjectLead, init:initDept});
