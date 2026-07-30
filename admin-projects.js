@@ -1,10 +1,17 @@
 /* admin-projects.js — المشاريع (تحت مجموعة "الخطة الاستراتيجية")
    للأدمن: إنشاء مشاريع جديدة، وتعيين رئيسة لكل مشروع مباشرة (تمنحها
    دور "مسؤولة مشروع" تلقائياً وتربطها بالمشروع عبر staff_project_leads). */
-import { db, $, S, clean, toast, bindDrop, readSheet, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
+import { db, $, S, clean, toast, bindDrop, readSheet, showWarns, printWithTitle, printHeaderHtml, printFooterHtml, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="adminProjects" style="display:none">
+  <div class="panel">
+    <h3>رفع ملف الخطة (بداية كل سنة/فصل)</h3>
+    <div class="sub">ملف إكسل بأعمدة بالترتيب: المشروع، المبادرة، الإجراء، الشهر (بالعربي: سبتمبر…يونيو)، المسؤول (اختياري). كل صف يُنشئ المشروع والمبادرة تلقائياً لو ما كانوا موجودين، ويُربطان دائماً بالسنة الدراسية النشطة حالياً.</div>
+    <div class="dropzone" id="apPlanDrop"><b>ملف الخطة (Excel)</b><p>اضغطي لاختيار الملف أو اسحبيه هنا</p><input type="file" id="apPlanFile" hidden></div>
+    <div id="apPlanProgress" style="display:none;margin-top:10px"></div>
+    <div id="apPlanWarns" style="display:none;margin-top:10px;color:var(--err);font-size:12.5px"></div>
+  </div>
   <div id="apUnlinkedWarn" style="display:none"></div>
   <div class="panel">
     <h3>رفع ملف الخطة (بداية العام الدراسي)</h3>
@@ -62,6 +69,7 @@ async function initAdminProjects(){
   $('apCreateBtn').dataset.ready='1';
   $('apCreateBtn').addEventListener('click',createProject);
   $('apPrintReport').addEventListener('click',printReport);
+  bindDrop($('apPlanDrop'),$('apPlanFile'), handlePlanUpload);
   let planFile=null;
   bindDrop($('apPlanDrop'),$('apPlanFile'), f=>{ planFile=f; $('apPlanFileLabel').textContent=`الملف: ${f.name}`; $('apPlanImportBtn').disabled=false; });
   $('apPlanImportBtn').addEventListener('click', ()=>importPlanFile(planFile));
@@ -77,6 +85,65 @@ async function createProject(){
   const {error}=await db.from('plan_projects').insert({academic_year_id:S.YEAR.id, name, sort_order:PROJECTS.length, chain_id:chainId});
   if(error){ toast('تعذر الإنشاء: '+error.message); return; }
   $('apNewName').value=''; toast(existing?'تم الإنشاء والربط بسلسلة المشروع من سنة سابقة':'تم إنشاء المشروع'); loadProjects();
+}
+
+const MONTH_NAME_TO_ID={'سبتمبر':'sep','أكتوبر':'oct','نوفمبر':'nov','ديسمبر':'dec','يناير':'jan','فبراير':'feb','مارس':'mar','أبريل':'apr','مايو':'may','يونيو':'jun'};
+
+async function handlePlanUpload(file){
+  const rows=await readSheet(file);
+  const dataRows=rows.slice(1).filter(r=>r.some(c=>String(c||'').trim()));
+  if(!dataRows.length){ toast('الملف فاضٍ'); return; }
+  $('apPlanProgress').style.display='block';
+  $('apPlanProgress').textContent=`جارٍ المعالجة… (0/${dataRows.length})`;
+
+  const projectCache={}, initiativeCache={};
+  const warns=[];
+  let processed=0, created=0;
+
+  for(const row of dataRows){
+    processed++;
+    $('apPlanProgress').textContent=`جارٍ المعالجة… (${processed}/${dataRows.length})`;
+    const [projName, initName, actionText, monthLabel, responsible] = row.map(c=>clean(String(c||'')));
+    if(!projName || !initName || !actionText){ warns.push(`صف ${processed+1}: المشروع/المبادرة/الإجراء ناقص — تُخُطّي`); continue; }
+    const monthId=MONTH_NAME_TO_ID[monthLabel];
+    if(!monthId){ warns.push(`صف ${processed+1}: اسم الشهر "${monthLabel}" غير معروف — تُخُطّي`); continue; }
+
+    let projectId=projectCache[projName];
+    if(!projectId){
+      const {data:existingProj}=await db.from('plan_projects').select('id').eq('academic_year_id',S.YEAR.id).eq('name',projName).maybeSingle();
+      if(existingProj){ projectId=existingProj.id; }
+      else{
+        const {data:newProj,error:projErr}=await db.from('plan_projects').insert({academic_year_id:S.YEAR.id, name:projName, sort_order:0}).select('id').single();
+        if(projErr){ warns.push(`صف ${processed+1}: تعذر إنشاء المشروع "${projName}": ${projErr.message}`); continue; }
+        projectId=newProj.id;
+      }
+      projectCache[projName]=projectId;
+    }
+
+    const initKey=projectId+'|'+initName;
+    let initiativeId=initiativeCache[initKey];
+    if(!initiativeId){
+      const {data:existingInit}=await db.from('plan_initiatives').select('id').eq('project_id',projectId).eq('name',initName).maybeSingle();
+      if(existingInit){ initiativeId=existingInit.id; }
+      else{
+        const {data:newInit,error:initErr}=await db.from('plan_initiatives').insert({project_id:projectId, name:initName, created_by:S.ME.id}).select('id').single();
+        if(initErr){ warns.push(`صف ${processed+1}: تعذر إنشاء المبادرة "${initName}": ${initErr.message}`); continue; }
+        initiativeId=newInit.id;
+      }
+      initiativeCache[initKey]=initiativeId;
+    }
+
+    const {error:actErr}=await db.from('plan_actions').insert({
+      initiative_id:initiativeId, text:actionText, responsible:responsible||null, month:monthId, status:'not_started', created_by:S.ME.id
+    });
+    if(actErr){ warns.push(`صف ${processed+1}: تعذر إضافة الإجراء: ${actErr.message}`); continue; }
+    created++;
+  }
+
+  $('apPlanProgress').textContent=`تم: ${created} إجراء أُضيف من أصل ${dataRows.length} صف.`;
+  showWarns('apPlanWarns', warns);
+  toast(`تم رفع الخطة — ${created} إجراء أُضيف`);
+  loadProjects();
 }
 
 async function loadProjects(){
