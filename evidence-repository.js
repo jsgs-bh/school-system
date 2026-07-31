@@ -120,7 +120,7 @@ async function uploadEvidence(){
 
 async function loadEvidence(){
   const projFilter=$('evFilterProject').value, semFilter=$('evFilterSemester').value;
-  let query=db.from('evidence_files').select('*, staff(full_name), plan_projects(name), plan_initiatives(name), committees(name)').eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false});
+  let query=db.from('evidence_files').select('*, staff:staff_id(full_name), plan_projects(name), plan_initiatives(name), committees(name)').eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false});
   if(projFilter) query=query.eq('project_id',projFilter);
   if(semFilter) query=query.eq('semester',+semFilter);
   const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead;
