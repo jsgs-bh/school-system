@@ -1,7 +1,7 @@
-/* leave-a-mark.js — فعاليات "اترك بصمة" (تحت مجموعة "الخطة الاستراتيجية")
-   المرحلتان ١و٢: إضافة فعاليات داخلية/خارجية، وحصرين مطابقين تماماً
-   لقوالب المدرسة المعتمدة، بفلترة وطباعة. */
-import { db, $, S, clean, toast, getCurrentSemester, printWithTitle, registerTab } from './core.js';
+/* leave-a-mark.js — فعاليات (تبويب مستقل، مو تحت الخطة الاستراتيجية)
+   كل معلمة: تضيف فعالية + تشوف تقاريرها هي. المعلمة الأولى/رئيسة
+   مشروع اترك بصمة/الأدمن: حصر شامل قابل للفرز والطباعة والتصدير. */
+import { db, $, S, clean, toast, getCurrentSemester, getLogoUrl, printWithTitle, registerTab } from './core.js';
 
 const MONTH_LABELS={sep:'سبتمبر',oct:'أكتوبر',nov:'نوفمبر',dec:'ديسمبر',jan:'يناير',feb:'فبراير',mar:'مارس',apr:'أبريل',may:'مايو',jun:'يونيو'};
 const MONTH_FROM_DATE=(dateStr)=>{
@@ -40,7 +40,16 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
 
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:12px">
-      <input type="text" id="lmExtraSup" placeholder="مشرفات إضافيات (اختياري، مثال: أ.بشرى، أ.عفاف)" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <div style="position:relative;flex:1;min-width:220px">
+        <input type="text" id="lmTeacherSearch" placeholder="المعلمة المنفذة (افتراضياً أنتِ — ابحثي لتغييرها)" autocomplete="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+        <div class="sugg" id="lmTeacherSugg"></div>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="sub">مشرفات إضافيات (اختياري)</div>
+      <div style="position:relative"><input type="text" id="lmExtraSupSearch" placeholder="ابحثي عن معلمة لإضافتها كمشرفة إضافية…" autocomplete="off" style="width:100%;max-width:400px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></div>
+      <div class="sugg" id="lmExtraSupSugg"></div>
+      <div id="lmExtraSupList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
     </div>
 
     <div style="margin-top:14px">
@@ -54,12 +63,22 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 
   <div class="panel">
-    <h3>حصر الفعاليات والمسابقات</h3>
+    <h3>تقارير فعالياتي</h3>
+    <div class="sub">الفعاليات اللي أضفتِها أو أنتِ معلمتها المنفذة/مشرفة إضافية عليها.</div>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="lmMyType"><option value="internal">داخلية</option><option value="external">خارجية</option></select>
+    </div>
+    <div id="lmMyList"></div>
+  </div>
+
+  <div class="panel" id="lmTallyPanel" style="display:none">
+    <h3>حصر الفعاليات والمسابقات (شامل)</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="lmReportType"><option value="internal">داخلية</option><option value="external">خارجية</option></select>
       <select id="lmFilterMonth"><option value="">كل الأشهر</option>${Object.entries(MONTH_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
       <select id="lmFilterDept" style="display:none"><option value="">كل الأقسام</option></select>
-      <button class="btn ghost" id="lmPrintBtn">🖨️ طباعة الحصر</button>
+      <button class="btn ghost" id="lmPrintBtn">🖨️ طباعة PDF</button>
+      <button class="btn ghost" id="lmXlsBtn">⬇ تصدير Excel</button>
     </div>
     <div class="board-wrap"><table class="board" id="lmTable"></table></div>
   </div>
@@ -67,8 +86,8 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div id="printAreaLM"></div>
 <style>
   #leaveMark.wide{max-width:1500px}
-  .lm-student-chip{display:flex;align-items:center;gap:6px;background:var(--sand);border-radius:99px;padding:5px 12px;font-size:12.5px}
-  .lm-student-chip button{background:none;border:none;color:var(--err);cursor:pointer;font-size:12px}
+  .lm-chip{display:flex;align-items:center;gap:6px;background:var(--sand);border-radius:99px;padding:5px 12px;font-size:12.5px}
+  .lm-chip button{background:none;border:none;color:var(--err);cursor:pointer;font-size:12px}
   #printAreaLM{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
@@ -87,24 +106,38 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let PICKED_STUDENTS=[], LM_PROJECT_ID=null, IS_LM_LEAD=false;
+let PICKED_STUDENTS=[], EXTRA_SUPS=[], LM_PROJECT_ID=null, IS_LM_LEAD=false, PICKED_TEACHER=null;
 
 async function initLeaveMark(){
   if($('lmSaveBtn').dataset.ready) return;
   $('lmSaveBtn').dataset.ready='1';
 
-  const {data:proj}=await db.from('plan_projects').select('id').eq('academic_year_id',S.YEAR.id).eq('name','اترك بصمة').maybeSingle();
-  LM_PROJECT_ID=proj?.id||null;
+  // مطابقة مرنة لاسم المشروع (تجنّباً لمشاكل الاسم المطابق تماماً)
+  const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id);
+  const lmProject=(projects||[]).find(p=>p.name.trim()==='اترك بصمة') || (projects||[]).find(p=>p.name.includes('اترك بصمة'));
+  LM_PROJECT_ID=lmProject?.id||null;
+  if(!LM_PROJECT_ID) toast('تنبيه: ما لقيت مشروع "اترك بصمة" بالسنة الحالية — راجعي اسمه في تبويب المشاريع');
 
   if(LM_PROJECT_ID){
     const {data:leadRow}=await db.from('staff_project_leads').select('id').eq('staff_id',S.ME.id).eq('project_id',LM_PROJECT_ID).maybeSingle();
     IS_LM_LEAD=!!leadRow;
   }
+  const canManageTally = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead || S.FLAGS.isSeniorTeacher || IS_LM_LEAD;
+  $('lmTallyPanel').style.display = canManageTally ? 'block' : 'none';
+
+  PICKED_TEACHER={id:S.ME.id, full_name:S.ME.full_name};
+  $('lmTeacherSearch').value=S.ME.full_name;
 
   $('lmType').addEventListener('change',()=>{
     const isInternal=$('lmType').value==='internal';
     $('lmInternalFields').style.display=isInternal?'flex':'none';
     $('lmExternalFields').style.display=isInternal?'none':'flex';
+  });
+
+  bindTeacherSearch($('lmTeacherSearch'),$('lmTeacherSugg'), s=>{ PICKED_TEACHER=s; });
+  bindTeacherSearch($('lmExtraSupSearch'),$('lmExtraSupSugg'), s=>{
+    if(!EXTRA_SUPS.some(e=>e.id===s.id)){ EXTRA_SUPS.push(s); renderExtraSups(); }
+    $('lmExtraSupSearch').value='';
   });
 
   let deb=null;
@@ -126,22 +159,48 @@ async function initLeaveMark(){
   });
 
   $('lmSaveBtn').addEventListener('click',saveEvent);
-  $('lmReportType').addEventListener('change',()=>{ loadReport(); });
-  $('lmFilterMonth').addEventListener('change',loadReport);
-  $('lmPrintBtn').addEventListener('click',printReport);
-
-  if(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead||IS_LM_LEAD){
-    const {data:depts}=await db.from('departments').select('id,name').order('name');
-    $('lmFilterDept').innerHTML='<option value="">كل الأقسام</option>'+(depts||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
-    $('lmFilterDept').style.display='inline-block';
-    $('lmFilterDept').addEventListener('change',loadReport);
+  $('lmMyType').addEventListener('change',loadMyEvents);
+  if(canManageTally){
+    $('lmReportType').addEventListener('change',loadTally);
+    $('lmFilterMonth').addEventListener('change',loadTally);
+    $('lmPrintBtn').addEventListener('click',printTally);
+    $('lmXlsBtn').addEventListener('click',exportTallyXls);
+    if(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead||IS_LM_LEAD){
+      const {data:depts}=await db.from('departments').select('id,name').order('name');
+      $('lmFilterDept').innerHTML='<option value="">كل الأقسام</option>'+(depts||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+      $('lmFilterDept').style.display='inline-block';
+      $('lmFilterDept').addEventListener('change',loadTally);
+    }
+    await loadTally();
   }
+  await loadMyEvents();
+}
 
-  await loadReport();
+function bindTeacherSearch(input,box,onPick){
+  let deb=null;
+  input.addEventListener('input',()=>{
+    clearTimeout(deb);
+    deb=setTimeout(async ()=>{
+      const q=clean(input.value);
+      if(q.length<2){ box.style.display='none'; return; }
+      const {data:st}=await db.from('staff').select('id,full_name').ilike('full_name',`%${q}%`).limit(6);
+      if(!(st||[]).length){ box.style.display='none'; return; }
+      box.innerHTML=st.map((s,i)=>`<div data-i="${i}">${s.full_name}</div>`).join('');
+      box.style.display='block';
+      box.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click',()=>{
+        input.value=st[i].full_name; box.style.display='none'; onPick(st[i]);
+      }));
+    },250);
+  });
+}
+
+function renderExtraSups(){
+  $('lmExtraSupList').innerHTML=EXTRA_SUPS.map((s,i)=>`<span class="lm-chip">${s.full_name}<button data-i="${i}">✕</button></span>`).join('');
+  $('lmExtraSupList').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ EXTRA_SUPS.splice(+b.dataset.i,1); renderExtraSups(); }));
 }
 
 function renderPickedStudents(){
-  $('lmPickedStudents').innerHTML=PICKED_STUDENTS.map((s,i)=>`<span class="lm-student-chip">${s.full_name} (${s.enrollments?.[0]?.sections?.code||'—'})<button data-i="${i}">✕</button></span>`).join('');
+  $('lmPickedStudents').innerHTML=PICKED_STUDENTS.map((s,i)=>`<span class="lm-chip">${s.full_name} (${s.enrollments?.[0]?.sections?.code||'—'})<button data-i="${i}">✕</button></span>`).join('');
   $('lmPickedStudents').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
     PICKED_STUDENTS.splice(+b.dataset.i,1); renderPickedStudents();
   }));
@@ -153,13 +212,15 @@ async function saveEvent(){
   const date=$('lmDate').value;
   if(!title){ toast('اكتبي اسم الفعالية'); return; }
   if(!date){ toast('حددي تاريخ التنفيذ'); return; }
-  if(!S.ME.department_id){ toast('حسابك غير مرتبط بقسم'); return; }
+  if(!PICKED_TEACHER){ toast('حددي المعلمة المنفذة'); return; }
+
+  const {data:teacherRow}=await db.from('staff').select('department_id').eq('id',PICKED_TEACHER.id).maybeSingle();
 
   const payload={
     academic_year_id:S.YEAR.id, semester:getCurrentSemester(), month:MONTH_FROM_DATE(date),
     project_id:LM_PROJECT_ID, type, title, execution_date:date,
-    department_id:S.ME.department_id, staff_id:S.ME.id,
-    extra_supervisors:clean($('lmExtraSup').value)||null,
+    department_id:teacherRow?.department_id||S.ME.department_id, staff_id:PICKED_TEACHER.id,
+    extra_supervisors:EXTRA_SUPS.map(s=>s.full_name).join('، ')||null,
     created_by:S.ME.id
   };
   if(type==='internal'){
@@ -181,16 +242,38 @@ async function saveEvent(){
       await db.from('event_participants').insert(PICKED_STUDENTS.map(s=>({event_id:ev.id, student_id:s.id})));
     }
     toast('تم حفظ الفعالية');
-    $('lmTitle').value=''; $('lmDate').value=''; $('lmOrgBody').value=''; $('lmResult').value=''; $('lmExtraSup').value='';
+    $('lmTitle').value=''; $('lmDate').value=''; $('lmOrgBody').value=''; $('lmResult').value='';
     $('lmSlot1').checked=$('lmSlot2').checked=$('lmSlot3').checked=$('lmSlot4').checked=false;
-    PICKED_STUDENTS=[]; renderPickedStudents();
-    loadReport();
+    PICKED_STUDENTS=[]; renderPickedStudents(); EXTRA_SUPS=[]; renderExtraSups();
+    PICKED_TEACHER={id:S.ME.id, full_name:S.ME.full_name}; $('lmTeacherSearch').value=S.ME.full_name;
+    loadMyEvents();
+    if(!$('lmTallyPanel').style.display || $('lmTallyPanel').style.display==='block') loadTally();
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
   finally{ btn.disabled=false; }
 }
 
-let REPORT_ROWS=[];
-async function loadReport(){
+async function fetchParticipantNames(eventIds){
+  if(!eventIds.length) return {};
+  const {data:parts}=await db.from('event_participants').select('event_id, students(full_name, enrollments(sections(code)))').in('event_id',eventIds);
+  const map={};
+  for(const p of parts||[]) (map[p.event_id] ??= []).push(`${p.students?.full_name||'—'} ${p.students?.enrollments?.[0]?.sections?.code||''}`);
+  return map;
+}
+
+async function loadMyEvents(){
+  const type=$('lmMyType').value;
+  const {data:events,error}=await db.from('event_records').select('*').eq('academic_year_id',S.YEAR.id).eq('type',type)
+    .or(`staff_id.eq.${S.ME.id},created_by.eq.${S.ME.id}`).order('execution_date',{ascending:false});
+  if(error){ $('lmMyList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  if(!events?.length){ $('lmMyList').innerHTML='<div class="empty-day">لا فعاليات بعد.</div>'; return; }
+  const partsMap=await fetchParticipantNames(events.map(e=>e.id));
+  $('lmMyList').innerHTML=events.map(e=>`
+    <div class="cm-row" style="cursor:default"><span><b>${e.title}</b> <small style="color:#8a93a0">${e.execution_date||''}${e.result?' — النتيجة: '+e.result:''}</small><br>
+    <small>${(partsMap[e.id]||[]).join('، ')||'لا طالبات مسجَّلات'}</small></span></div>`).join('');
+}
+
+let TALLY_ROWS=[];
+async function loadTally(){
   const type=$('lmReportType').value;
   const monthFilter=$('lmFilterMonth').value;
   const deptFilter=$('lmFilterDept')?.value;
@@ -198,57 +281,56 @@ async function loadReport(){
   let query=db.from('event_records').select('*, staff:staff_id(full_name), departments(name)').eq('academic_year_id',S.YEAR.id).eq('type',type).order('execution_date');
   if(monthFilter) query=query.eq('month',monthFilter);
   if(deptFilter) query=query.eq('department_id',deptFilter);
-  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead || IS_LM_LEAD;
-  if(!canSeeAll && S.FLAGS.isSeniorTeacher && S.ME.department_id) query=query.eq('department_id',S.ME.department_id);
-  else if(!canSeeAll) query=query.eq('staff_id',S.ME.id);
+  if(!(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead||IS_LM_LEAD) && S.FLAGS.isSeniorTeacher && S.ME.department_id){
+    query=query.eq('department_id',S.ME.department_id);
+  }
 
   const {data:events,error}=await query;
   if(error){ $('lmTable').innerHTML=`<tr><td style="padding:20px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
-
-  const eventIds=(events||[]).map(e=>e.id);
-  const {data:parts}=eventIds.length ? await db.from('event_participants').select('event_id, students(full_name, enrollments(sections(code)))').in('event_id',eventIds) : {data:[]};
-  const partsByEvent={};
-  for(const p of parts||[]) (partsByEvent[p.event_id] ??= []).push(`${p.students?.full_name||'—'} ${p.students?.enrollments?.[0]?.sections?.code||''}`);
-
-  REPORT_ROWS=(events||[]).map(e=>({...e, participantNames:partsByEvent[e.id]||[]}));
-  renderReportTable(type);
+  const partsMap=await fetchParticipantNames((events||[]).map(e=>e.id));
+  TALLY_ROWS=(events||[]).map(e=>({...e, participantNames:partsMap[e.id]||[]}));
+  renderTallyTable(type);
 }
 
-function renderReportTable(type){
-  if(!REPORT_ROWS.length){ $('lmTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا فعاليات ضمن هذا الفلتر</td></tr>'; return; }
+function renderTallyTable(type){
+  if(!TALLY_ROWS.length){ $('lmTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا فعاليات ضمن هذا الفلتر</td></tr>'; return; }
   if(type==='internal'){
     $('lmTable').innerHTML='<tr><th>#</th><th>الفعالية</th><th>الفئة المستهدفة</th><th>التاريخ</th><th>عدد المشاركات</th><th>الطالبات/الصف</th><th>المعلمة المشرفة</th></tr>'+
-      REPORT_ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${r.title}</td><td class="c">${r.target_category||'—'}</td><td class="c">${r.execution_date||'—'}</td><td class="c">${r.participantNames.length}</td><td>${r.participantNames.join('، ')||'—'}</td><td class="c">${r.staff?.full_name||'—'}${r.extra_supervisors?', '+r.extra_supervisors:''}</td></tr>`).join('');
+      TALLY_ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${r.title}</td><td class="c">${r.target_category||'—'}</td><td class="c">${r.execution_date||'—'}</td><td class="c">${r.participantNames.length}</td><td>${r.participantNames.join('، ')||'—'}</td><td class="c">${r.staff?.full_name||'—'}${r.extra_supervisors?', '+r.extra_supervisors:''}</td></tr>`).join('');
   }else{
     $('lmTable').innerHTML='<tr><th>#</th><th>البرنامج/الفعالية</th><th>الجهة المنظمة</th><th>عدد المشاركات</th><th>الطالبات/الصف</th><th>المعلمة المشرفة</th><th>النتيجة</th></tr>'+
-      REPORT_ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${r.title}</td><td class="c">${r.organizing_body||'—'}</td><td class="c">${r.participantNames.length}</td><td>${r.participantNames.join('، ')||'—'}</td><td class="c">${r.staff?.full_name||'—'}${r.extra_supervisors?', '+r.extra_supervisors:''}</td><td class="c">${r.result||'—'}</td></tr>`).join('');
+      TALLY_ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${r.title}</td><td class="c">${r.organizing_body||'—'}</td><td class="c">${r.participantNames.length}</td><td>${r.participantNames.join('، ')||'—'}</td><td class="c">${r.staff?.full_name||'—'}${r.extra_supervisors?', '+r.extra_supervisors:''}</td><td class="c">${r.result||'—'}</td></tr>`).join('');
   }
 }
 
-function printReport(){
-  if(!REPORT_ROWS.length){ toast('لا بيانات للطباعة'); return; }
+function tallyMeta(){
   const type=$('lmReportType').value;
   const monthFilter=$('lmFilterMonth').value;
   const deptFilter=$('lmFilterDept')?.value;
-  const deptName = deptFilter ? $('lmFilterDept').selectedOptions[0].textContent : (REPORT_ROWS[0]?.departments?.name||'—');
+  const deptName = deptFilter ? $('lmFilterDept').selectedOptions[0].textContent : (TALLY_ROWS[0]?.departments?.name||'—');
   const semLabel = getCurrentSemester()===1?'الأول':'الثاني';
-  const yearLabel = S.YEAR?.name||'';
-  const logo=S.SETTINGS.logo_path ? db.storage.from('school-files').getPublicUrl(S.SETTINGS.logo_path).data.publicUrl : '';
-
   const title = type==='internal'
     ? 'حصر الفعاليات والمسابقات الداخلية المنفذة من الأقسام الأكاديمية والإدارية'
     : 'حصر الفعاليات والمسابقات المشاركة بها خارج المدرسة';
+  return {type, monthFilter, deptName, semLabel, title};
+}
+
+function printTally(){
+  if(!TALLY_ROWS.length){ toast('لا بيانات للطباعة'); return; }
+  const {type, monthFilter, deptName, semLabel, title}=tallyMeta();
+  const yearLabel=S.YEAR?.name||'';
+  const logo=getLogoUrl();
 
   let rowsHtml='';
   if(type==='internal'){
     rowsHtml=`<table class="lm-print-tbl"><tr><th>م</th><th>الفعالية</th><th>الفئة المستهدفة</th><th>قبل الطابور</th><th>الفسحة الأولى</th><th>الفسحة الثانية</th><th>بعد الدوام الرسمي</th><th>عدد المشاركات</th><th>أسماء الطالبات/الصف</th><th>اسم المعلمة المشرفة</th><th>النتيجة</th></tr>
-      ${REPORT_ROWS.map((r,i)=>`<tr><td>${i+1}</td><td>${r.title}</td><td>${r.target_category||''}</td>
+      ${TALLY_ROWS.map((r,i)=>`<tr><td>${i+1}</td><td>${r.title}</td><td>${r.target_category||''}</td>
         <td>${r.slot_before_assembly?r.execution_date:''}</td><td>${r.slot_break1?r.execution_date:''}</td><td>${r.slot_break2?r.execution_date:''}</td><td>${r.slot_after_hours?r.execution_date:''}</td>
         <td>${r.participantNames.length||''}</td><td style="text-align:right">${r.participantNames.join('<br>')||''}</td><td>${r.staff?.full_name||''}</td><td></td></tr>`).join('')}
       </table>`;
   }else{
     rowsHtml=`<table class="lm-print-tbl"><tr><th>ت</th><th>اسم البرنامج/الفعالية</th><th>الجهة المنظمة</th><th>عدد المشاركات</th><th>أسماء الطالبات/الصف</th><th>المعلمة المشرفة</th><th>النتيجة</th></tr>
-      ${REPORT_ROWS.map((r,i)=>`<tr><td>${i+1}</td><td>${r.title}</td><td>${r.organizing_body||''}</td><td>${r.participantNames.length||''}</td><td style="text-align:right">${r.participantNames.join('<br>')||''}</td><td>${r.staff?.full_name||''}</td><td>${r.result||''}</td></tr>`).join('')}
+      ${TALLY_ROWS.map((r,i)=>`<tr><td>${i+1}</td><td>${r.title}</td><td>${r.organizing_body||''}</td><td>${r.participantNames.length||''}</td><td style="text-align:right">${r.participantNames.join('<br>')||''}</td><td>${r.staff?.full_name||''}</td><td>${r.result||''}</td></tr>`).join('')}
       </table>`;
   }
 
@@ -265,5 +347,35 @@ function printReport(){
   printWithTitle(type==='internal'?'حصر_الفعاليات_الداخلية':'حصر_الفعاليات_الخارجية','printAreaLM');
 }
 
-registerTab({id:'leaveMark', label:'اترك بصمة', group:'plan', groupLabel:'الخطة الاستراتيجية',
+async function exportTallyXls(){
+  if(!TALLY_ROWS.length){ toast('لا بيانات للتصدير'); return; }
+  const {type, monthFilter, deptName, semLabel, title}=tallyMeta();
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('الحصر',{views:[{rightToLeft:true}]});
+  const NAVY='FF1A3A6B', WHITE='FFFFFFFF';
+  const cols = type==='internal'
+    ? ['#','الفعالية','الفئة المستهدفة','التاريخ','عدد المشاركات','الطالبات/الصف','المعلمة المشرفة']
+    : ['#','البرنامج/الفعالية','الجهة المنظمة','عدد المشاركات','الطالبات/الصف','المعلمة المشرفة','النتيجة'];
+  const titleRow=ws.addRow([title]); ws.mergeCells(titleRow.number,1,titleRow.number,cols.length);
+  titleRow.getCell(1).font={bold:true,size:13,color:{argb:WHITE}}; titleRow.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:NAVY}}; titleRow.getCell(1).alignment={horizontal:'center'};
+  const metaRow=ws.addRow([`الفصل ${semLabel} — شهر: ${monthFilter?MONTH_LABELS[monthFilter]:'الكل'} — القسم: ${deptName}`]);
+  ws.mergeCells(metaRow.number,1,metaRow.number,cols.length); metaRow.getCell(1).alignment={horizontal:'center'};
+  ws.addRow([]);
+  const hdr=ws.addRow(cols);
+  hdr.eachCell(c=>{ c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD0E8D8'}}; c.alignment={horizontal:'center'}; });
+  TALLY_ROWS.forEach((r,i)=>{
+    const row = type==='internal'
+      ? [i+1, r.title, r.target_category||'', r.execution_date||'', r.participantNames.length, r.participantNames.join('، '), r.staff?.full_name||'']
+      : [i+1, r.title, r.organizing_body||'', r.participantNames.length, r.participantNames.join('، '), r.staff?.full_name||'', r.result||''];
+    ws.addRow(row).eachCell(c=>{ c.alignment={horizontal:'center',wrapText:true}; c.font={size:10}; });
+  });
+  ws.columns=cols.map(()=>({width:22}));
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`${type==='internal'?'حصر_الفعاليات_الداخلية':'حصر_الفعاليات_الخارجية'}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+registerTab({id:'leaveMark', label:'فعاليات', group:'events', groupLabel:'فعاليات',
   show:()=>true, init:initLeaveMark});
