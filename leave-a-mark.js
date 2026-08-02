@@ -1,7 +1,7 @@
 /* leave-a-mark.js — فعاليات (تبويب مستقل، مو تحت الخطة الاستراتيجية)
    كل معلمة: تضيف فعالية + تشوف تقاريرها هي. المعلمة الأولى/رئيسة
    مشروع اترك بصمة/الأدمن: حصر شامل قابل للفرز والطباعة والتصدير. */
-import { db, $, S, clean, toast, getCurrentSemester, getLogoUrl, printWithTitle, registerTab } from './core.js';
+import { db, $, S, clean, normName, toast, getCurrentSemester, getLogoUrl, printWithTitle, registerTab } from './core.js';
 
 const MONTH_LABELS={sep:'سبتمبر',oct:'أكتوبر',nov:'نوفمبر',dec:'ديسمبر',jan:'يناير',feb:'فبراير',mar:'مارس',apr:'أبريل',may:'مايو',jun:'يونيو'};
 const MONTH_FROM_DATE=(dateStr)=>{
@@ -114,7 +114,7 @@ async function initLeaveMark(){
 
   // مطابقة مرنة لاسم المشروع (تجنّباً لمشاكل الاسم المطابق تماماً)
   const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id);
-  const lmProject=(projects||[]).find(p=>p.name.trim()==='اترك بصمة') || (projects||[]).find(p=>p.name.includes('اترك بصمة'));
+  const lmProject=(projects||[]).find(p=>normName(p.name)===normName('اترك بصمة')) || (projects||[]).find(p=>normName(p.name).includes(normName('اترك بصمة')));
   LM_PROJECT_ID=lmProject?.id||null;
   if(!LM_PROJECT_ID) toast('تنبيه: ما لقيت مشروع "اترك بصمة" بالسنة الحالية — راجعي اسمه في تبويب المشاريع');
 
