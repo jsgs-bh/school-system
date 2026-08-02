@@ -87,7 +87,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let PICKED_STUDENTS=[], LM_PROJECT_ID=null;
+let PICKED_STUDENTS=[], LM_PROJECT_ID=null, IS_LM_LEAD=false;
 
 async function initLeaveMark(){
   if($('lmSaveBtn').dataset.ready) return;
@@ -95,6 +95,11 @@ async function initLeaveMark(){
 
   const {data:proj}=await db.from('plan_projects').select('id').eq('academic_year_id',S.YEAR.id).eq('name','اترك بصمة').maybeSingle();
   LM_PROJECT_ID=proj?.id||null;
+
+  if(LM_PROJECT_ID){
+    const {data:leadRow}=await db.from('staff_project_leads').select('id').eq('staff_id',S.ME.id).eq('project_id',LM_PROJECT_ID).maybeSingle();
+    IS_LM_LEAD=!!leadRow;
+  }
 
   $('lmType').addEventListener('change',()=>{
     const isInternal=$('lmType').value==='internal';
@@ -125,7 +130,7 @@ async function initLeaveMark(){
   $('lmFilterMonth').addEventListener('change',loadReport);
   $('lmPrintBtn').addEventListener('click',printReport);
 
-  if(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead||S.FLAGS.isProjectLead){
+  if(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead||IS_LM_LEAD){
     const {data:depts}=await db.from('departments').select('id,name').order('name');
     $('lmFilterDept').innerHTML='<option value="">كل الأقسام</option>'+(depts||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
     $('lmFilterDept').style.display='inline-block';
@@ -193,7 +198,7 @@ async function loadReport(){
   let query=db.from('event_records').select('*, staff:staff_id(full_name), departments(name)').eq('academic_year_id',S.YEAR.id).eq('type',type).order('execution_date');
   if(monthFilter) query=query.eq('month',monthFilter);
   if(deptFilter) query=query.eq('department_id',deptFilter);
-  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead || S.FLAGS.isProjectLead;
+  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead || IS_LM_LEAD;
   if(!canSeeAll && S.FLAGS.isSeniorTeacher && S.ME.department_id) query=query.eq('department_id',S.ME.department_id);
   else if(!canSeeAll) query=query.eq('staff_id',S.ME.id);
 
