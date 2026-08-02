@@ -1,0 +1,264 @@
+/* leave-a-mark.js — فعاليات "اترك بصمة" (تحت مجموعة "الخطة الاستراتيجية")
+   المرحلتان ١و٢: إضافة فعاليات داخلية/خارجية، وحصرين مطابقين تماماً
+   لقوالب المدرسة المعتمدة، بفلترة وطباعة. */
+import { db, $, S, clean, toast, getCurrentSemester, printWithTitle, registerTab } from './core.js';
+
+const MONTH_LABELS={sep:'سبتمبر',oct:'أكتوبر',nov:'نوفمبر',dec:'ديسمبر',jan:'يناير',feb:'فبراير',mar:'مارس',apr:'أبريل',may:'مايو',jun:'يونيو'};
+const MONTH_FROM_DATE=(dateStr)=>{
+  if(!dateStr) return null;
+  const m=+dateStr.slice(5,7);
+  const map={9:'sep',10:'oct',11:'nov',12:'dec',1:'jan',2:'feb',3:'mar',4:'apr',5:'may',6:'jun'};
+  return map[m]||null;
+};
+
+$('appView').insertAdjacentHTML('beforeend', `
+<div class="app-main wide" id="leaveMark" style="display:none">
+  <div class="panel">
+    <h3>إضافة فعالية / مسابقة</h3>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <select id="lmType" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+        <option value="internal">فعالية داخلية</option>
+        <option value="external">فعالية/مسابقة خارجية</option>
+      </select>
+      <input type="text" id="lmTitle" placeholder="اسم الفعالية/البرنامج" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <input type="date" id="lmDate" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+    </div>
+
+    <div id="lmInternalFields" class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:12px">
+      <select id="lmTargetCat" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
+        <option value="الطالبات">الطالبات</option><option value="المعلمات">المعلمات</option><option value="الطالبات والمعلمات">الطالبات والمعلمات</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" id="lmSlot1"> قبل الطابور</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" id="lmSlot2"> الفسحة الأولى</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" id="lmSlot3"> الفسحة الثانية</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" id="lmSlot4"> بعد الدوام الرسمي</label>
+    </div>
+
+    <div id="lmExternalFields" class="row" style="display:none;gap:12px;flex-wrap:wrap;align-items:center;margin-top:12px">
+      <input type="text" id="lmOrgBody" placeholder="الجهة المنظمة" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <input type="text" id="lmResult" placeholder="النتيجة/المركز (اتركيه فاضياً لحد الإعلان)" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+    </div>
+
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:12px">
+      <input type="text" id="lmExtraSup" placeholder="مشرفات إضافيات (اختياري، مثال: أ.بشرى، أ.عفاف)" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="sub">أسماء الطالبات المشاركات</div>
+      <div class="search-row" style="position:relative"><input type="text" id="lmStudentSearch" placeholder="ابحثي عن اسم طالبة لإضافتها…"></div>
+      <div class="sugg" id="lmStudentSugg"></div>
+      <div id="lmPickedStudents" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+    </div>
+
+    <button class="btn gold" id="lmSaveBtn" style="width:auto;padding:10px 24px;margin-top:14px">حفظ الفعالية</button>
+  </div>
+
+  <div class="panel">
+    <h3>حصر الفعاليات والمسابقات</h3>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="lmReportType"><option value="internal">داخلية</option><option value="external">خارجية</option></select>
+      <select id="lmFilterMonth"><option value="">كل الأشهر</option>${Object.entries(MONTH_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
+      <select id="lmFilterDept" style="display:none"><option value="">كل الأقسام</option></select>
+      <button class="btn ghost" id="lmPrintBtn">🖨️ طباعة الحصر</button>
+    </div>
+    <div class="board-wrap"><table class="board" id="lmTable"></table></div>
+  </div>
+</div>
+<div id="printAreaLM"></div>
+<style>
+  #leaveMark.wide{max-width:1500px}
+  .lm-student-chip{display:flex;align-items:center;gap:6px;background:var(--sand);border-radius:99px;padding:5px 12px;font-size:12.5px}
+  .lm-student-chip button{background:none;border:none;color:var(--err);cursor:pointer;font-size:12px}
+  #printAreaLM{display:none}
+  @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+    @page{margin:0.22in; size:landscape}
+    body *{visibility:hidden}
+    #printAreaLM, #printAreaLM *{visibility:visible}
+    #printAreaLM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+    .lm-print-head{text-align:center;margin-bottom:10px}
+    .lm-print-head img{height:0.7in;object-fit:contain}
+    .lm-print-head h2{font-size:14px;color:#1d3d5c;margin:4px 0}
+    .lm-print-meta{display:flex;justify-content:space-between;border:1px solid #333;padding:5px 10px;font-size:11px;font-weight:700;margin-bottom:8px}
+    .lm-print-tbl{width:100%;border-collapse:collapse;font-size:9.5px}
+    .lm-print-tbl th{background:#eef1f5;border:1px solid #999;padding:4px}
+    .lm-print-tbl td{border:1px solid #999;padding:4px;text-align:center;vertical-align:middle}
+    .lm-print-foot{display:flex;justify-content:space-around;margin-top:20px;font-size:10.5px;font-weight:700}
+  }
+</style>`);
+
+let PICKED_STUDENTS=[], LM_PROJECT_ID=null;
+
+async function initLeaveMark(){
+  if($('lmSaveBtn').dataset.ready) return;
+  $('lmSaveBtn').dataset.ready='1';
+
+  const {data:proj}=await db.from('plan_projects').select('id').eq('academic_year_id',S.YEAR.id).eq('name','اترك بصمة').maybeSingle();
+  LM_PROJECT_ID=proj?.id||null;
+
+  $('lmType').addEventListener('change',()=>{
+    const isInternal=$('lmType').value==='internal';
+    $('lmInternalFields').style.display=isInternal?'flex':'none';
+    $('lmExternalFields').style.display=isInternal?'none':'flex';
+  });
+
+  let deb=null;
+  $('lmStudentSearch').addEventListener('input',()=>{
+    clearTimeout(deb);
+    deb=setTimeout(async ()=>{
+      const q=clean($('lmStudentSearch').value); const box=$('lmStudentSugg');
+      if(q.length<2){ box.style.display='none'; return; }
+      const {data:st}=await db.from('students').select('id,full_name,academic_number, enrollments(sections(code))').ilike('full_name',`%${q}%`).limit(8);
+      const filtered=(st||[]).filter(s=>!PICKED_STUDENTS.some(p=>p.id===s.id));
+      if(!filtered.length){ box.style.display='none'; return; }
+      box.innerHTML=filtered.map((s,i)=>`<div data-i="${i}">${s.full_name} <small>${s.academic_number}</small></div>`).join('');
+      box.style.display='block';
+      box.querySelectorAll('div').forEach((el,i)=>el.addEventListener('click',()=>{
+        PICKED_STUDENTS.push(filtered[i]); renderPickedStudents();
+        $('lmStudentSearch').value=''; box.style.display='none';
+      }));
+    },250);
+  });
+
+  $('lmSaveBtn').addEventListener('click',saveEvent);
+  $('lmReportType').addEventListener('change',()=>{ loadReport(); });
+  $('lmFilterMonth').addEventListener('change',loadReport);
+  $('lmPrintBtn').addEventListener('click',printReport);
+
+  if(S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead||S.FLAGS.isProjectLead){
+    const {data:depts}=await db.from('departments').select('id,name').order('name');
+    $('lmFilterDept').innerHTML='<option value="">كل الأقسام</option>'+(depts||[]).map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+    $('lmFilterDept').style.display='inline-block';
+    $('lmFilterDept').addEventListener('change',loadReport);
+  }
+
+  await loadReport();
+}
+
+function renderPickedStudents(){
+  $('lmPickedStudents').innerHTML=PICKED_STUDENTS.map((s,i)=>`<span class="lm-student-chip">${s.full_name} (${s.enrollments?.[0]?.sections?.code||'—'})<button data-i="${i}">✕</button></span>`).join('');
+  $('lmPickedStudents').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    PICKED_STUDENTS.splice(+b.dataset.i,1); renderPickedStudents();
+  }));
+}
+
+async function saveEvent(){
+  const type=$('lmType').value;
+  const title=clean($('lmTitle').value);
+  const date=$('lmDate').value;
+  if(!title){ toast('اكتبي اسم الفعالية'); return; }
+  if(!date){ toast('حددي تاريخ التنفيذ'); return; }
+  if(!S.ME.department_id){ toast('حسابك غير مرتبط بقسم'); return; }
+
+  const payload={
+    academic_year_id:S.YEAR.id, semester:getCurrentSemester(), month:MONTH_FROM_DATE(date),
+    project_id:LM_PROJECT_ID, type, title, execution_date:date,
+    department_id:S.ME.department_id, staff_id:S.ME.id,
+    extra_supervisors:clean($('lmExtraSup').value)||null,
+    created_by:S.ME.id
+  };
+  if(type==='internal'){
+    payload.target_category=$('lmTargetCat').value;
+    payload.slot_before_assembly=$('lmSlot1').checked;
+    payload.slot_break1=$('lmSlot2').checked;
+    payload.slot_break2=$('lmSlot3').checked;
+    payload.slot_after_hours=$('lmSlot4').checked;
+  }else{
+    payload.organizing_body=clean($('lmOrgBody').value)||null;
+    payload.result=clean($('lmResult').value)||null;
+  }
+
+  const btn=$('lmSaveBtn'); btn.disabled=true;
+  try{
+    const {data:ev,error}=await db.from('event_records').insert(payload).select('id').single();
+    if(error) throw error;
+    if(PICKED_STUDENTS.length){
+      await db.from('event_participants').insert(PICKED_STUDENTS.map(s=>({event_id:ev.id, student_id:s.id})));
+    }
+    toast('تم حفظ الفعالية');
+    $('lmTitle').value=''; $('lmDate').value=''; $('lmOrgBody').value=''; $('lmResult').value=''; $('lmExtraSup').value='';
+    $('lmSlot1').checked=$('lmSlot2').checked=$('lmSlot3').checked=$('lmSlot4').checked=false;
+    PICKED_STUDENTS=[]; renderPickedStudents();
+    loadReport();
+  }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
+  finally{ btn.disabled=false; }
+}
+
+let REPORT_ROWS=[];
+async function loadReport(){
+  const type=$('lmReportType').value;
+  const monthFilter=$('lmFilterMonth').value;
+  const deptFilter=$('lmFilterDept')?.value;
+
+  let query=db.from('event_records').select('*, staff:staff_id(full_name), departments(name)').eq('academic_year_id',S.YEAR.id).eq('type',type).order('execution_date');
+  if(monthFilter) query=query.eq('month',monthFilter);
+  if(deptFilter) query=query.eq('department_id',deptFilter);
+  const canSeeAll = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead || S.FLAGS.isProjectLead;
+  if(!canSeeAll && S.FLAGS.isSeniorTeacher && S.ME.department_id) query=query.eq('department_id',S.ME.department_id);
+  else if(!canSeeAll) query=query.eq('staff_id',S.ME.id);
+
+  const {data:events,error}=await query;
+  if(error){ $('lmTable').innerHTML=`<tr><td style="padding:20px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
+
+  const eventIds=(events||[]).map(e=>e.id);
+  const {data:parts}=eventIds.length ? await db.from('event_participants').select('event_id, students(full_name, enrollments(sections(code)))').in('event_id',eventIds) : {data:[]};
+  const partsByEvent={};
+  for(const p of parts||[]) (partsByEvent[p.event_id] ??= []).push(`${p.students?.full_name||'—'} ${p.students?.enrollments?.[0]?.sections?.code||''}`);
+
+  REPORT_ROWS=(events||[]).map(e=>({...e, participantNames:partsByEvent[e.id]||[]}));
+  renderReportTable(type);
+}
+
+function renderReportTable(type){
+  if(!REPORT_ROWS.length){ $('lmTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">لا فعاليات ضمن هذا الفلتر</td></tr>'; return; }
+  if(type==='internal'){
+    $('lmTable').innerHTML='<tr><th>#</th><th>الفعالية</th><th>الفئة المستهدفة</th><th>التاريخ</th><th>عدد المشاركات</th><th>الطالبات/الصف</th><th>المعلمة المشرفة</th></tr>'+
+      REPORT_ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${r.title}</td><td class="c">${r.target_category||'—'}</td><td class="c">${r.execution_date||'—'}</td><td class="c">${r.participantNames.length}</td><td>${r.participantNames.join('، ')||'—'}</td><td class="c">${r.staff?.full_name||'—'}${r.extra_supervisors?', '+r.extra_supervisors:''}</td></tr>`).join('');
+  }else{
+    $('lmTable').innerHTML='<tr><th>#</th><th>البرنامج/الفعالية</th><th>الجهة المنظمة</th><th>عدد المشاركات</th><th>الطالبات/الصف</th><th>المعلمة المشرفة</th><th>النتيجة</th></tr>'+
+      REPORT_ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td>${r.title}</td><td class="c">${r.organizing_body||'—'}</td><td class="c">${r.participantNames.length}</td><td>${r.participantNames.join('، ')||'—'}</td><td class="c">${r.staff?.full_name||'—'}${r.extra_supervisors?', '+r.extra_supervisors:''}</td><td class="c">${r.result||'—'}</td></tr>`).join('');
+  }
+}
+
+function printReport(){
+  if(!REPORT_ROWS.length){ toast('لا بيانات للطباعة'); return; }
+  const type=$('lmReportType').value;
+  const monthFilter=$('lmFilterMonth').value;
+  const deptFilter=$('lmFilterDept')?.value;
+  const deptName = deptFilter ? $('lmFilterDept').selectedOptions[0].textContent : (REPORT_ROWS[0]?.departments?.name||'—');
+  const semLabel = getCurrentSemester()===1?'الأول':'الثاني';
+  const yearLabel = S.YEAR?.name||'';
+  const logo=S.SETTINGS.logo_path ? db.storage.from('school-files').getPublicUrl(S.SETTINGS.logo_path).data.publicUrl : '';
+
+  const title = type==='internal'
+    ? 'حصر الفعاليات والمسابقات الداخلية المنفذة من الأقسام الأكاديمية والإدارية'
+    : 'حصر الفعاليات والمسابقات المشاركة بها خارج المدرسة';
+
+  let rowsHtml='';
+  if(type==='internal'){
+    rowsHtml=`<table class="lm-print-tbl"><tr><th>م</th><th>الفعالية</th><th>الفئة المستهدفة</th><th>قبل الطابور</th><th>الفسحة الأولى</th><th>الفسحة الثانية</th><th>بعد الدوام الرسمي</th><th>عدد المشاركات</th><th>أسماء الطالبات/الصف</th><th>اسم المعلمة المشرفة</th><th>النتيجة</th></tr>
+      ${REPORT_ROWS.map((r,i)=>`<tr><td>${i+1}</td><td>${r.title}</td><td>${r.target_category||''}</td>
+        <td>${r.slot_before_assembly?r.execution_date:''}</td><td>${r.slot_break1?r.execution_date:''}</td><td>${r.slot_break2?r.execution_date:''}</td><td>${r.slot_after_hours?r.execution_date:''}</td>
+        <td>${r.participantNames.length||''}</td><td style="text-align:right">${r.participantNames.join('<br>')||''}</td><td>${r.staff?.full_name||''}</td><td></td></tr>`).join('')}
+      </table>`;
+  }else{
+    rowsHtml=`<table class="lm-print-tbl"><tr><th>ت</th><th>اسم البرنامج/الفعالية</th><th>الجهة المنظمة</th><th>عدد المشاركات</th><th>أسماء الطالبات/الصف</th><th>المعلمة المشرفة</th><th>النتيجة</th></tr>
+      ${REPORT_ROWS.map((r,i)=>`<tr><td>${i+1}</td><td>${r.title}</td><td>${r.organizing_body||''}</td><td>${r.participantNames.length||''}</td><td style="text-align:right">${r.participantNames.join('<br>')||''}</td><td>${r.staff?.full_name||''}</td><td>${r.result||''}</td></tr>`).join('')}
+      </table>`;
+  }
+
+  $('printAreaLM').innerHTML=`
+    <div class="lm-print-head">${logo?`<img src="${logo}">`:''}<h2>${title}</h2><h2>للفصل ${semLabel} من العام الدراسي ${yearLabel}م</h2></div>
+    <div class="lm-print-meta"><span>شهر: ${monthFilter?MONTH_LABELS[monthFilter]:'الكل'}</span><span>القسم الأكاديمي: ${deptName}</span></div>
+    ${rowsHtml}
+    <div class="lm-print-foot">
+      <span>توثيق: ${S.ME.full_name}</span>
+      <span>منسّقة الأنشطة: ${S.SETTINGS.activities_coordinator_name||'—'}</span>
+      <span>المديرة المساعدة: ${S.SETTINGS.deputy1_name||'—'}</span>
+      <span>مديرة المدرسة: ${S.SETTINGS.principal_name||'—'}</span>
+    </div>`;
+  printWithTitle(type==='internal'?'حصر_الفعاليات_الداخلية':'حصر_الفعاليات_الخارجية','printAreaLM');
+}
+
+registerTab({id:'leaveMark', label:'اترك بصمة', group:'plan', groupLabel:'الخطة الاستراتيجية',
+  show:()=>true, init:initLeaveMark});

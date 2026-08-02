@@ -16,6 +16,8 @@ $('appView').insertAdjacentHTML('beforeend', `
       <input id="setDeputy1" type="text" autocomplete="off"><div class="sugg" id="setDeputy1Sugg"></div></div>
     <div class="field" style="position:relative;max-width:420px"><label>اسم المديرة المساعدة ٢</label>
       <input id="setDeputy2" type="text" autocomplete="off"><div class="sugg" id="setDeputy2Sugg"></div></div>
+    <div class="field" style="position:relative;max-width:420px"><label>اسم منسّقة الأنشطة</label>
+      <input id="setActCoord" type="text" autocomplete="off"><div class="sugg" id="setActCoordSugg"></div></div>
     <button class="btn gold" id="setSaveName" style="width:auto;padding:11px 26px">حفظ بيانات المدرسة</button>
   </div>
   <div class="panel">
@@ -100,9 +102,11 @@ function initData(){
     $('setPrincipal').value = S.SETTINGS.principal_name||'';
     $('setDeputy1').value = S.SETTINGS.deputy1_name||'';
     $('setDeputy2').value = S.SETTINGS.deputy2_name||'';
+    $('setActCoord').value = S.SETTINGS.activities_coordinator_name||'';
     bindNameSearch('setPrincipal','setPrincipalSugg');
     bindNameSearch('setDeputy1','setDeputy1Sugg');
     bindNameSearch('setDeputy2','setDeputy2Sugg');
+    bindNameSearch('setActCoord','setActCoordSugg');
     $('setSemesterOverride').value = S.SETTINGS.semester_override ? String(S.SETTINGS.semester_override) : '';
     $('setSemesterSave').addEventListener('click', async ()=>{
       const val=$('setSemesterOverride').value;
@@ -120,10 +124,11 @@ function initData(){
         principal_name: clean($('setPrincipal').value)||null,
         deputy1_name: clean($('setDeputy1').value)||null,
         deputy2_name: clean($('setDeputy2').value)||null,
+        activities_coordinator_name: clean($('setActCoord').value)||null,
         updated_at:new Date().toISOString()
       });
       if(error){ toast('تعذر الحفظ: '+error.message); return; }
-      Object.assign(S.SETTINGS,{school_name:name, principal_name:$('setPrincipal').value, deputy1_name:$('setDeputy1').value, deputy2_name:$('setDeputy2').value});
+      Object.assign(S.SETTINGS,{school_name:name, principal_name:$('setPrincipal').value, deputy1_name:$('setDeputy1').value, deputy2_name:$('setDeputy2').value, activities_coordinator_name:$('setActCoord').value});
       applySettingsToDom();
       toast('تم حفظ بيانات المدرسة');
     });
