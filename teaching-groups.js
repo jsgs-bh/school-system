@@ -6,7 +6,7 @@
    تلقائياً "مجموعة وحيدة" بلا أي إعداد يدوي أول ما تفتحه أي معلمة.
    ملاحظة بنيوية: teaching_groups.teacher_id عمود مفرد (NOT NULL) —
    معلمة واحدة مسؤولة لكل مجموعة، لا قائمة معلمات. */
-import { db, $, S, clean, toast, bindDrop, readSheet, registerTab } from './core.js';
+import { db, $, S, clean, toast, bindDrop, readSheet, printWithTitle, printHeaderHtml, printFooterHtml, getCurrentSemester, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="teachingGroups" style="display:none">
@@ -14,12 +14,8 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>مجموعات التدريس</h3>
     <div class="sub">المقرر غير المنقسم لا يحتاج أي إعداد هنا (مجموعة واحدة تلقائية). استخدمي هذي الشاشة فقط عندما يُدرّس مقرر لشعبة بأكثر من معلمة.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-      <select id="tgSemesterFilter" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
-        <option value="1">الفصل الأول</option>
-        <option value="2">الفصل الثاني</option>
-      </select>
-      <select id="tgSection" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"></select>
       <select id="tgSubject" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"></select>
+      <select id="tgSection" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"><option value="">اختاري المقرر أولاً…</option></select>
       <button class="btn gold" id="tgGo" style="width:auto;padding:10px 24px">فتح</button>
     </div>
     <div class="result" id="tgStatus" style="display:none"></div>
@@ -41,7 +37,19 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
   </div>
 </div>
+<div id="printAreaTG"></div>
 <style>
+  #printAreaTG{display:none}
+  @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+    @page{margin:0.22in}
+    body *{visibility:hidden}
+    #printAreaTG, #printAreaTG *{visibility:visible}
+    #printAreaTG{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    .tg-print-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:14px}
+    .tg-print-tbl th,.tg-print-tbl td{border:1px solid #ccc;padding:8px;text-align:center}
+    .tg-print-tbl th{background:#1d3d5c;color:#fff}
+  }
   .tg-group-row{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:12px 16px;margin-bottom:8px;flex-wrap:wrap}
   .tg-group-row input[type=text]{padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-weight:700;color:var(--navy);min-width:160px}
   .tg-group-row .tg-teacher{flex:1;min-width:200px;position:relative}
@@ -55,10 +63,19 @@ $('appView').insertAdjacentHTML('beforeend', `
 
 let SECTIONS=[], SUBJECTS=[], GROUPS=[], ALL_STUDENTS=[], CUR_SEC=null, CUR_SUBJ=null;
 
-function renderSectionOptions(){
-  const sem=+$('tgSemesterFilter').value;
-  const filtered=SECTIONS.filter(s=>s.semester===sem);
-  $('tgSection').innerHTML='<option value="">اختاري الشعبة…</option>'+filtered.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+async function renderSectionOptionsForSubject(){
+  const subjId=$('tgSubject').value;
+  if(!subjId){ $('tgSection').innerHTML='<option value="">اختاري المقرر أولاً…</option>'; return; }
+  const sem=getCurrentSemester();
+  const currentSemSections=SECTIONS.filter(s=>s.semester===sem);
+  const sectionIds=currentSemSections.map(s=>s.id);
+  if(!sectionIds.length){ $('tgSection').innerHTML='<option value="">لا شعب لهذا الفصل</option>'; return; }
+  const {data:entries}=await db.from('timetable_entries').select('section_id').eq('subject_id',subjId).in('section_id',sectionIds);
+  const teachingSectionIds=new Set((entries||[]).map(e=>e.section_id));
+  const filtered=currentSemSections.filter(s=>teachingSectionIds.has(s.id));
+  $('tgSection').innerHTML = filtered.length
+    ? '<option value="">اختاري الشعبة…</option>'+filtered.map(s=>`<option value="${s.id}">${s.code}</option>`).join('')
+    : '<option value="">لا شعب مسجَّلة لهذا المقرر بالجدول</option>';
 }
 
 async function initTG(){
@@ -69,9 +86,8 @@ async function initTG(){
     db.from('subjects').select('id,code').order('code'),
   ]);
   SECTIONS=secs||[]; SUBJECTS=subs||[];
-  renderSectionOptions();
   $('tgSubject').innerHTML='<option value="">اختاري المقرر…</option>'+SUBJECTS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
-  $('tgSemesterFilter').addEventListener('change',renderSectionOptions);
+  $('tgSubject').addEventListener('change',renderSectionOptionsForSubject);
   $('tgGo').addEventListener('click',loadGroups);
   $('tgAddGroup').addEventListener('click',addGroup);
   $('tgSave').addEventListener('click',saveAll);
@@ -108,7 +124,7 @@ async function loadGroups(){
   $('tgStatus').style.display='none';
 
   const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
-  ALL_STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+  ALL_STUDENTS=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'ar',{numeric:true}));
 
   let {data:groups}=await db.from('teaching_groups').select('id,name,teacher_id,teaching_group_members(student_id)')
     .eq('section_id',secId).eq('subject_id',subjId);
@@ -158,8 +174,11 @@ function renderGroups(){
         <div class="sugg" style="display:none"></div>
       </div>
       <span style="font-size:12px;color:#6b7683">${g.memberIds.size} طالبة</span>
+      <button class="btn ghost tg-print-btn" data-gi="${gi}" style="width:auto;padding:6px 14px;font-size:12px">🖨️ طباعة قائمة المجموعة</button>
       ${GROUPS.length>1?`<button class="del" data-gi="${gi}">✕ حذف المجموعة</button>`:''}
     </div>`).join('');
+
+  $('tgGroupsList').querySelectorAll('.tg-print-btn').forEach(b=>b.addEventListener('click',()=>printGroupList(+b.dataset.gi)));
 
   $('tgGroupsList').querySelectorAll('.tg-name').forEach((inp,gi)=>inp.addEventListener('input',()=>{ GROUPS[gi].name=inp.value; }));
   $('tgGroupsList').querySelectorAll('.tg-teacher-search').forEach((inp,gi)=>{
@@ -210,7 +229,7 @@ function renderMembers(){
   const rows=ALL_STUDENTS.map(s=>{
     const curGroupIdx=GROUPS.findIndex(g=>g.memberIds.has(s.id));
     return {s, curGroupIdx};
-  }).sort((a,b)=> (a.curGroupIdx===-1?-1:0) - (b.curGroupIdx===-1?-1:0) || a.s.full_name.localeCompare(b.s.full_name,'ar'));
+  }).sort((a,b)=> (a.curGroupIdx===-1?-1:0) - (b.curGroupIdx===-1?-1:0) || String(a.s.academic_number).localeCompare(String(b.s.academic_number),'ar',{numeric:true}));
 
   $('tgMembersList').innerHTML = rows.map(({s,curGroupIdx})=>`
     <div class="tg-member-row ${curGroupIdx===-1?'unassigned':''}" data-sid="${s.id}">
@@ -262,6 +281,23 @@ async function saveAll(){
     loadGroups();
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
   finally{ btn.disabled=false; btn.textContent='حفظ التوزيع'; }
+}
+
+function printGroupList(gi){
+  const g=GROUPS[gi];
+  if(!g || !g.memberIds.size){ toast('لا طالبات في هذي المجموعة بعد'); return; }
+  const members=ALL_STUDENTS.filter(s=>g.memberIds.has(s.id))
+    .sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'ar',{numeric:true}));
+  const secCode=CUR_SEC?.code||'';
+  const subjCode=CUR_SUBJ?.code||'';
+  $('printAreaTG').innerHTML=`
+    ${printHeaderHtml(`قائمة ${g.name} — ${secCode} — ${subjCode}`)}
+    <p style="margin:8px 0">المعلمة المسؤولة: <b>${g.teacher_name||'—'}</b> — عدد الطالبات: <b>${members.length}</b></p>
+    <table class="tg-print-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th></tr>
+      ${members.map((s,i)=>`<tr><td>${i+1}</td><td>${s.academic_number}</td><td>${s.full_name}</td></tr>`).join('')}
+    </table>
+    ${printFooterHtml('المعلمة', g.teacher_name||S.ME.full_name)}`;
+  printWithTitle(`قائمة_${g.name}_${secCode}_${subjCode}`,'printAreaTG');
 }
 
 registerTab({id:'teachingGroups', label:'مجموعات التدريس', group:'settings', groupLabel:'الإعدادات',
