@@ -87,9 +87,27 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div id="cmMinuteNoAccess" style="display:none" class="empty-day">محاضر الاجتماعات تُنشأ فقط من رئيسة اللجنة أو أحد أعضائها.</div>
       <div id="cmMinutesList" style="margin-top:14px"></div>
     </div>
+    <div class="panel">
+      <h3>التقرير الختامي للجنة</h3>
+      <div class="sub" id="cmFinalStats"></div>
+      <div class="field"><label>قياس الأثر</label><textarea id="cmImpactText" rows="3" placeholder="وصف الأثر الفعلي لعمل اللجنة على الطالبات..."></textarea></div>
+      <div class="field"><label>المهارات التي تم تطويرها</label><textarea id="cmSkillsText" rows="3" placeholder="المهارات المكتسبة من خلال أنشطة اللجنة..."></textarea></div>
+      <button class="btn gold" id="cmFinalPrintBtn" style="width:auto;padding:9px 20px">🖨️ طباعة التقرير الختامي</button>
+    </div>
   </div>
 </div>
 <div id="printAreaCM"></div>
+<div id="printAreaCMFinal"></div>
+<style>
+  #printAreaCMFinal{display:none}
+  @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+    @page{margin:0.22in}
+    body *{visibility:hidden}
+    #printAreaCMFinal, #printAreaCMFinal *{visibility:visible}
+    #printAreaCMFinal{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
+  }
+</style>
 <style>
   #printAreaCM{display:none}
   @media print{
@@ -145,6 +163,7 @@ async function initCommittees(){
   $('cmPrintAssignment').addEventListener('click',printAssignment);
   $('cmPrintInvite').addEventListener('click',printInvite);
   $('cmPrintAttendance').addEventListener('click',printAttendance);
+  $('cmFinalPrintBtn').addEventListener('click',printFinalReport);
   let deb=null;
   $('cmMemberSearch').addEventListener('input',()=>{
     clearTimeout(deb);
@@ -238,13 +257,21 @@ async function loadCommittees(){
 }
 
 async function openCommittee(id){
-  const {data:c}=await db.from('committees').select('id,name,type,home_project_id,head_staff_id,initiative_id, plan_projects(name)').eq('id',id).single();
+  const {data:c}=await db.from('committees').select('id,name,type,home_project_id,head_staff_id,initiative_id,impact_text,skills_text, plan_projects(name)').eq('id',id).single();
   if(!c) return;
   CUR_COMMITTEE=c;
   $('cmListView').style.display='none'; $('cmDetailView').style.display='block';
   $('cmDetailName').textContent=c.name;
   $('cmDetailMeta').textContent=`المشروع الأم: ${c.plan_projects?.name||'—'} — نوع اللجنة: ${TYPE_LABEL[c.type]||c.type}`;
-  await loadMembers(); await loadCommitteeActions(); await loadTasks(); await checkMinuteAccess(); await loadMinutes();
+  $('cmImpactText').value=c.impact_text||''; $('cmSkillsText').value=c.skills_text||'';
+  await loadMembers(); await loadCommitteeActions(); await loadTasks(); await checkMinuteAccess(); await loadMinutes(); await loadFinalStats();
+}
+
+async function loadFinalStats(){
+  if(!CUR_COMMITTEE.initiative_id){ $('cmFinalStats').textContent=''; return; }
+  const {data:actions}=await db.from('plan_actions').select('id,status').eq('initiative_id',CUR_COMMITTEE.initiative_id);
+  const total=(actions||[]).length, done=(actions||[]).filter(a=>a.status==='done').length;
+  $('cmFinalStats').textContent=`عدد الفعاليات/المسابقات المسجَّلة لهذي اللجنة: ${total} — منجَز: ${done}`;
 }
 
 async function checkMinuteAccess(){
@@ -464,6 +491,27 @@ async function printAttendance(){
     </table>
     ${printFooterHtml('رئيسة اللجنة', S.ME.full_name)}`;
   printWithTitle(`استمارة_حضور_${CUR_COMMITTEE.name}`,'printAreaCM');
+}
+
+async function printFinalReport(){
+  const impact=clean($('cmImpactText').value), skills=clean($('cmSkillsText').value);
+  await db.from('committees').update({impact_text:impact||null, skills_text:skills||null}).eq('id',CUR_COMMITTEE.id);
+  let actionsHtml='';
+  if(CUR_COMMITTEE.initiative_id){
+    const {data:actions}=await db.from('plan_actions').select('text,status,execution_date:month').eq('initiative_id',CUR_COMMITTEE.initiative_id);
+    const STATUS_LABEL={not_started:'لم يبدأ', in_progress:'جاري', done:'تم'};
+    actionsHtml=`<table class="cm-print-tbl"><tr><th>#</th><th>الفعالية/الإجراء</th><th>الحالة</th></tr>
+      ${(actions||[]).map((a,i)=>`<tr><td>${i+1}</td><td>${a.text}</td><td>${STATUS_LABEL[a.status]}</td></tr>`).join('')}
+      </table>`;
+  }
+  $('printAreaCMFinal').innerHTML=`
+    ${printHeaderHtml(`التقرير الختامي — ${CUR_COMMITTEE.name}`)}
+    <p style="margin-top:10px"><b>قياس الأثر:</b> ${impact||'—'}</p>
+    <p><b>المهارات التي تم تطويرها:</b> ${skills||'—'}</p>
+    <h4 style="margin-top:16px">الفعاليات والمسابقات المسجَّلة</h4>
+    ${actionsHtml||'<p>لا فعاليات مسجَّلة بعد.</p>'}
+    ${printFooterHtml('رئيسة اللجنة', S.ME.full_name)}`;
+  printWithTitle(`التقرير_الختامي_${CUR_COMMITTEE.name}`,'printAreaCMFinal');
 }
 
 registerTab({id:'committeesMain', label:'اللجان والمبادرات', group:'plan', groupLabel:'الخطة الاستراتيجية',
