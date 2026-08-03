@@ -490,6 +490,6 @@ async function exportTallyXls(){
 // يشوفونها كتبويب "اترك بصمة" تحت "الخطة الاستراتيجية"، وباقي المعلمات
 // يشوفونها كتبويب "فعاليات" مستقل — نفس الحاوية، نفس المحتوى بالضبط.
 registerTab({id:'leaveMark', label:'اترك بصمة', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isAdmin||f.isLead||f.isStrategicPlanLead||f.isProjectLead, init:initLeaveMark});
+  show:f=>f.isProjectLead, init:initLeaveMark});
 registerTab({id:'leaveMark', label:'فعاليات', group:'events', groupLabel:'فعاليات',
-  show:f=>!(f.isAdmin||f.isLead||f.isStrategicPlanLead), init:initLeaveMark});
+  show:f=>!f.isProjectLead, init:initLeaveMark});
