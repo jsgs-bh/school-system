@@ -13,6 +13,28 @@ const MONTH_FROM_DATE=(dateStr)=>{
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="leaveMark" style="display:none">
+  <div id="lmAnnounceModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:var(--white);border-radius:14px;padding:24px;max-width:420px;width:90%;text-align:center">
+      <h3 style="margin-top:0">📢 إعلان جديد</h3>
+      <div id="lmAnnounceModalBody" style="margin:14px 0;font-size:14px"></div>
+      <button class="btn gold" id="lmAnnounceModalClose" style="width:auto;padding:9px 24px">حسناً</button>
+    </div>
+  </div>
+
+  <div class="panel" id="lmAnnouncePanel" style="display:none">
+    <h3>إعلانات المسابقات (رئيسة المشروع)</h3>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="lmAnnounceTitle" placeholder="اسم المسابقة" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <button class="btn gold" id="lmAnnounceCreateBtn" style="width:auto;padding:9px 20px">نشر إعلان</button>
+    </div>
+    <textarea id="lmAnnounceDesc" placeholder="تفاصيل/رابط المسابقة (اختياري)" rows="2" style="width:100%;margin-top:10px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;resize:vertical"></textarea>
+    <div id="lmAnnouncementsList" style="margin-top:16px"></div>
+  </div>
+
+  <div class="panel">
+    <h3>مسابقات معلنة — سجّلي مشاركتك</h3>
+    <div id="lmOpenCompetitions"></div>
+  </div>
   <div class="panel">
     <h3>إضافة فعالية / مسابقة</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
@@ -173,8 +195,82 @@ async function initLeaveMark(){
     }
     await loadTally();
   }
+
+  if(IS_LM_LEAD){
+    $('lmAnnouncePanel').style.display='block';
+    $('lmAnnounceCreateBtn').addEventListener('click',createAnnouncement);
+    await loadAnnouncementsForLead();
+  }
+  $('lmAnnounceModalClose').addEventListener('click', async ()=>{
+    $('lmAnnounceModal').style.display='none';
+    if(PENDING_POPUP_ID) await db.from('announcement_dismissals').insert({announcement_id:PENDING_POPUP_ID, staff_id:S.ME.id});
+  });
+
+  await loadOpenCompetitions();
+  await checkPopup();
   await loadMyEvents();
 }
+
+let PENDING_POPUP_ID=null;
+async function checkPopup(){
+  if(!LM_PROJECT_ID) return;
+  const {data:anns}=await db.from('competition_announcements').select('id,title,description').eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false}).limit(5);
+  if(!anns?.length) return;
+  const {data:dismissed}=await db.from('announcement_dismissals').select('announcement_id').eq('staff_id',S.ME.id);
+  const dismissedIds=new Set((dismissed||[]).map(d=>d.announcement_id));
+  const unseen=anns.find(a=>!dismissedIds.has(a.id));
+  if(!unseen) return;
+  PENDING_POPUP_ID=unseen.id;
+  $('lmAnnounceModalBody').innerHTML=`<b>${unseen.title}</b>${unseen.description?`<p style="color:#8a93a0;font-size:13px">${unseen.description}</p>`:''}`;
+  $('lmAnnounceModal').style.display='flex';
+}
+
+async function createAnnouncement(){
+  const title=clean($('lmAnnounceTitle').value);
+  if(!title){ toast('اكتبي اسم المسابقة'); return; }
+  const description=clean($('lmAnnounceDesc').value)||null;
+  const {error}=await db.from('competition_announcements').insert({academic_year_id:S.YEAR.id, project_id:LM_PROJECT_ID, title, description, created_by:S.ME.id});
+  if(error){ toast('تعذر النشر: '+error.message); return; }
+  toast('تم نشر الإعلان'); $('lmAnnounceTitle').value=''; $('lmAnnounceDesc').value='';
+  loadAnnouncementsForLead(); loadOpenCompetitions();
+}
+
+async function loadAnnouncementsForLead(){
+  const {data:anns}=await db.from('competition_announcements').select('id,title,description').eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false});
+  if(!anns?.length){ $('lmAnnouncementsList').innerHTML='<div class="empty-day">لا إعلانات بعد.</div>'; return; }
+  const {data:parts}=await db.from('event_records').select('id,title,announcement_id, staff:staff_id(full_name), result').in('announcement_id',anns.map(a=>a.id));
+  $('lmAnnouncementsList').innerHTML=anns.map(a=>{
+    const mine=(parts||[]).filter(p=>p.announcement_id===a.id);
+    return `<div class="cm-row" style="cursor:default;display:block">
+      <b>${a.title}</b> <small style="color:#8a93a0">(${mine.length} مشاركة)</small>
+      ${mine.length?`<div style="margin-top:8px">${mine.map(p=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f2f0ea;font-size:12.5px">
+        <span>${p.staff?.full_name||'—'}</span><span>${p.result||'بانتظار النتيجة'}</span></div>`).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function loadOpenCompetitions(){
+  if(!LM_PROJECT_ID){ $('lmOpenCompetitions').innerHTML='<div class="empty-day">لا مسابقات معلنة بعد.</div>'; return; }
+  const {data:anns}=await db.from('competition_announcements').select('id,title,description').eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false});
+  if(!anns?.length){ $('lmOpenCompetitions').innerHTML='<div class="empty-day">لا مسابقات معلنة بعد.</div>'; return; }
+  const {data:mine}=await db.from('event_records').select('id,announcement_id').eq('staff_id',S.ME.id).in('announcement_id',anns.map(a=>a.id));
+  const participatedIds=new Set((mine||[]).map(m=>m.announcement_id));
+  $('lmOpenCompetitions').innerHTML=anns.map(a=>`
+    <div class="cm-row" style="cursor:default">
+      <span><b>${a.title}</b>${a.description?` <small style="color:#8a93a0">${a.description}</small>`:''}</span>
+      ${participatedIds.has(a.id)
+        ? `<span class="cm-tag">✓ سجَّلتِ مشاركتك</span>`
+        : `<button class="btn gold lm-participate-btn" data-id="${a.id}" data-title="${a.title.replace(/"/g,'&quot;')}" style="width:auto;padding:7px 16px;font-size:12.5px">سجّلي مشاركتك</button>`}
+    </div>`).join('');
+  $('lmOpenCompetitions').querySelectorAll('.lm-participate-btn').forEach(b=>b.addEventListener('click',()=>{
+    $('lmType').value='external'; $('lmType').dispatchEvent(new Event('change'));
+    $('lmTitle').value=b.dataset.title;
+    PENDING_ANNOUNCEMENT_ID=b.dataset.id;
+    $('lmTitle').scrollIntoView({behavior:'smooth', block:'center'});
+    toast('عبّي بيانات مشاركتك بالأسفل واحفظي');
+  }));
+}
+let PENDING_ANNOUNCEMENT_ID=null;
 
 function bindTeacherSearch(input,box,onPick){
   let deb=null;
@@ -221,6 +317,7 @@ async function saveEvent(){
     project_id:LM_PROJECT_ID, type, title, execution_date:date,
     department_id:teacherRow?.department_id||S.ME.department_id, staff_id:PICKED_TEACHER.id,
     extra_supervisors:EXTRA_SUPS.map(s=>s.full_name).join('، ')||null,
+    announcement_id:PENDING_ANNOUNCEMENT_ID||null,
     created_by:S.ME.id
   };
   if(type==='internal'){
@@ -246,6 +343,7 @@ async function saveEvent(){
     $('lmSlot1').checked=$('lmSlot2').checked=$('lmSlot3').checked=$('lmSlot4').checked=false;
     PICKED_STUDENTS=[]; renderPickedStudents(); EXTRA_SUPS=[]; renderExtraSups();
     PICKED_TEACHER={id:S.ME.id, full_name:S.ME.full_name}; $('lmTeacherSearch').value=S.ME.full_name;
+    if(PENDING_ANNOUNCEMENT_ID){ PENDING_ANNOUNCEMENT_ID=null; loadOpenCompetitions(); if(IS_LM_LEAD) loadAnnouncementsForLead(); }
     loadMyEvents();
     if(!$('lmTallyPanel').style.display || $('lmTallyPanel').style.display==='block') loadTally();
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
@@ -268,8 +366,19 @@ async function loadMyEvents(){
   if(!events?.length){ $('lmMyList').innerHTML='<div class="empty-day">لا فعاليات بعد.</div>'; return; }
   const partsMap=await fetchParticipantNames(events.map(e=>e.id));
   $('lmMyList').innerHTML=events.map(e=>`
-    <div class="cm-row" style="cursor:default"><span><b>${e.title}</b> <small style="color:#8a93a0">${e.execution_date||''}${e.result?' — النتيجة: '+e.result:''}</small><br>
-    <small>${(partsMap[e.id]||[]).join('، ')||'لا طالبات مسجَّلات'}</small></span></div>`).join('');
+    <div class="cm-row" style="cursor:default;flex-wrap:wrap"><span><b>${e.title}</b> <small style="color:#8a93a0">${e.execution_date||''}</small><br>
+    <small>${(partsMap[e.id]||[]).join('، ')||'لا طالبات مسجَّلات'}</small></span>
+    ${type==='external'?`<span style="display:flex;align-items:center;gap:6px">
+      <input type="text" class="lm-result-input" data-id="${e.id}" placeholder="النتيجة/المركز" value="${e.result||''}" style="padding:6px 10px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12.5px;width:140px">
+      <button class="btn ghost lm-result-save" data-id="${e.id}" style="width:auto;padding:6px 12px;font-size:11px">حفظ</button>
+    </span>`:''}
+    </div>`).join('');
+  $('lmMyList').querySelectorAll('.lm-result-save').forEach(b=>b.addEventListener('click', async ()=>{
+    const inp=$('lmMyList').querySelector(`.lm-result-input[data-id="${b.dataset.id}"]`);
+    const {error}=await db.from('event_records').update({result:clean(inp.value)||null}).eq('id',b.dataset.id);
+    if(error){ toast('تعذر الحفظ: '+error.message); return; }
+    toast('تم حفظ النتيجة');
+  }));
 }
 
 let TALLY_ROWS=[];
@@ -383,4 +492,4 @@ async function exportTallyXls(){
 registerTab({id:'leaveMark', label:'اترك بصمة', group:'plan', groupLabel:'الخطة الاستراتيجية',
   show:f=>f.isAdmin||f.isLead||f.isStrategicPlanLead||f.isProjectLead, init:initLeaveMark});
 registerTab({id:'leaveMark', label:'فعاليات', group:'events', groupLabel:'فعاليات',
-  show:f=>!(f.isAdmin||f.isLead||f.isStrategicPlanLead||f.isProjectLead), init:initLeaveMark});
+  show:f=>!(f.isAdmin||f.isLead||f.isStrategicPlanLead), init:initLeaveMark});
