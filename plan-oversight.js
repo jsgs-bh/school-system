@@ -49,6 +49,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <select id="poPrintMonth"><option value="">كل الأشهر</option>${MONTHS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('')}</select>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--navy);cursor:pointer"><input type="checkbox" id="poBlankStatus"> عمود حالة فاضٍ (للتعبئة اليدوية)</label>
       <button class="btn ghost" id="poPrint">🖨️ طباعة</button>
+      <button class="btn gold" id="poPrintOfficial">📋 طباعة الخطة (القالب الرسمي)</button>
       <button class="btn ghost" id="poXls">⬇ تصدير Excel (كل المشاريع)</button>
     </div>
     <div class="board-wrap"><table class="board" id="poTable"></table></div>
@@ -78,6 +79,11 @@ $('appView').insertAdjacentHTML('beforeend', `
     .po-tbl tr.in_progress td{background:#fff3cd}
     .po-mhead{background:#f0faf5;border-right:3px solid #52b788;padding:4px 10px;font-weight:700;color:#2d6a4f;margin:8px 0 3px;font-size:11px}
     .po-phead{background:#1a3a6b;color:#fff;padding:6px 10px;font-weight:700;margin-top:14px}
+    .po-official-phead{background:#1a3a6b;color:#fff;padding:8px 12px;font-weight:700;margin-top:18px;font-size:13px;page-break-after:avoid}
+    .po-official-tbl{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:6px}
+    .po-official-tbl th{background:#eef1f5;border:1px solid #999;padding:5px}
+    .po-official-tbl td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}
+    .po-official-tbl td:first-child{text-align:right}
   }
 </style>`);
 
@@ -90,6 +96,7 @@ async function initOversight(){
   $('poFilterMonth').addEventListener('change',renderTable);
   $('poFilterStatus').addEventListener('change',renderTable);
   $('poPrint').addEventListener('click',printWhole);
+  $('poPrintOfficial').addEventListener('click',printOfficialTemplate);
   $('poXls').addEventListener('click',exportXls);
   $('poMoveBtn').addEventListener('click',moveInitiative);
   await loadAll();
@@ -251,6 +258,46 @@ function printWhole(){
     ${body}
     ${printFooterHtml('رئيسة متابعة الخطة الاستراتيجية', S.ME.full_name)}`;
   printWithTitle('الخطة_الشاملة','printAreaPO');
+}
+
+/* ============ طباعة القالب الرسمي (مطابق لملف الخطة الأصلي) ============ */
+function printOfficialTemplate(){
+  if(!ALL.length){ toast('لا بيانات للطباعة بعد'); return; }
+  const [startYear,endYear]=(S.YEAR?.name||'').split('-').map(s=>s.trim());
+  const yearFor=(monthId)=>['sep','oct','nov','dec'].includes(monthId) ? (startYear||'') : (endYear||'');
+
+  let body='';
+  PROJECTS.forEach(p=>{
+    const projActions=ALL.filter(a=>a.project_id===p.id);
+    if(!projActions.length) return;
+    const byInit={};
+    for(const a of projActions) (byInit[a.initiative_id||a.initName] ??= {name:a.initName, items:[]}).items.push(a);
+
+    body+=`<div class="po-official-phead">${p.name}</div>
+      <table class="po-official-tbl">
+        <tr><th>الإجراء</th><th>المنفذون</th><th>الموعد النهائي</th><th>تم التنفيذ</th><th>جاري التنفيذ</th><th>لم يتم التنفيذ</th></tr>`;
+    Object.values(byInit).forEach(g=>{
+      g.items.forEach((a,i)=>{
+        const monthLabel=MONTHS.find(m=>m.id===a.month)?.label||'';
+        const dateLabel = monthLabel ? `${monthLabel} ${yearFor(a.month)}م` : '—';
+        body+=`<tr>
+          <td>${i===0?`<b>${g.name}</b><br>`:''}${a.text}</td>
+          <td>${a.responsible||'—'}</td>
+          <td>${dateLabel}</td>
+          <td>${a.status==='done'?'✓':''}</td>
+          <td>${a.status==='in_progress'?'✓':''}</td>
+          <td>${a.status==='not_started'?'✓':''}</td>
+        </tr>`;
+      });
+    });
+    body+=`</table>`;
+  });
+
+  $('printAreaPO').innerHTML=`
+    ${printHeaderHtml(`الخطة التنفيذية للعام الدراسي ${S.YEAR?.name||''}م`)}
+    ${body}
+    ${printFooterHtml('رئيسة متابعة الخطة الاستراتيجية', S.ME.full_name)}`;
+  printWithTitle(`الخطة_التنفيذية_${S.YEAR?.name||''}`,'printAreaPO');
 }
 
 /* ============ تصدير Excel ============ */
