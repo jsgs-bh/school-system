@@ -71,7 +71,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaPO, #printAreaPO *{visibility:visible}
-    #printAreaPO{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaPO{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .po-tbl{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px}
     .po-tbl th{background:#1a3a6b;color:#fff;padding:5px}
     .po-tbl td{border:1px solid #dee2e6;padding:4px;text-align:right}

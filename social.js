@@ -12,10 +12,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaSocial{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaSocial, #printAreaSocial *{visibility:visible}
-    #printAreaSocial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaSocial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .soc-head{text-align:center;margin-bottom:12px}
     .soc-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .soc-tbl{width:100%;border-collapse:collapse;font-size:11px}
@@ -156,7 +156,7 @@ function exportPdf(){
   $('printAreaSocial').innerHTML=`
     <div class="soc-head"><h2>التأخير والاستئذان — ${dstr(SOC_DATE)}</h2></div>
     <table class="soc-tbl"><tr><th>النوع</th><th>اسم الطالبة</th><th>الرقم الأكاديمي</th><th>الوقت</th><th>السبب/ملاحظة</th></tr>${rows}</table>`;
-  printWithTitle(`التأخير_والاستئذان_${dstr(SOC_DATE)}`);
+  printWithTitle(`التأخير_والاستئذان_${dstr(SOC_DATE)}`,'printAreaSocial');
 }
 
 registerTab({id:'socialMain', label:'التأخير والاستئذان', group:'attendance', groupLabel:'متابعة الغياب',

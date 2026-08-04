@@ -86,7 +86,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     body *{visibility:hidden}
     #printAreaPeriod, #printAreaPeriod *{visibility:visible}
     #printAreaPeriod{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
-    .pr-page{page-break-after:always;padding:0 0 18mm 0}
+    .pr-page{page-break-after:always;padding:0}
     .pr-page:last-child{page-break-after:auto}
     .pr-head{text-align:center;margin-bottom:12px}
     .pr-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}

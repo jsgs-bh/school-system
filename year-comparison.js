@@ -31,10 +31,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaYC{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaYC, #printAreaYC *{visibility:visible}
-    #printAreaYC{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaYC{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .yc-head{text-align:center;margin-bottom:12px}
     .yc-head h2{font-size:15px;color:#1d3d5c;font-weight:600}
     .yc-tbl{width:100%;border-collapse:collapse;font-size:11px}
@@ -165,7 +165,7 @@ function exportPdf(){
   if(!RESULT_ROWS.length){ toast('شغّلي المقارنة أولاً'); return; }
   $('printAreaYC').innerHTML=`<div class="yc-head"><h2>${schoolName()} — مقارنة السنوات الدراسية</h2></div>
     <table class="yc-tbl">${$('ycTable').innerHTML}</table>`;
-  printWithTitle('مقارنة_السنوات');
+  printWithTitle('مقارنة_السنوات','printAreaYC');
 }
 
 registerTab({id:'yearCompare', label:'مقارنة السنوات', group:'grades', groupLabel:'الدرجات',

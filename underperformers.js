@@ -40,10 +40,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaUP{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaUP, #printAreaUP *{visibility:visible}
-    #printAreaUP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaUP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .up-head{text-align:center;margin-bottom:12px}
     .up-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .up-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
@@ -208,7 +208,7 @@ function printStudentReport(r){
       <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
     </table>
     ${printFooterHtml('مكتب الإرشاد الأكاديمي والتوجيه المهني', S.ME.full_name)}`;
-  printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
+  printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`,'printAreaUP');
 }
 
 /* ============ تصدير ============ */
@@ -254,7 +254,7 @@ function exportPdf(){
     ${printHeaderHtml('متابعة أداء الطالبات')}
     <table class="up-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th></tr>${rows}</table>
     ${printFooterHtml('مكتب الإرشاد الأكاديمي والتوجيه المهني', S.ME.full_name)}`;
-  printWithTitle('متابعة_أداء_الطالبات');
+  printWithTitle('متابعة_أداء_الطالبات','printAreaUP');
 }
 
 registerTab({id:'upMain', label:'متابعة أداء الطالبات', group:'grades', groupLabel:'الدرجات',

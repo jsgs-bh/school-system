@@ -53,7 +53,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printArea, #printArea *{visibility:visible}
-    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printArea{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .p-head{text-align:center;margin-bottom:14px}
     .p-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:8px}
     .p-head p{font-size:12px;color:#333}
@@ -288,7 +288,7 @@ function exportPdf(kind){
           <th>حالة الغياب</th><th>الإجراء المتخذ</th><th>حالة الاستجابة</th><th>سبب الغياب</th></tr>
         ${rowsHtml}
       </table>`;
-    printWithTitle(`استمارة_المتغيبات_${date}`);
+    printWithTitle(`استمارة_المتغيبات_${date}`,'printArea');
   }else{
     const perSec={}; for(const r of ROWS) perSec[r.sec]=(perSec[r.sec]||0)+1;
     const rowsHtml=ROWS.map((r,i)=>`<tr><td class="c">${i+1}</td><td class="c">${r.academic_number}</td><td>${r.full_name}</td><td class="c">${r.sec}</td></tr>`).join('');
@@ -299,7 +299,7 @@ function exportPdf(kind){
       <table class="p-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>الصف</th></tr>${rowsHtml}</table>
       <div class="p-head" style="margin-top:18px"><h2>العدد حسب الصف</h2></div>
       <table class="p-tbl" style="width:280px"><tr><th>الصف</th><th>العدد</th></tr>${secHtml}</table>`;
-    printWithTitle(`أسماء_وأعداد_المتغيبات_${date}`);
+    printWithTitle(`أسماء_وأعداد_المتغيبات_${date}`,'printArea');
   }
 }
 

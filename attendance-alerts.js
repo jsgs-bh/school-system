@@ -54,10 +54,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaAA{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaAA, #printAreaAA *{visibility:visible}
-    #printAreaAA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaAA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .aa-head{text-align:center;margin-bottom:12px}
     .aa-head h2{font-size:15px;color:#1d3d5c;font-weight:600}
     .aa-tbl{width:100%;border-collapse:collapse;font-size:11px}
@@ -196,7 +196,7 @@ async function printStudent(r){
       <p><b>الإجراء المتبع:</b> ${r.action_taken||'—'}</p>
       <p><b>الحالة:</b> ${STATUS_LABEL[r.status]||r.status}</p>
     </div>`;
-  printWithTitle(`تقرير_${r.kind==='absence'?'غياب':'تأخير'}_${r.students?.academic_number}`);
+  printWithTitle(`تقرير_${r.kind==='absence'?'غياب':'تأخير'}_${r.students?.academic_number}`,'printAreaAA');
 }
 
 /* ============ تصدير ============ */
@@ -241,7 +241,7 @@ function exportPdf(){
     <td>${r.count}</td><td>${r.reason||'—'}</td><td>${r.action_taken||'—'}</td><td>${STATUS_LABEL[r.status]||r.status}</td></tr>`).join('');
   $('printAreaAA').innerHTML=`<div class="aa-head"><h2>${schoolName()} — تنبيهات الغياب والتأخير</h2></div>
     <table class="aa-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>النوع</th><th>العدد</th><th>السبب</th><th>الإجراء</th><th>الحالة</th></tr>${rows}</table>`;
-  printWithTitle('تنبيهات_الغياب_والتأخير');
+  printWithTitle('تنبيهات_الغياب_والتأخير','printAreaAA');
 }
 
 registerTab({id:'attAlerts', label:'تنبيهات الغياب والتأخير', group:'attendance', groupLabel:'متابعة الغياب',

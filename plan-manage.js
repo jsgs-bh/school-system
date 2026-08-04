@@ -93,7 +93,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaPM, #printAreaPM *{visibility:visible}
-    #printAreaPM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaPM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .pm-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:14px}
     .pm-tbl th{background:#1a3a6b;color:#fff;padding:6px 5px}
     .pm-tbl td{border:1px solid #dee2e6;padding:5px;text-align:right}

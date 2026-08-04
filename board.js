@@ -28,11 +28,11 @@ if(!document.getElementById('boardExtraStyle')){
     #printAreaBoard{display:none}
     @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-      @page{margin:0}
+      @page{margin:0.22in}
       body *{visibility:hidden}
       #printAreaBoard, #printAreaBoard *{visibility:visible}
       #printAreaBoard{display:block;position:absolute;inset-inline-start:0;top:0;width:100%}
-      .pb-page{page-break-after:always;padding:14mm 12mm}
+      .pb-page{page-break-after:always;padding:0}
       .pb-page:last-child{page-break-after:auto}
       .pb-head{text-align:center;margin-bottom:12px}
       .pb-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
@@ -225,7 +225,7 @@ function printDay(){
   const periods=Object.keys(perPeriod).map(Number).sort((a,b)=>a-b);
   if(!periods.length){
     $('printAreaBoard').innerHTML=`<div class="pb-page"><div class="pb-head"><h2>لا غياب مسجل في هذا اليوم 🎉</h2></div></div>`;
-    printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`); return;
+    printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`,'printAreaBoard'); return;
   }
   const pages=periods.map(p=>{
     const rows=perPeriod[p].sort((a,b)=>(a.sec||'').localeCompare(b.sec||'','ar')||(a.full_name||'').localeCompare(b.full_name||'','ar'))
@@ -237,7 +237,7 @@ function printDay(){
     </div>`;
   }).join('');
   $('printAreaBoard').innerHTML=pages;
-  printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`);
+  printWithTitle(`تفاصيل_الغياب_${dstr(BOARD_DATE)}`,'printAreaBoard');
 }
 
 registerTab({id:'boardMain', label:'متابعة الرصد', group:'attendance', groupLabel:'متابعة الغياب',

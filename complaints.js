@@ -141,10 +141,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   #printAreaCF, #printAreaCS{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-    @page{margin:0}
+    @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaCF, #printAreaCF *, #printAreaCS, #printAreaCS *{visibility:visible}
-    #printAreaCF, #printAreaCS{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:14mm 12mm}
+    #printAreaCF, #printAreaCS{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .cf-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .cf-tbl th,.cf-tbl td{border:1px solid #ccc;padding:6px;text-align:center}
     .cf-tbl th{background:#1d3d5c;color:#fff}

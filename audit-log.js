@@ -32,7 +32,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaAL, #printAreaAL *{visibility:visible}
-    #printAreaAL{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaAL{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .al-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
     .al-tbl th,.al-tbl td{border:1px solid #ccc;padding:6px;text-align:center}
     .al-tbl th{background:#1d3d5c;color:#fff}

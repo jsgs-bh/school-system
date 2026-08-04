@@ -205,7 +205,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaComp, #printAreaComp *, #printAreaExtract, #printAreaExtract *, #printAreaAlerts, #printAreaAlerts *, #printAreaRemedial, #printAreaRemedial *{visibility:visible}
-    #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaComp,#printAreaExtract,#printAreaAlerts,#printAreaRemedial{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .cp-head{text-align:center;margin-bottom:10px}
     .cp-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .cp-hdr{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px}
@@ -648,7 +648,7 @@ function exportClassificationPdf(){
     <table class="cp-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th><th>درجة الاختبار</th></tr>${body}</table>
     <table class="cp-tbl" style="margin-top:14px;width:60%">${summaryRows}</table>
     ${printFooterHtml('اسم المعلمة', S.ME.full_name)}`;
-  printWithTitle(`كشف_الدرجات_والتصنيف_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`);
+  printWithTitle(`كشف_الدرجات_والتصنيف_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`,'printAreaComp');
 }
 
 /* ============ استمارة تحليل الكفايات ============ */
@@ -804,7 +804,7 @@ function printCompetencies(){
       <tr><td>عدد طالبات الشعبة</td><td>${$('cQN').textContent}</td><td>عدد فقرات الأسئلة</td><td>${$('cQItems').value||'—'}</td></tr>
     </table>
     ${sections}`;
-  printWithTitle(`تحليل_كفايات_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`);
+  printWithTitle(`تحليل_كفايات_${CUR_PAIR.section_code}_${CUR_PAIR.subject_code}_${CUR_EXAM.name}`,'printAreaComp');
 }
 
 /* ============ استخراج حسب الفئة ============ */
@@ -904,7 +904,7 @@ function exportExtractPdf(){
       ${perExam[name].map((s,i)=>`<tr><td>${i+1}</td><td>${s.sec}</td><td>${s.academic_number}</td><td style="text-align:right">${s.full_name}</td><td>${s.score}</td><td>${s.pct.toFixed(1)}٪</td></tr>`).join('')}
     </table></div>`).join('');
   $('printAreaExtract').innerHTML=pages;
-  printWithTitle(`استخراج_${subj}_${cat.name}`);
+  printWithTitle(`استخراج_${subj}_${cat.name}`,'printAreaExtract');
 }
 
 /* ============ متابعة أداء طالباتي (نطاق المعلمة نفسها فقط) ============ */
@@ -1003,7 +1003,7 @@ function printStudentAlert(r){
       <tr><td>إجراء المكتب</td><td>${r.office_action||'—'}</td></tr>
     </table>
     ${printFooterHtml('اسم المعلمة', S.ME.full_name)}`;
-  printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`);
+  printWithTitle(`متابعة_أداء_${r.students?.academic_number||''}`,'printAreaAlerts');
 }
 
 function exportAlertsPdf(){
@@ -1015,7 +1015,7 @@ function exportAlertsPdf(){
     ${printHeaderHtml('متابعة أداء طالباتي')}
     <table class="cp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>الحالة</th></tr>${rows}</table>
     ${printFooterHtml('اسم المعلمة', S.ME.full_name)}`;
-  printWithTitle('متابعة_أداء_طالباتي');
+  printWithTitle('متابعة_أداء_طالباتي','printAreaAlerts');
 }
 
 /* ============ استمارة التغذية الراجعة (مشتركة بين معلمات المقرر) ============ */
@@ -1165,7 +1165,7 @@ function exportRemedialPdf(){
   $('printAreaRemedial').innerHTML=`
     <div class="cp-head"><h2>استمارة التغذية الراجعة — ${subjCode} — ${examName}</h2>${goal?`<p>الهدف الخاص: ${goal}</p>`:''}</div>
     <table class="cp-tbl"><tr><th>الفئة</th>${R_SECTIONS.map(s=>`<th>${s.code}</th>`).join('')}<th>الإجراء</th><th>متابعة التنفيذ</th></tr>${trs}</table>`;
-  printWithTitle(`التغذية_الراجعة_${subjCode}_${examName}`);
+  printWithTitle(`التغذية_الراجعة_${subjCode}_${examName}`,'printAreaRemedial');
 }
 
 registerTab({id:'gradesEntry', label:'رصد الدرجات', group:'teacherArea', groupLabel:'حصصي',

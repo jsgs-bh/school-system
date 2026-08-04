@@ -115,7 +115,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaCM, #printAreaCM *{visibility:visible}
-    #printAreaCM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaCM{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .cm-print-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:14px}
     .cm-print-tbl th,.cm-print-tbl td{border:1px solid #ccc;padding:8px;text-align:center}
     .cm-print-tbl th{background:#1d3d5c;color:#fff}

@@ -118,7 +118,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaGA, #printAreaGA *{visibility:visible}
-    #printAreaGA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaGA{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .ga-page{page-break-after:always;padding:6px}
     .ga-page:last-child{page-break-after:auto}
     .ga-head{text-align:center;margin-bottom:12px}
@@ -429,7 +429,7 @@ function gaPageHtml(d,subjectCode,examTotal){
 function exportPdf(){
   if(!CUR_DETAIL){ toast('افتحي تحليل اختبار أولاً'); return; }
   $('printAreaGA').innerHTML=gaPageHtml(CUR_DETAIL,CUR_SUBJECT.code,CUR_DETAIL.examTotal);
-  printWithTitle(`كشف_الدرجات_${CUR_DETAIL.secCode}_${CUR_SUBJECT.code}_${CUR_DETAIL.examName}`);
+  printWithTitle(`كشف_الدرجات_${CUR_DETAIL.secCode}_${CUR_SUBJECT.code}_${CUR_DETAIL.examName}`,'printAreaGA');
 }
 
 /* ============ تصدير مجمّع: مقرر كامل أو كل المقررات ============ */
@@ -478,7 +478,7 @@ async function bulkExport(scope,kind){
       URL.revokeObjectURL(url);
     }else{
       $('printAreaGA').innerHTML=allDetails.map(d=>gaPageHtml(d,d.subjectCode,d.examTotal)).join('');
-      printWithTitle(scope==='subject'?`كشوف_${CUR_SUBJECT.code}`:'كشوف_كل_المقررات');
+      printWithTitle(scope==='subject'?`كشوف_${CUR_SUBJECT.code}`:'كشوف_كل_المقررات','printAreaGA');
     }
   }catch(err){ toast('تعذر التصدير: '+(err.message||err)); }
   finally{ btn.disabled=false; $('gaBulkStatus').style.display='none'; }
@@ -602,7 +602,7 @@ function exportComparePdf(){
       <table class="ga-tbl"><tr><th>#</th><th>الرقم الأكاديمي</th><th>اسم الطالبة</th>${c.exams.map(e=>`<th>${e.name} (من ${e.total})</th>`).join('')}<th>الفرق (نقاط٪)</th></tr>${rows}</table>
       ${notes?`<div style="margin-top:14px;padding:10px;border:1px solid #ccc;border-radius:6px"><b>ملاحظات المقارنة:</b><p style="margin-top:6px;white-space:pre-wrap">${notes}</p></div>`:''}
     </div>`;
-  printWithTitle(`مقارنة_${c.secCode}_${c.subjectCode}`);
+  printWithTitle(`مقارنة_${c.secCode}_${c.subjectCode}`,'printAreaGA');
 }
 
 async function exportCompareWord(){
@@ -804,7 +804,7 @@ async function generateBundle(kind){
     if(kind==='pdf'){
       if(!html){ toast('لا بيانات في العناصر المختارة'); return; }
       $('printAreaGA').innerHTML=html;
-      printWithTitle(fname);
+      printWithTitle(fname,'printAreaGA');
     }else{
       if(!wb.worksheets.length){ toast('لا بيانات في العناصر المختارة'); return; }
       const buf=await wb.xlsx.writeBuffer();

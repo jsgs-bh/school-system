@@ -66,7 +66,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaBuilder, #printAreaBuilder *{visibility:visible}
-    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaBuilder{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .bd-head{text-align:center;margin-bottom:12px}
     .bd-head h2{font-size:14px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .bd-head p{font-size:11.5px;color:#333}

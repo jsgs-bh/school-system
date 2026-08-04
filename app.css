@@ -153,12 +153,12 @@
   footer{text-align:center;font-size:11.5px;color:#8a93a0;padding:16px}
 
   @media print{
-    @page{size:portrait}
+    @page{size:portrait; margin:0.22in}
     body{background:#fff!important}
     .shared-print-head{text-align:center;margin-bottom:14px}
-    .shared-print-head img{max-height:70px;margin-bottom:8px}
+    .shared-print-head img{height:0.95in;width:7.74in;object-fit:contain;margin-bottom:8px}
     .shared-print-head h2{font-size:15px;color:#1d3d5c;font-weight:600}
-    .shared-print-footer{position:fixed;bottom:6mm;inset-inline:12mm;display:flex;justify-content:space-between;font-size:12pt;font-weight:700;color:#1a2733}
+    .shared-print-footer{margin-top:16mm;display:flex;justify-content:space-between;font-size:12pt;font-weight:700;color:#1a2733;break-inside:avoid;padding-top:4mm;border-top:1px solid #ccc}
     .shared-print-footer div{text-align:center}
     .shared-print-footer b{display:block;margin-bottom:4px;font-size:12pt;font-weight:700}
   }

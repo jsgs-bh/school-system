@@ -56,7 +56,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     @page{margin:0.22in}
     body *{visibility:hidden}
     #printAreaSP, #printAreaSP *{visibility:visible}
-    #printAreaSP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0 0 18mm 0}
+    #printAreaSP{display:block;position:absolute;inset-inline-start:0;top:0;width:100%;padding:0}
     .sp-head{text-align:center;margin-bottom:12px}
     .sp-head h2{font-size:15px;color:#1d3d5c;font-weight:600;margin-bottom:6px}
     .sp-tbl{width:100%;border-collapse:collapse;font-size:10px}
@@ -287,7 +287,7 @@ function exportPdf(){
   $('printAreaSP').innerHTML=`
     <div class="sp-head"><h2>تتبع الدرجات</h2></div>
     <table class="sp-tbl"><tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th>${exams.map(n=>`<th>${n}</th>`).join('')}</tr>${rows}</table>`;
-  printWithTitle('تتبع_الدرجات');
+  printWithTitle('تتبع_الدرجات','printAreaSP');
 }
 
 registerTab({id:'spMain', label:'تتبع الدرجات', group:'grades', groupLabel:'الدرجات',
