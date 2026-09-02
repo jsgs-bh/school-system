@@ -15,6 +15,10 @@ $('appView').insertAdjacentHTML('beforeend', `
     </select>
     <div id="dfrAutoStats" class="board-wrap"><table class="board" id="dfrAutoTable"></table></div>
 
+    <h3 style="margin-top:22px">الفعاليات المُحتسَبة (تفصيلياً)</h3>
+    <div class="sub">هذي هي الفعاليات نفسها اللي دخلت في الأعداد أعلاه — للمراجعة قبل الطباعة.</div>
+    <div class="board-wrap"><table class="board" id="dfrEventsTable"></table></div>
+
     <div id="dfrManualInternal" style="margin-top:16px">
       <div class="field"><label>عدد الطالبات الموهوبات في القسم</label><input type="number" id="dfrGiftedCount" min="0"></div>
       <div class="field"><label>نسبة الطالبات المقدَّم لهن الدعم من إجمالي المتميزات</label><input type="text" id="dfrGiftedSupportPct" placeholder="مثال: 75%"></div>
@@ -66,11 +70,13 @@ async function initDeptFinalReports(){
 let AUTO_STATS=null;
 async function loadAutoStats(){
   const type=$('dfrType').value;
-  if(!S.ME.department_id){ $('dfrAutoTable').innerHTML='<tr><td>حسابك غير مرتبط بقسم</td></tr>'; return; }
-  const {data:events}=await db.from('event_records').select('id, result').eq('academic_year_id',S.YEAR.id).eq('type',type).eq('department_id',S.ME.department_id).eq('semester',getCurrentSemester());
+  if(!S.ME.department_id){ $('dfrAutoTable').innerHTML='<tr><td>حسابك غير مرتبط بقسم</td></tr>'; $('dfrEventsTable').innerHTML=''; return; }
+  const {data:events}=await db.from('event_records').select('id, title, execution_date, result, staff:staff_id(full_name)').eq('academic_year_id',S.YEAR.id).eq('type',type).eq('department_id',S.ME.department_id).eq('semester',getCurrentSemester()).order('execution_date');
   const eventIds=(events||[]).map(e=>e.id);
-  const {data:parts}=eventIds.length ? await db.from('event_participants').select('event_id,student_id').in('event_id',eventIds) : {data:[]};
+  const {data:parts}=eventIds.length ? await db.from('event_participants').select('event_id,student_id, students(full_name)') .in('event_id',eventIds) : {data:[]};
   const uniqueParticipants=new Set((parts||[]).map(p=>p.student_id));
+  const partsMap={};
+  for(const p of parts||[]) (partsMap[p.event_id] ??= []).push(p.students?.full_name||'—');
 
   if(type==='internal'){
     AUTO_STATS={ activityCount:(events||[]).length, participantCount:uniqueParticipants.size };
@@ -84,6 +90,16 @@ async function loadAutoStats(){
       <tr><td>عدد الأنشطة والمسابقات الخارجية المشارك فيها الطالبات</td><td>${AUTO_STATS.activityCount}</td></tr>
       <tr><td>عدد الطالبات المشاركات في الأنشطة الخارجية</td><td>${AUTO_STATS.participantCount}</td></tr>
       <tr><td>عدد الفعاليات اللي فيها نتيجة/مركز مسجَّل</td><td>${AUTO_STATS.winCount}</td></tr>`;
+  }
+
+  if(!(events||[]).length){
+    $('dfrEventsTable').innerHTML='<tr><td style="padding:14px;text-align:center;color:#8a93a0">لا فعاليات ضمن هذا الفصل بعد</td></tr>';
+  }else if(type==='internal'){
+    $('dfrEventsTable').innerHTML='<tr><th>#</th><th>الفعالية</th><th>التاريخ</th><th>المعلمة</th><th>الطالبات المشاركات</th></tr>'+
+      events.map((e,i)=>`<tr><td class="c">${i+1}</td><td>${e.title}</td><td class="c">${e.execution_date||'—'}</td><td class="c">${e.staff?.full_name||'—'}</td><td>${(partsMap[e.id]||[]).join('، ')||'—'}</td></tr>`).join('');
+  }else{
+    $('dfrEventsTable').innerHTML='<tr><th>#</th><th>الفعالية</th><th>التاريخ</th><th>المعلمة</th><th>الطالبات المشاركات</th><th>النتيجة/المركز</th></tr>'+
+      events.map((e,i)=>`<tr><td class="c">${i+1}</td><td>${e.title}</td><td class="c">${e.execution_date||'—'}</td><td class="c">${e.staff?.full_name||'—'}</td><td>${(partsMap[e.id]||[]).join('، ')||'—'}</td><td class="c">${e.result||'—'}</td></tr>`).join('');
   }
 }
 

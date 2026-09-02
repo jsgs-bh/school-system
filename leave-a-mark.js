@@ -17,7 +17,10 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div style="background:var(--white);border-radius:14px;padding:24px;max-width:420px;width:90%;text-align:center">
       <h3 style="margin-top:0">📢 إعلان جديد</h3>
       <div id="lmAnnounceModalBody" style="margin:14px 0;font-size:14px"></div>
-      <button class="btn gold" id="lmAnnounceModalClose" style="width:auto;padding:9px 24px">حسناً</button>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn gold" id="lmAnnounceModalParticipate" style="width:auto;padding:9px 24px">✍️ سجّلي مشاركتك</button>
+        <button class="btn ghost" id="lmAnnounceModalClose" style="width:auto;padding:9px 24px">لاحقاً</button>
+      </div>
     </div>
   </div>
 
@@ -231,6 +234,15 @@ async function initLeaveMark(){
     $('lmAnnounceModal').style.display='none';
     if(PENDING_POPUP_ID) await db.from('announcement_dismissals').insert({announcement_id:PENDING_POPUP_ID, staff_id:S.ME.id});
   });
+  $('lmAnnounceModalParticipate').addEventListener('click', ()=>{
+    $('lmAnnounceModal').style.display='none';
+    switchLmTab('add');
+    $('lmType').value='external'; $('lmType').dispatchEvent(new Event('change'));
+    $('lmTitle').value=PENDING_POPUP_TITLE||'';
+    PENDING_ANNOUNCEMENT_ID=PENDING_POPUP_ID;
+    setTimeout(()=>$('lmTitle').scrollIntoView({behavior:'smooth', block:'center'}),50);
+    toast('عبّي بيانات مشاركتك بالأسفل واحفظي');
+  });
 
   await loadOpenCompetitions();
   await checkPopup();
@@ -238,15 +250,18 @@ async function initLeaveMark(){
 }
 
 let PENDING_POPUP_ID=null;
+let PENDING_POPUP_TITLE=null;
 async function checkPopup(){
   if(!LM_PROJECT_ID) return;
   const {data:anns}=await db.from('competition_announcements').select('id,title,description').eq('academic_year_id',S.YEAR.id).order('created_at',{ascending:false}).limit(5);
   if(!anns?.length) return;
   const {data:dismissed}=await db.from('announcement_dismissals').select('announcement_id').eq('staff_id',S.ME.id);
   const dismissedIds=new Set((dismissed||[]).map(d=>d.announcement_id));
-  const unseen=anns.find(a=>!dismissedIds.has(a.id));
+  const {data:mine}=await db.from('event_records').select('announcement_id').eq('staff_id',S.ME.id).in('announcement_id',anns.map(a=>a.id));
+  const participatedIds=new Set((mine||[]).map(m=>m.announcement_id));
+  const unseen=anns.find(a=>!dismissedIds.has(a.id) && !participatedIds.has(a.id));
   if(!unseen) return;
-  PENDING_POPUP_ID=unseen.id;
+  PENDING_POPUP_ID=unseen.id; PENDING_POPUP_TITLE=unseen.title;
   $('lmAnnounceModalBody').innerHTML=`<b>${unseen.title}</b>${unseen.description?`<p style="color:#8a93a0;font-size:13px">${unseen.description}</p>`:''}`;
   $('lmAnnounceModal').style.display='flex';
 }
