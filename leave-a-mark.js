@@ -1,7 +1,7 @@
 /* leave-a-mark.js — فعاليات (تبويب مستقل، مو تحت الخطة الاستراتيجية)
    كل معلمة: تضيف فعالية + تشوف تقاريرها هي. المعلمة الأولى/رئيسة
    مشروع اترك بصمة/الأدمن: حصر شامل قابل للفرز والطباعة والتصدير. */
-import { db, $, S, clean, normName, toast, getCurrentSemester, getLogoUrl, printWithTitle, registerTab } from './core.js';
+import { db, $, S, clean, normName, toast, getCurrentSemester, getLogoUrl, printWithTitle, registerTab, bindDrop } from './core.js';
 
 const MONTH_LABELS={sep:'سبتمبر',oct:'أكتوبر',nov:'نوفمبر',dec:'ديسمبر',jan:'يناير',feb:'فبراير',mar:'مارس',apr:'أبريل',may:'مايو',jun:'يونيو'};
 const MONTH_FROM_DATE=(dateStr)=>{
@@ -25,8 +25,8 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 
   <div class="lm-subnav" id="lmSubnav">
-    <button class="lm-subnav-btn" data-lmtab="add">➕ إضافة فعالية</button>
-    <button class="lm-subnav-btn" data-lmtab="mine">📋 تقاريري</button>
+    <button class="lm-subnav-btn" data-lmtab="add">➕ إضافة تقرير فعالية</button>
+    <button class="lm-subnav-btn" data-lmtab="mine">📋 متابعة الفعاليات</button>
     <button class="lm-subnav-btn" data-lmtab="open">🏆 مسابقات معلنة</button>
     <button class="lm-subnav-btn" data-lmtab="announce" id="lmAnnounceNavBtn" style="display:none">📢 الإعلانات</button>
     <button class="lm-subnav-btn" data-lmtab="tally" id="lmTallyNavBtn" style="display:none">📊 حصر الفعاليات</button>
@@ -47,7 +47,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div id="lmOpenCompetitions"></div>
   </div>
   <div class="panel" data-lmtab="add" style="display:none">
-    <h3>إضافة فعالية / مسابقة</h3>
+    <h3>إضافة تقرير فعالية / مسابقة</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <select id="lmType" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
         <option value="internal">فعالية داخلية</option>
@@ -92,11 +92,18 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div id="lmPickedStudents" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
     </div>
 
+    <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">
+      <div class="sub">إرفاق دليل (اختياري) — لو رفعتِ ملف يندرج تلقائياً في مستودع الأدلة</div>
+      <div class="dropzone" id="lmEvDrop"><b id="lmEvFileLabel">اختاري ملف (صورة/شهادة/مستند)</b><p>اضغطي لاختيار الملف أو اسحبيه هنا</p><input type="file" id="lmEvFile" hidden></div>
+      <select id="lmEvProjectPick" style="margin-top:8px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);display:none">
+      </select>
+    </div>
+
     <button class="btn gold" id="lmSaveBtn" style="width:auto;padding:10px 24px;margin-top:14px">حفظ الفعالية</button>
   </div>
 
   <div class="panel" data-lmtab="mine" style="display:none">
-    <h3>تقارير فعالياتي</h3>
+    <h3>متابعة الفعاليات</h3>
     <div class="sub">الفعاليات اللي أضفتِها أو أنتِ معلمتها المنفذة/مشرفة إضافية عليها.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="lmMyType"><option value="internal">داخلية</option><option value="external">خارجية</option></select>
@@ -144,7 +151,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let PICKED_STUDENTS=[], EXTRA_SUPS=[], LM_PROJECT_ID=null, IS_LM_LEAD=false, PICKED_TEACHER=null;
+let PICKED_STUDENTS=[], EXTRA_SUPS=[], LM_PROJECT_ID=null, IS_LM_LEAD=false, PICKED_TEACHER=null, EV_FILE=null;
 
 function bindLmSubnav(){
   $('lmSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.addEventListener('click',()=>switchLmTab(b.dataset.lmtab)));
@@ -211,6 +218,13 @@ async function initLeaveMark(){
 
   $('lmSaveBtn').addEventListener('click',saveEvent);
   $('lmMyType').addEventListener('change',loadMyEvents);
+  if(LM_PROJECT_ID){
+    const {data:allProjects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
+    $('lmEvProjectPick').innerHTML=(allProjects||[]).map(p=>`<option value="${p.id}" ${p.id===LM_PROJECT_ID?'selected':''}>${p.name}</option>`).join('');
+  }
+  bindDrop($('lmEvDrop'),$('lmEvFile'), f=>{
+    EV_FILE=f; $('lmEvFileLabel').textContent=f.name; $('lmEvProjectPick').style.display='block';
+  });
   if(canManageTally){
     $('lmReportType').addEventListener('change',loadTally);
     $('lmFilterMonth').addEventListener('change',loadTally);
@@ -379,10 +393,28 @@ async function saveEvent(){
     if(PICKED_STUDENTS.length){
       await db.from('event_participants').insert(PICKED_STUDENTS.map(s=>({event_id:ev.id, student_id:s.id})));
     }
-    toast('تم حفظ الفعالية');
+    if(EV_FILE){
+      try{
+        const ext=(/\.([a-zA-Z0-9]+)$/.exec(EV_FILE.name)?.[1]||'dat').toLowerCase();
+        const path=`evidence/${S.YEAR.id}/${Date.now()}.${ext}`;
+        const {error:upErr}=await db.storage.from('school-files').upload(path,EV_FILE);
+        if(upErr) throw upErr;
+        const evProjectId=$('lmEvProjectPick').value||LM_PROJECT_ID;
+        await db.from('evidence_files').insert({
+          file_path:path, file_name:EV_FILE.name, title,
+          academic_year_id:S.YEAR.id, semester:getCurrentSemester(),
+          staff_id:PICKED_TEACHER.id, department_id:payload.department_id,
+          project_id:evProjectId||null, uploaded_by:S.ME.id
+        });
+        toast('تم حفظ الفعالية وإدراجها كدليل');
+      }catch(evErr){ toast('تم حفظ الفعالية، لكن تعذر رفع الدليل: '+(evErr.message||evErr)); }
+    } else {
+      toast('تم حفظ الفعالية');
+    }
     $('lmTitle').value=''; $('lmDate').value=''; $('lmOrgBody').value=''; $('lmResult').value='';
     $('lmSlot1').checked=$('lmSlot2').checked=$('lmSlot3').checked=$('lmSlot4').checked=false;
     PICKED_STUDENTS=[]; renderPickedStudents(); EXTRA_SUPS=[]; renderExtraSups();
+    EV_FILE=null; $('lmEvFileLabel').textContent='اختاري ملف (صورة/شهادة/مستند)'; $('lmEvProjectPick').style.display='none';
     PICKED_TEACHER={id:S.ME.id, full_name:S.ME.full_name}; $('lmTeacherSearch').value=S.ME.full_name;
     if(PENDING_ANNOUNCEMENT_ID){ PENDING_ANNOUNCEMENT_ID=null; loadOpenCompetitions(); if(IS_LM_LEAD) loadAnnouncementsForLead(); }
     loadMyEvents();
@@ -531,6 +563,6 @@ async function exportTallyXls(){
 // يشوفونها كتبويب "اترك بصمة" تحت "الخطة الاستراتيجية"، وباقي المعلمات
 // يشوفونها كتبويب "فعاليات" مستقل — نفس الحاوية، نفس المحتوى بالضبط.
 registerTab({id:'leaveMark', label:'اترك بصمة', group:'plan', groupLabel:'الخطة الاستراتيجية',
-  show:f=>f.isProjectLead, init:initLeaveMark});
-registerTab({id:'leaveMark', label:'فعاليات', group:'events', groupLabel:'فعاليات',
-  show:f=>!f.isProjectLead, init:initLeaveMark});
+  show:f=>f.isLeaveMarkLead, init:initLeaveMark});
+registerTab({id:'leaveMark', label:'إضافة تقرير - متابعة الفعاليات', group:'events', groupLabel:'فعاليات',
+  show:f=>!f.isLeaveMarkLead, init:initLeaveMark});
