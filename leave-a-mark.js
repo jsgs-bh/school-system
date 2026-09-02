@@ -21,7 +21,15 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
   </div>
 
-  <div class="panel" id="lmAnnouncePanel" style="display:none">
+  <div class="lm-subnav" id="lmSubnav">
+    <button class="lm-subnav-btn" data-lmtab="add">➕ إضافة فعالية</button>
+    <button class="lm-subnav-btn" data-lmtab="mine">📋 تقاريري</button>
+    <button class="lm-subnav-btn" data-lmtab="open">🏆 مسابقات معلنة</button>
+    <button class="lm-subnav-btn" data-lmtab="announce" id="lmAnnounceNavBtn" style="display:none">📢 الإعلانات</button>
+    <button class="lm-subnav-btn" data-lmtab="tally" id="lmTallyNavBtn" style="display:none">📊 حصر الفعاليات</button>
+  </div>
+
+  <div class="panel" id="lmAnnouncePanel" data-lmtab="announce" style="display:none">
     <h3>إعلانات المسابقات (رئيسة المشروع)</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <input type="text" id="lmAnnounceTitle" placeholder="اسم المسابقة" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
@@ -31,11 +39,11 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div id="lmAnnouncementsList" style="margin-top:16px"></div>
   </div>
 
-  <div class="panel">
+  <div class="panel" data-lmtab="open" style="display:none">
     <h3>مسابقات معلنة — سجّلي مشاركتك</h3>
     <div id="lmOpenCompetitions"></div>
   </div>
-  <div class="panel">
+  <div class="panel" data-lmtab="add" style="display:none">
     <h3>إضافة فعالية / مسابقة</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <select id="lmType" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white)">
@@ -84,7 +92,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <button class="btn gold" id="lmSaveBtn" style="width:auto;padding:10px 24px;margin-top:14px">حفظ الفعالية</button>
   </div>
 
-  <div class="panel">
+  <div class="panel" data-lmtab="mine" style="display:none">
     <h3>تقارير فعالياتي</h3>
     <div class="sub">الفعاليات اللي أضفتِها أو أنتِ معلمتها المنفذة/مشرفة إضافية عليها.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
@@ -93,7 +101,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div id="lmMyList"></div>
   </div>
 
-  <div class="panel" id="lmTallyPanel" style="display:none">
+  <div class="panel" id="lmTallyPanel" data-lmtab="tally" style="display:none">
     <h3>حصر الفعاليات والمسابقات (شامل)</h3>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="lmReportType"><option value="internal">داخلية</option><option value="external">خارجية</option></select>
@@ -106,6 +114,11 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 </div>
 <div id="printAreaLM"></div>
+<style>
+  .lm-subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;border-bottom:2px solid var(--line);padding-bottom:10px}
+  .lm-subnav-btn{background:var(--sand);border:1.5px solid var(--line);border-radius:9px;padding:9px 16px;font:inherit;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer}
+  .lm-subnav-btn.active{background:var(--gold);border-color:var(--gold);color:#fff}
+</style>
 <style>
   #leaveMark.wide{max-width:1500px}
   .lm-chip{display:flex;align-items:center;gap:6px;background:var(--sand);border-radius:99px;padding:5px 12px;font-size:12.5px}
@@ -130,6 +143,16 @@ $('appView').insertAdjacentHTML('beforeend', `
 
 let PICKED_STUDENTS=[], EXTRA_SUPS=[], LM_PROJECT_ID=null, IS_LM_LEAD=false, PICKED_TEACHER=null;
 
+function bindLmSubnav(){
+  $('lmSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.addEventListener('click',()=>switchLmTab(b.dataset.lmtab)));
+}
+function switchLmTab(tab){
+  document.querySelectorAll('#leaveMark [data-lmtab]').forEach(el=>{
+    el.style.display = el.dataset.lmtab===tab ? 'block' : 'none';
+  });
+  $('lmSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active', b.dataset.lmtab===tab));
+}
+
 async function initLeaveMark(){
   if($('lmSaveBtn').dataset.ready) return;
   $('lmSaveBtn').dataset.ready='1';
@@ -145,7 +168,10 @@ async function initLeaveMark(){
     IS_LM_LEAD=!!leadRow;
   }
   const canManageTally = S.FLAGS.isAdmin || S.FLAGS.isLead || S.FLAGS.isStrategicPlanLead || S.FLAGS.isSeniorTeacher || IS_LM_LEAD;
-  $('lmTallyPanel').style.display = canManageTally ? 'block' : 'none';
+  if(canManageTally) $('lmTallyNavBtn').style.display='inline-block';
+
+  bindLmSubnav();
+  switchLmTab('add');
 
   PICKED_TEACHER={id:S.ME.id, full_name:S.ME.full_name};
   $('lmTeacherSearch').value=S.ME.full_name;
@@ -197,7 +223,7 @@ async function initLeaveMark(){
   }
 
   if(IS_LM_LEAD){
-    $('lmAnnouncePanel').style.display='block';
+    $('lmAnnounceNavBtn').style.display='inline-block';
     $('lmAnnounceCreateBtn').addEventListener('click',createAnnouncement);
     await loadAnnouncementsForLead();
   }
@@ -345,7 +371,7 @@ async function saveEvent(){
     PICKED_TEACHER={id:S.ME.id, full_name:S.ME.full_name}; $('lmTeacherSearch').value=S.ME.full_name;
     if(PENDING_ANNOUNCEMENT_ID){ PENDING_ANNOUNCEMENT_ID=null; loadOpenCompetitions(); if(IS_LM_LEAD) loadAnnouncementsForLead(); }
     loadMyEvents();
-    if(!$('lmTallyPanel').style.display || $('lmTallyPanel').style.display==='block') loadTally();
+    if($('lmTallyNavBtn').style.display==='inline-block') loadTally();
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
   finally{ btn.disabled=false; }
 }
