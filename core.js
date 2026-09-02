@@ -69,6 +69,12 @@ export function registerTab(t){
 }
 const allTabs = () => [...TOP, ...Object.values(GROUPS).flatMap(g=>g.tabs)];
 function groupOf(tid){
+  /* بعض الشاشات (مثل "اترك بصمة" / "فعاليات") تُسجَّل بنفس المعرّف مرتين
+     تحت مجموعتين مختلفتين (واحدة لرئيسة المشروع تحت "الخطة الاستراتيجية"،
+     وأخرى لبقية المستخدمين تحت "فعاليات"). لازم نُفضّل المجموعة اللي فعلاً
+     تظهر لهذا المستخدم (show صحيح)، وإلا يختلط تظليل التبويب العلوي
+     والتبويبات الفرعية بمجموعة غير مقصودة لهذا المستخدم. */
+  for(const [gid,g] of Object.entries(GROUPS)) if(g.tabs.some(t=>t.id===tid && t.show(S.FLAGS))) return gid;
   for(const [gid,g] of Object.entries(GROUPS)) if(g.tabs.some(t=>t.id===tid)) return gid;
   return null;
 }
