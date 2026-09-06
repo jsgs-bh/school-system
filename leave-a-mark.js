@@ -26,7 +26,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div class="lm-subnav" id="lmSubnav">
     <button class="lm-subnav-btn" data-lmtab="add">➕ إضافة تقرير فعالية</button>
-    <button class="lm-subnav-btn" data-lmtab="mine">📋 متابعة الفعاليات</button>
+    <button class="lm-subnav-btn" data-lmtab="mine">📋 متابعة التقارير</button>
     <button class="lm-subnav-btn" data-lmtab="open">🏆 مسابقات معلنة</button>
     <button class="lm-subnav-btn" data-lmtab="announce" id="lmAnnounceNavBtn" style="display:none">📢 الإعلانات</button>
     <button class="lm-subnav-btn" data-lmtab="tally" id="lmTallyNavBtn" style="display:none">📊 حصر الفعاليات</button>
@@ -103,7 +103,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 
   <div class="panel" data-lmtab="mine" style="display:none">
-    <h3>متابعة الفعاليات</h3>
+    <h3>متابعة التقارير</h3>
     <div class="sub">الفعاليات اللي أضفتِها أو أنتِ معلمتها المنفذة/مشرفة إضافية عليها.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="lmMyType"><option value="internal">داخلية</option><option value="external">خارجية</option></select>
@@ -564,5 +564,5 @@ async function exportTallyXls(){
 // يشوفونها كتبويب "فعاليات" مستقل — نفس الحاوية، نفس المحتوى بالضبط.
 registerTab({id:'leaveMark', label:'اترك بصمة', group:'plan', groupLabel:'الخطة الاستراتيجية',
   show:f=>f.isLeaveMarkLead, init:initLeaveMark});
-registerTab({id:'leaveMark', label:'إضافة تقرير - متابعة الفعاليات', group:'events', groupLabel:'فعاليات',
+registerTab({id:'leaveMark', label:'إضافة تقرير فعالية - متابعة التقارير', group:'events', groupLabel:'فعاليات',
   show:f=>!f.isLeaveMarkLead, init:initLeaveMark});
