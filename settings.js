@@ -344,7 +344,7 @@ async function initPermsRoster(){
   }
   ROSTER_ALL=(staff||[]).map(s=>({
     id:s.id, full_name:s.full_name, dept:s.departments?.name||'', title:titleNames[s.title]||s.title,
-    rolesText:(rolesByStaff[s.id]||[]).map(r=>roleNames[r.role]||r.role).join('، ')||'—',
+    rolesText:(rolesByStaff[s.id]||[]).map(r=>(roleNames[r.role]||r.role)+(r.scope?' — '+r.scope:'')).join('، ')||'—',
     committeesText:[...(committeeNamesByStaff[s.id]||[])].join('، ')||'',
     _projectNames:new Set((rolesByStaff[s.id]||[]).filter(r=>r.role==='project_lead').map(r=>r.scope)),
     _committeeIds:committeeIdsByStaff[s.id]||new Set(),
