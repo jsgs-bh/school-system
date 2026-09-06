@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>رصد سريع للغياب — بدون تسجيل دخول</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+  body{background:var(--sand,#f4f1ea)}
+  .qa-wrap{max-width:720px;margin:0 auto;padding:18px 14px 60px}
+  .qa-top{display:flex;align-items:center;gap:12px;padding:16px 4px 20px}
+  .qa-top .crest{width:44px;height:44px;border-radius:12px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Amiri',serif;font-size:22px;flex-shrink:0}
+  .qa-top h1{font-family:'Amiri',serif;font-size:19px;color:var(--navy);margin:0}
+  .qa-top p{font-size:12px;color:#8a93a0;margin:2px 0 0}
+  .qa-banner{background:var(--gold-soft);border:1px solid #ecd9ab;border-radius:12px;padding:12px 16px;font-size:13px;color:var(--warn);margin-bottom:18px;line-height:1.8}
+  .qa-card{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .qa-search{position:relative}
+  .qa-search input{width:100%;padding:13px 16px;border:1.5px solid var(--line);border-radius:11px;font:inherit;font-size:15px}
+  .qa-sugg{margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto}
+  .qa-sugg .opt{padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;font-size:14px}
+  .qa-sugg .opt:hover{border-color:var(--gold);background:var(--gold-soft)}
+  .qa-sugg .opt small{display:block;color:#8a93a0;font-size:11.5px;margin-top:2px}
+  .qa-who{display:flex;align-items:center;gap:10px;background:var(--sand);border-radius:11px;padding:10px 14px;margin-bottom:16px;font-size:13.5px}
+  .qa-who b{color:var(--navy)}
+  .qa-who button{margin-inline-start:auto;background:transparent;border:none;color:var(--err);font:inherit;font-size:12.5px;cursor:pointer}
+  .empty-day{text-align:center;color:#8a93a0;padding:30px 10px;font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="qa-wrap">
+  <div class="qa-top">
+    <div class="crest">ج</div>
+    <div><h1 id="schoolName">رصد سريع للغياب</h1><p>بدون تسجيل دخول — لأي معلمة يتعطل عندها الدخول العادي، أو للتغطية والاحتياط</p></div>
+  </div>
+
+  <div class="qa-banner">كل رصد من هذي الصفحة يُوثَّق داخلياً باسمك وبتاريخه، ويُحسب زي رصد حسابك العادي تماماً.</div>
+
+  <div class="qa-card">
+    <div id="pickView">
+      <div class="qa-search">
+        <input type="text" id="qaSearch" placeholder="اكتبي اسمك للبحث…" autocomplete="off">
+        <div class="qa-sugg" id="qaSugg"></div>
+      </div>
+    </div>
+
+    <div id="mainView" style="display:none">
+      <div class="qa-who">
+        اخترتِ: <b id="qaWhoName">—</b>
+        <button id="qaChangeBtn">تغيير الاسم</button>
+      </div>
+
+      <div id="dayView">
+        <div class="datebar">
+          <div class="today-lbl" id="dayTitle">حصص اليوم</div>
+          <input type="date" id="dayPick">
+        </div>
+        <div id="lessonList"></div>
+        <div style="margin-top:14px">
+          <button class="btn ghost" id="otherBtn" style="width:auto;padding:10px 22px;font-size:13.5px">＋ رصد حصة أخرى (تغطية / احتياط)</button>
+          <div class="other-box" id="otherBox">
+            <div class="row">
+              <select id="otherSec"><option value="">اختاري الشعبة…</option></select>
+              <select id="otherPer"><option value="">الحصة…</option></select>
+            </div>
+            <button class="btn gold" id="otherGo" style="width:auto;padding:10px 24px;font-size:13.5px">فتح الرصد</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="rosterView" style="display:none">
+        <div class="roster-head">
+          <button class="back" id="rosterBack">→ رجوع</button>
+          <div class="ttl"><b id="rosterTitle">—</b><span id="rosterSub">—</span></div>
+        </div>
+        <div class="recorded-by" id="recordedBy" style="display:none"></div>
+        <div class="covers" id="coversBox" style="display:none">
+          <input type="checkbox" id="coversChk">
+          <label for="coversChk" id="coversLbl">الرصد يشمل الحصة التالية أيضاً</label>
+        </div>
+        <div class="hint">اضغطي على اسم الطالبة الغائبة — <b>اللون الأحمر يعني أنها غائبة</b>، والضغط مرة أخرى يعيدها حاضرة.</div>
+        <div class="roster-tools">
+          <button id="allAbsent">الكل غائبات</button>
+          <button id="allPresent">الكل حاضرات</button>
+          <div class="counter">الغائبات: <b id="absCount">0</b> من <span id="totCount">0</span></div>
+        </div>
+        <div class="students" id="stuGrid"></div>
+        <button class="btn gold" id="saveAtt">حفظ الرصد</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div id="toastMsg"></div></div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const db = createClient('https://vvfxcoxnnuubycrpkwzj.supabase.co','sb_publishable_8JhfrwxXY9z3hYfi7E5tRg_eOFGxwv8');
+const $ = id => document.getElementById(id);
+const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
+const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
+const clean = s => String(s??'').replace(/\s+/g,' ').trim();
+const normName = s => clean(s).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');
+const chunk = (a,n)=>Array.from({length:Math.ceil(a.length/n)},(_,i)=>a.slice(i*n,(i+1)*n));
+const dstr = d => d.toISOString().slice(0,10);
+function toast(t){ $('toastMsg').textContent=t; $('toast').classList.add('show'); setTimeout(()=>$('toast').classList.remove('show'),2400); }
+
+let YEAR=null, PERIODS=[], ALL_STAFF=[], ME=null, CUR_DATE=new Date(), MY_LESSONS=[];
+
+async function boot(){
+  try{
+    const {data:appSettings} = await db.from('app_settings').select('school_name').eq('id',1).maybeSingle();
+    if(appSettings?.school_name) $('schoolName').textContent=appSettings.school_name;
+  }catch(e){ /* اسم المدرسة تجميلي فقط */ }
+  const {data:yr} = await db.from('academic_years').select('*').eq('is_active',true).maybeSingle();
+  YEAR=yr;
+  const {data:pat} = await db.from('timetable_patterns').select('id').eq('is_active',true).maybeSingle();
+  if(pat){ const {data:pp}=await db.from('pattern_periods').select('*').eq('pattern_id',pat.id).order('period_no'); PERIODS=pp||[]; }
+  const {data:staff} = await db.from('staff').select('id,full_name,title').eq('is_active',true).order('full_name');
+  ALL_STAFF=staff||[];
+  if(!YEAR) $('pickView').innerHTML='<div class="empty-day">لا توجد سنة دراسية نشطة حالياً — تواصلي مع الدعم الفني.</div>';
+}
+boot();
+
+/* ============ اختيار المعلمة ============ */
+$('qaSearch').addEventListener('input',()=>{
+  const q=normName($('qaSearch').value);
+  const box=$('qaSugg');
+  if(!q){ box.innerHTML=''; return; }
+  const hits=ALL_STAFF.filter(s=>normName(s.full_name).includes(q)).slice(0,15);
+  box.innerHTML=hits.map(s=>`<div class="opt" data-id="${s.id}">${s.full_name}<small>${s.title==='senior_teacher'?'معلمة أولى':s.title==='teacher'?'معلمة':s.title}</small></div>`).join('')
+    || '<div class="opt" style="cursor:default">لا نتائج</div>';
+  box.querySelectorAll('.opt[data-id]').forEach(el=>el.addEventListener('click',()=>pickTeacher(el.dataset.id)));
+});
+function pickTeacher(id){
+  ME=ALL_STAFF.find(s=>s.id===id); if(!ME) return;
+  $('qaWhoName').textContent=ME.full_name;
+  $('pickView').style.display='none'; $('mainView').style.display='block';
+  $('qaSearch').value=''; $('qaSugg').innerHTML='';
+  $('dayPick').value=dstr(CUR_DATE); $('dayPick').max=dstr(new Date());
+  loadDay();
+}
+$('qaChangeBtn').addEventListener('click',()=>{
+  ME=null; $('mainView').style.display='none'; $('pickView').style.display='block';
+  $('rosterView').style.display='none'; $('dayView').style.display='block';
+});
+
+/* ============ حصص اليوم ============ */
+function currentPeriodNo(){
+  if(dstr(CUR_DATE)!==dstr(new Date())) return null;
+  const now=new Date().toTimeString().slice(0,5);
+  for(const p of PERIODS) if(now>=p.start_time.slice(0,5) && now<p.end_time.slice(0,5)) return p.period_no;
+  return null;
+}
+$('dayPick').addEventListener('change',()=>{ if($('dayPick').value){ CUR_DATE=new Date($('dayPick').value+'T12:00:00'); loadDay(); } });
+
+async function loadDay(){
+  const list=$('lessonList');
+  const d=CUR_DATE, jsDay=d.getDay();
+  const isToday=dstr(d)===dstr(new Date());
+  $('dayTitle').textContent=(isToday?'حصص اليوم — ':'')+(jsDay<=4?AR_DAYS[jsDay]:'')+' '+dstr(d);
+  if(jsDay>4){ list.innerHTML='<div class="empty-day">يوم عطلة — لا حصص.</div>'; return; }
+  const dow=jsDay+1;
+  list.innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
+  const {data:rows,error}=await db.from('entry_teachers')
+    .select('is_attendance_taker, timetable_entries!inner(id,period_no,room,section_id,day_of_week,academic_year_id,sections(code),subjects(code))')
+    .eq('staff_id',ME.id).eq('timetable_entries.day_of_week',dow).eq('timetable_entries.academic_year_id',YEAR.id);
+  if(error){ list.innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  MY_LESSONS=(rows||[]).map(r=>({
+    entry_id:r.timetable_entries.id, period_no:r.timetable_entries.period_no,
+    section_id:r.timetable_entries.section_id, section_code:r.timetable_entries.sections?.code||'—',
+    subj:r.timetable_entries.subjects?.code||'', room:r.timetable_entries.room||''
+  })).sort((a,b)=>a.period_no-b.period_no);
+  if(!MY_LESSONS.length){ list.innerHTML='<div class="empty-day">لا حصص لك في هذا اليوم بحسب الجدول. تقدرين تستخدمين "رصد حصة أخرى" تحت.</div>'; return; }
+  const ids=MY_LESSONS.map(l=>l.entry_id);
+  const {data:sess}=await db.from('attendance_sessions')
+    .select('entry_id,recorded_by,recorded_name,staff(full_name)').in('entry_id',ids).eq('date',dstr(d));
+  const sBy={}; for(const s of sess||[]) sBy[s.entry_id]=s;
+  const nowP=currentPeriodNo();
+  list.innerHTML=MY_LESSONS.map(l=>{
+    const s=sBy[l.entry_id];
+    const p=PERIODS.find(x=>x.period_no===l.period_no);
+    const time=p?`${p.start_time.slice(0,5)} – ${p.end_time.slice(0,5)}`:'';
+    const who=s?(s.staff?.full_name||s.recorded_name||''):'';
+    return `<div class="lesson ${l.period_no===nowP?'now':''}" data-eid="${l.entry_id}">
+      <div class="pno"><b>${l.period_no}</b><span>حصة</span></div>
+      <div class="info"><b>${l.section_code} — ${l.subj}${l.period_no===nowP?'<span class="now-chip">الآن</span>':''}</b>
+      <span>${time}${l.room?' · '+l.room:''}${who&&s.recorded_by!==ME.id?' · رصدتها: '+who:''}</span></div>
+      <div class="st ${s?'done':'pending'}">${s?'مرصودة ✓':'لم تُرصد'}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.lesson').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const l=MY_LESSONS.find(x=>x.entry_id===el.dataset.eid);
+      openRoster({...l, label:'الحصة '+PERIOD_NAMES[l.period_no], isMine:true});
+    });
+  });
+}
+
+$('otherBtn').addEventListener('click',async ()=>{
+  const box=$('otherBox');
+  box.style.display=box.style.display==='block'?'none':'block';
+  if(box.style.display==='block' && $('otherSec').options.length<=1){
+    const {data:secs}=await db.from('sections').select('id,code').eq('academic_year_id',YEAR.id).order('code');
+    for(const s of secs||[]) $('otherSec').insertAdjacentHTML('beforeend',`<option value="${s.id}">${s.code}</option>`);
+  }
+});
+$('otherSec').addEventListener('change', async ()=>{
+  const sel=$('otherPer'); sel.innerHTML='<option value="">الحصة…</option>';
+  const dow=CUR_DATE.getDay()+1;
+  const {data:ents}=await db.from('timetable_entries')
+    .select('id,period_no,subjects(code)').eq('section_id',$('otherSec').value).eq('day_of_week',dow).order('period_no');
+  for(const e of ents||[]) sel.insertAdjacentHTML('beforeend',`<option value="${e.id}">الحصة ${PERIOD_NAMES[e.period_no]} — ${e.subjects?.code||''}</option>`);
+  if(!(ents||[]).length) sel.insertAdjacentHTML('beforeend','<option value="">لا حصص لهذه الشعبة في هذا اليوم</option>');
+});
+$('otherGo').addEventListener('click',()=>{
+  const eid=$('otherPer').value;
+  if(!eid){ toast('اختاري الشعبة والحصة'); return; }
+  openRoster({entry_id:eid, section_code:$('otherSec').selectedOptions[0].textContent,
+    subj:'', period_no:null, label:$('otherPer').selectedOptions[0].textContent, isMine:false});
+});
+$('rosterBack').addEventListener('click',()=>{ $('rosterView').style.display='none'; $('dayView').style.display='block'; loadDay(); });
+
+/* ============ الرصد ============ */
+let ROSTER={entry:null,students:[],absent:new Set(),nextEntry:null};
+async function openRoster(lesson){
+  $('dayView').style.display='none'; $('rosterView').style.display='block';
+  $('rosterTitle').textContent=`${lesson.section_code} ${lesson.subj?'— '+lesson.subj:''}`;
+  $('rosterSub').textContent=`${lesson.label} · ${AR_DAYS[CUR_DATE.getDay()]||''} ${dstr(CUR_DATE)}`;
+  $('stuGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;color:#8a93a0;padding:20px">جارٍ تحميل الطالبات…</div>';
+  $('coversBox').style.display='none'; $('recordedBy').style.display='none';
+  ROSTER={entry:lesson,students:[],absent:new Set(),nextEntry:null};
+  const {data:ent}=await db.from('timetable_entries')
+    .select('id,period_no,section_id,sections(code),subjects(code)').eq('id',lesson.entry_id).single();
+  ROSTER.entry={...lesson, period_no:ent.period_no, section_id:ent.section_id,
+    section_code:ent.sections?.code||lesson.section_code, subj:ent.subjects?.code||lesson.subj};
+  $('rosterTitle').textContent=`${ROSTER.entry.section_code} — ${ROSTER.entry.subj}`;
+  if(lesson.isMine){
+    const nxt=MY_LESSONS.find(x=>x.section_id===ent.section_id && x.period_no===ent.period_no+1);
+    if(nxt){ ROSTER.nextEntry=nxt;
+      $('coversLbl').textContent=`الرصد يشمل الحصة ${PERIOD_NAMES[nxt.period_no]} أيضاً (نفس الشعبة)`;
+      $('coversBox').style.display='flex'; $('coversChk').checked=false; }
+  }
+  const {data:enr,error}=await db.from('enrollments')
+    .select('students(id,full_name,academic_number,special_case)')
+    .eq('section_id',ent.section_id).is('to_date',null);
+  if(error){ $('stuGrid').innerHTML=`<div style="grid-column:1/-1;color:var(--err)">تعذر التحميل: ${error.message}</div>`; return; }
+  ROSTER.students=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+  const {data:sess}=await db.from('attendance_sessions')
+    .select('id,recorded_by,recorded_name,staff(full_name)')
+    .eq('entry_id',lesson.entry_id).eq('date',dstr(CUR_DATE)).maybeSingle();
+  if(sess){
+    const {data:recs}=await db.from('attendance_records').select('student_id,status').eq('session_id',sess.id);
+    for(const r of recs||[]) if(r.status==='absent') ROSTER.absent.add(r.student_id);
+    const who=sess.staff?.full_name||sess.recorded_name;
+    if(who && sess.recorded_by!==ME.id){
+      $('recordedBy').textContent=`رُصدت سابقاً بواسطة: ${who} — أي تعديل تحفظينه سيُوثق باسمك.`;
+      $('recordedBy').style.display='block';
+    }
+  }
+  renderStudents();
+}
+function renderStudents(){
+  const g=$('stuGrid');
+  g.innerHTML=ROSTER.students.map(s=>`
+    <div class="stu ${ROSTER.absent.has(s.id)?'absent':''} ${s.special_case?'special':''}" data-id="${s.id}">
+      ${s.full_name}<small>${s.academic_number}</small></div>`).join('');
+  g.querySelectorAll('.stu').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const id=el.dataset.id;
+      ROSTER.absent.has(id)?ROSTER.absent.delete(id):ROSTER.absent.add(id);
+      el.classList.toggle('absent'); updateCount();
+    });
+  });
+  updateCount();
+}
+function updateCount(){ $('absCount').textContent=ROSTER.absent.size; $('totCount').textContent=ROSTER.students.length; }
+$('allAbsent').addEventListener('click',()=>{ ROSTER.students.forEach(s=>ROSTER.absent.add(s.id)); renderStudents(); });
+$('allPresent').addEventListener('click',()=>{ ROSTER.absent.clear(); renderStudents(); });
+
+async function saveSession(entryId, coversNext){
+  const {data:sess,error}=await db.from('attendance_sessions')
+    .upsert({entry_id:entryId, date:dstr(CUR_DATE), recorded_by:ME.id, recorded_name:ME.full_name, covers_next:coversNext,
+             via_link:true, updated_at:new Date().toISOString()},{onConflict:'entry_id,date'})
+    .select('id').single();
+  if(error) throw error;
+  const {error:eDel}=await db.from('attendance_records').delete().eq('session_id',sess.id);
+  if(eDel) throw eDel;
+  const recs=[...ROSTER.absent].map(sid=>({session_id:sess.id, student_id:sid, status:'absent'}));
+  for(const c of chunk(recs,300)){ const {error:eIns}=await db.from('attendance_records').insert(c); if(eIns) throw eIns; }
+}
+$('saveAtt').addEventListener('click', async ()=>{
+  const btn=$('saveAtt'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
+  try{
+    const covers=$('coversChk').checked && ROSTER.nextEntry;
+    await saveSession(ROSTER.entry.entry_id, !!covers);
+    if(covers) await saveSession(ROSTER.nextEntry.entry_id, false);
+    toast(`تم حفظ الرصد — ${ROSTER.absent.size} غائبة${covers?' (لحصتين)':''}`);
+    $('rosterView').style.display='none'; $('dayView').style.display='block'; loadDay();
+  }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent='حفظ الرصد'; }
+});
+</script>
+</body>
+</html>
