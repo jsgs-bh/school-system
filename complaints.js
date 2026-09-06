@@ -14,6 +14,7 @@ function recipientOptions(){
     {v:'principal', label:`المديرة${S.SETTINGS.principal_name?' — '+S.SETTINGS.principal_name:''}`},
     {v:'deputy1', label:`المديرة المساعدة ١${S.SETTINGS.deputy1_name?' — '+S.SETTINGS.deputy1_name:''}`},
     {v:'deputy2', label:`المديرة المساعدة ٢${S.SETTINGS.deputy2_name?' — '+S.SETTINGS.deputy2_name:''}`},
+    {v:'deputy3', label:`المديرة المساعدة ٣${S.SETTINGS.deputy3_name?' — '+S.SETTINGS.deputy3_name:''}`},
   ];
 }
 function recipientLabel(v){ return recipientOptions().find(o=>o.v===v)?.label || v; }
