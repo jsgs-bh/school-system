@@ -2,7 +2,7 @@
    وسم الطالبة كـ"حالة خاصة" — يدوياً بالبحث، أو دفعة واحدة برفع ملف
    إكسل بأرقامهن الأكاديمية. تُستثنى تلقائياً من سلم الفئات الرقمي في كل
    كشوف الدرجات والتحليلات، وتظهر بلونها المخصص بدلاً من ذلك. */
-import { db, $, S, clean, toast, bindDrop, readSheet, registerTab } from './core.js';
+import { db, $, S, clean, toast, bindDrop, readSheet } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="specialCases" style="display:none">
@@ -127,5 +127,5 @@ async function loadCounts(){
     codes.map(c=>`<tr><td class="sec">${c}</td><td class="c">${perSec[c]}</td></tr>`).join('');
 }
 
-registerTab({id:'specialCases', label:'الحالات الخاصة', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:initSC});
+/* لا registerTab هنا — طفل ضمن تبويب "الطالبات" المُجمَّع (settings-nav.js). */
+export { initSC };

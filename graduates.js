@@ -1,7 +1,7 @@
 /* graduates.js — سجل المتخرجات (تحت "الإعدادات")
    قائمة بحث للطالبات المتخرجات — بياناتهن لا تُحذف أبداً (لا يوجد أي
    حذف تلقائي بالنظام)، فتبقى متاحة للرجوع إليها في أي وقت. */
-import { db, $, clean, registerTab } from './core.js';
+import { db, $, clean } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="graduates" style="display:none">
@@ -40,5 +40,7 @@ async function load(){
   }).join('');
 }
 
-registerTab({id:'graduates', label:'سجل المتخرجات', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin||f.isReg, init:initGraduates});
+/* لا registerTab هنا — طفل ضمن تبويب "الطالبات" المُجمَّع (settings-nav.js).
+   ملاحظة: هذي الشاشة وحدها يشوفها كمان مكتب التسجيل (isReg) مو الأدمن بس —
+   الفلترة الآن تصير داخل settings-nav.js نفسه. */
+export { initGraduates };

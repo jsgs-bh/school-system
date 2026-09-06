@@ -1,7 +1,7 @@
 /* settings.js — تبويب «الإعدادات» (للدعم الفني/الأدمن فقط):
    البيانات الأساسية (اسم المدرسة، أوقات الحصص) + الصلاحيات (منح/سحب الأدوار).
    الملف مكتفٍ بذاته: يضيف تبويباته وتنسيقاته بنفسه. */
-import { db, $, S, clean, normDigits, toast, roleNames, applySettingsToDom, bindDrop, registerTab } from './core.js';
+import { db, $, S, clean, normDigits, toast, roleNames, titleNames, printHeaderHtml, printWithTitle, applySettingsToDom, bindDrop, registerTab } from './core.js';
 
 /* ============ حقن الواجهة ============ */
 $('appView').insertAdjacentHTML('beforeend', `
@@ -68,10 +68,33 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
     </div>
   </div>
+
+  <div class="panel">
+    <h3>عرض الصلاحيات</h3>
+    <div class="sub">كل المنتسبات وصلاحياتهن. فلتري باسم مشروع لعرض مسؤولته، أو باسم لجنة لعرض أعضائها.</div>
+    <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="permFilterProject" style="min-width:200px"><option value="">فرز حسب مشروع…</option></select>
+      <select id="permFilterCommittee" style="min-width:200px"><option value="">فرز حسب لجنة…</option></select>
+      <button class="btn ghost" id="permFilterClear" style="width:auto;padding:9px 16px">الكل (بلا فلتر)</button>
+      <button class="btn gold" id="permPrintBtn" style="width:auto;padding:9px 20px;margin-inline-start:auto">🖨️ طباعة PDF</button>
+      <button class="btn ghost" id="permExportBtn" style="width:auto;padding:9px 20px">⬇️ تصدير Excel</button>
+    </div>
+    <div class="board-wrap"><table class="board" id="permRosterTable"></table></div>
+  </div>
+  <div id="printAreaPerms" style="display:none"></div>
 </div>
 <style>
   .perm-badge{display:inline-flex;align-items:center;gap:7px;background:var(--gold-soft);border:1px solid #ecd9ab;color:var(--warn);border-radius:99px;padding:6px 14px;font-size:12.5px}
   .perm-badge button{background:none;border:none;color:var(--err);cursor:pointer;font-size:14px;line-height:1}
+  #printAreaPerms{display:none}
+  .perms-print-tbl{width:100%;border-collapse:collapse;font-size:11pt;margin-top:8px}
+  .perms-print-tbl th{background:#eef1f5;border:1px solid #333;padding:7px}
+  .perms-print-tbl td{border:1px solid #333;padding:7px}
+  @media print{
+    body *{visibility:hidden}
+    #printAreaPerms, #printAreaPerms *{visibility:visible}
+    #printAreaPerms{display:block!important;position:absolute;inset-inline-start:0;top:0;width:100%}
+  }
   .period-row{display:flex;align-items:center;gap:12px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:10px 14px;margin-bottom:8px}
   .period-row b{width:70px;color:var(--navy)}
   .period-row input{padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fbfaf7}
@@ -294,7 +317,100 @@ async function refreshRoles(){
   }));
 }
 
+/* ============ عرض الصلاحيات (روستر + فلترة + طباعة/تصدير) ============ */
+let ROSTER_ALL=[], ROSTER_COMMITTEES=[];
+async function initPermsRoster(){
+  if($('permFilterProject').dataset.ready) return;
+  $('permFilterProject').dataset.ready='1';
+
+  const [{data:staff}, {data:roles}, {data:committees}, {data:members}] = await Promise.all([
+    db.from('staff').select('id,full_name,title,departments(name)').eq('is_active',true).order('full_name'),
+    db.from('staff_roles').select('staff_id,role,scope'),
+    db.from('committees').select('id,name,home_project_id,head_staff_id'),
+    db.from('committee_members').select('committee_id,staff_id'),
+  ]);
+  ROSTER_COMMITTEES = committees||[];
+  const rolesByStaff={}; for(const r of roles||[]) (rolesByStaff[r.staff_id] ??= []).push(r);
+  const committeeNamesByStaff={}, committeeIdsByStaff={};
+  const addCommittee=(staffId,c)=>{
+    if(!staffId||!c) return;
+    (committeeNamesByStaff[staffId] ??= new Set()).add(c.name);
+    (committeeIdsByStaff[staffId] ??= new Set()).add(c.id);
+  };
+  for(const c of ROSTER_COMMITTEES) addCommittee(c.head_staff_id, c);
+  for(const m of members||[]){
+    const c=ROSTER_COMMITTEES.find(x=>x.id===m.committee_id);
+    addCommittee(m.staff_id, c);
+  }
+  ROSTER_ALL=(staff||[]).map(s=>({
+    id:s.id, full_name:s.full_name, dept:s.departments?.name||'', title:titleNames[s.title]||s.title,
+    rolesText:(rolesByStaff[s.id]||[]).map(r=>roleNames[r.role]||r.role).join('، ')||'—',
+    committeesText:[...(committeeNamesByStaff[s.id]||[])].join('، ')||'',
+    _projectNames:new Set((rolesByStaff[s.id]||[]).filter(r=>r.role==='project_lead').map(r=>r.scope)),
+    _committeeIds:committeeIdsByStaff[s.id]||new Set(),
+  }));
+
+  $('permFilterProject').innerHTML='<option value="">فرز حسب مشروع…</option>'+PERM_PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  $('permFilterCommittee').innerHTML='<option value="">فرز حسب لجنة…</option>'+ROSTER_COMMITTEES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+
+  $('permFilterProject').addEventListener('change',()=>{ if($('permFilterProject').value) $('permFilterCommittee').value=''; renderRoster(); });
+  $('permFilterCommittee').addEventListener('change',()=>{ if($('permFilterCommittee').value) $('permFilterProject').value=''; renderRoster(); });
+  $('permFilterClear').addEventListener('click',()=>{ $('permFilterProject').value=''; $('permFilterCommittee').value=''; renderRoster(); });
+  $('permPrintBtn').addEventListener('click',printRoster);
+  $('permExportBtn').addEventListener('click',exportRosterXls);
+
+  renderRoster();
+}
+function currentRosterView(){
+  const projId=$('permFilterProject').value, commId=$('permFilterCommittee').value;
+  if(projId){
+    const projName=PERM_PROJECTS.find(p=>p.id===projId)?.name||'';
+    return {title:`المسؤولات عن مشروع: ${projName}`, rows:ROSTER_ALL.filter(s=>s._projectNames.has(projName))};
+  }
+  if(commId){
+    const commName=ROSTER_COMMITTEES.find(c=>c.id===commId)?.name||'';
+    return {title:`أعضاء لجنة: ${commName}`, rows:ROSTER_ALL.filter(s=>s._committeeIds.has(commId))};
+  }
+  return {title:'كل المنتسبات وصلاحياتهن', rows:ROSTER_ALL};
+}
+function renderRoster(){
+  const {rows}=currentRosterView();
+  $('permRosterTable').innerHTML = rows.length
+    ? '<tr><th>الاسم</th><th>القسم</th><th>المسمى</th><th>الصلاحيات الإضافية</th><th>اللجان</th></tr>'+
+      rows.map(s=>`<tr><td>${s.full_name}</td><td class="c">${s.dept}</td><td class="c">${s.title}</td><td>${s.rolesText}</td><td>${s.committeesText||'—'}</td></tr>`).join('')
+    : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">لا نتائج</td></tr>';
+}
+function printRoster(){
+  const {title, rows}=currentRosterView();
+  if(!rows.length){ toast('لا بيانات للطباعة'); return; }
+  $('printAreaPerms').innerHTML=`
+    ${printHeaderHtml(title)}
+    <table class="perms-print-tbl">
+      <tr><th>الاسم</th><th>القسم</th><th>المسمى</th><th>الصلاحيات الإضافية</th><th>اللجان</th></tr>
+      ${rows.map(s=>`<tr><td>${s.full_name}</td><td>${s.dept}</td><td>${s.title}</td><td>${s.rolesText}</td><td>${s.committeesText||'—'}</td></tr>`).join('')}
+    </table>`;
+  printWithTitle(title.replace(/\s+/g,'_'),'printAreaPerms');
+}
+async function exportRosterXls(){
+  const {title, rows}=currentRosterView();
+  if(!rows.length){ toast('لا بيانات للتصدير'); return; }
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('الصلاحيات',{views:[{rightToLeft:true}]});
+  const cols=['الاسم','القسم','المسمى','الصلاحيات الإضافية','اللجان'];
+  const titleRow=ws.addRow([title]); ws.mergeCells(titleRow.number,1,titleRow.number,cols.length);
+  titleRow.getCell(1).font={bold:true,size:13,color:{argb:'FFFFFFFF'}}; titleRow.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1A3A6B'}}; titleRow.getCell(1).alignment={horizontal:'center'};
+  const hdr=ws.addRow(cols);
+  hdr.eachCell(c=>{ c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD0E8D8'}}; c.alignment={horizontal:'center'}; });
+  rows.forEach(s=>{ ws.addRow([s.full_name, s.dept, s.title, s.rolesText, s.committeesText||'—']).eachCell(c=>{ c.alignment={horizontal:'center',wrapText:true}; c.font={size:10}; }); });
+  ws.columns=cols.map(()=>({width:26}));
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`${title.replace(/\s+/g,'_')}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
+}
+
 registerTab({id:'settingsData', label:'البيانات الأساسية', group:'settings', groupLabel:'الإعدادات',
   show:f=>f.isAdmin, init:initData});
-registerTab({id:'settingsPerms', label:'الصلاحيات', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:initPerms});
+registerTab({id:'settingsPerms', label:'المعلمات', group:'settings', groupLabel:'الإعدادات',
+  show:f=>f.isAdmin, init:async()=>{ await initPerms(); await initPermsRoster(); }});

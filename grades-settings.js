@@ -157,5 +157,6 @@ async function saveCategories(){
 
 registerTab({id:'settingsSubjects', label:'المقررات والدرجات', group:'settings', groupLabel:'الإعدادات',
   show:f=>f.isAdmin, init:initSubjects});
-registerTab({id:'settingsCategories', label:'فئات التصنيف', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:initCategories});
+/* settingsCategories ("فئات التصنيف") لم تعد تبويباً مستقلاً — صارت طفلاً
+   ضمن تبويب "الطالبات" المُجمَّع (انظر settings-nav.js). */
+export { initCategories };

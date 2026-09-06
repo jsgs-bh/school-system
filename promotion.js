@@ -11,6 +11,7 @@
    المستوى الأول إلى الثاني بين السنوات لا يُؤتمت — يحتاج ملف توزيع
    جديد (استيراد عادي) حسب الوثيقة المعتمدة. */
 import { db, $, S, dstr, toast, logAction } from './core.js';
+export { initPromotion };
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="promotion" style="display:none">

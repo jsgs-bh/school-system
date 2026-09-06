@@ -3,7 +3,7 @@
    التفعيل لا يمسح أي بيانات إطلاقاً؛ كل الجداول (شعب، طالبات، درجات،
    غياب) تبقى محفوظة تماماً بغض النظر عن أي سنة نشطة حالياً — التفعيل
    مجرد إشارة تحدد أي سنة تعمل عليها الشاشات الآن. */
-import { db, $, S, toast, registerTab } from './core.js';
+import { db, $, S, toast } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="academicYears" style="display:none">
@@ -73,5 +73,6 @@ async function addYear(){
   finally{ btn.disabled=false; }
 }
 
-registerTab({id:'academicYears', label:'السنوات الدراسية', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:initAY});
+/* لا registerTab هنا — هذي الشاشة صارت طفلاً ضمن تبويب "السنوات الدراسية"
+   المُجمَّع (انظر settings-nav.js) بدل تبويب مستقل تحت "الإعدادات". */
+export { initAY };
