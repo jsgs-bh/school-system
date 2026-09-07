@@ -51,7 +51,11 @@ async function loadMySchedule(){
   for(const p of periodNos){
     html+=`<tr><td class="sec">${p}</td>`;
     for(let day=0; day<5; day++){
-      const cell=grid[day]?.[p];
+      /* day_of_week بقاعدة البيانات مرقّم من ١ (الأحد) إلى ٥ (الخميس)،
+         بينما عمود الجدول هنا مفهرس من صفر — لازم +1 وإلا كل الأعمدة
+         تنزاح يوماً كاملاً (حصص الأحد تظهر تحت الاثنين... وهكذا). */
+      const dow=day+1;
+      const cell=grid[dow]?.[p];
       const isToday = cell && day===todayIdx;
       html += cell
         ? `<td class="cell ${isToday?'today-cell':''}" ${isToday?`data-entry="${cell.entryId}"`:''}><b>${cell.sec}</b><small>${cell.subj}</small></td>`
