@@ -167,7 +167,7 @@ bindDrop($('stfDrop'),$('stfFile'), async file=>{
     const dept = col.dept>=0?normDept(r[col.dept]):'';
     if(dept&&!depts.has(dept)) depts.set(dept,{name:dept,kind:deptKind(dept)});
     const tRaw = col.title>=0?clean(r[col.title]):'';
-    const title = /أولى|اولى/.test(tRaw)?'senior_teacher':/معلم/.test(tRaw)?'teacher':'staff';
+    const title = /أولى|اولى|منسق/.test(tRaw)?'senior_teacher':/معلم/.test(tRaw)?'teacher':'staff';
     if(title==='senior_teacher') seniors++;
     staffRows.push({ personal_number:pers, full_name:name,
       email: col.mail>=0?clean(r[col.mail])||null:null, _dept:dept||null, title });
