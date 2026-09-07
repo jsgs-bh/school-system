@@ -27,12 +27,23 @@ function initTeacher(){
     const dow=CUR_DATE.getDay()+1;
     const {data:ents}=await db.from('timetable_entries')
       .select('id,period_no,subjects(code)').eq('section_id',$('otherSec').value).eq('day_of_week',dow).order('period_no');
-    for(const e of ents||[]) sel.insertAdjacentHTML('beforeend',`<option value="${e.id}">الحصة ${PERIOD_NAMES[e.period_no]} — ${e.subjects?.code||''}</option>`);
+    for(const e of ents||[]) sel.insertAdjacentHTML('beforeend',`<option value="${e.id}" data-period="${e.period_no}">الحصة ${PERIOD_NAMES[e.period_no]} — ${e.subjects?.code||''}</option>`);
     if(!(ents||[]).length) sel.insertAdjacentHTML('beforeend','<option value="">لا حصص لهذه الشعبة في هذا اليوم</option>');
   });
-  $('otherGo').addEventListener('click',()=>{
+  $('otherGo').addEventListener('click', async ()=>{
     const eid=$('otherPer').value;
     if(!eid){ toast('اختاري الشعبة والحصة'); return; }
+    const per=+($('otherPer').selectedOptions[0].dataset.period||0);
+    const dow=CUR_DATE.getDay()+1;
+    const {data:conflict}=await db.from('entry_teachers')
+      .select('timetable_entries!inner(meeting_label,is_meeting,day_of_week,period_no,academic_year_id)')
+      .eq('staff_id',S.ME.id).eq('timetable_entries.is_meeting',true)
+      .eq('timetable_entries.day_of_week',dow).eq('timetable_entries.period_no',per)
+      .eq('timetable_entries.academic_year_id',S.YEAR.id).maybeSingle();
+    if(conflict?.timetable_entries){
+      const ok=confirm(`تنبيه: عندك اجتماع "${conflict.timetable_entries.meeting_label}" بنفس هذي الحصة. تكملين الرصد كتغطية رغم ذلك؟`);
+      if(!ok) return;
+    }
     openRoster({entry_id:eid, section_code:$('otherSec').selectedOptions[0].textContent,
       subj:'', period_no:null, label:$('otherPer').selectedOptions[0].textContent, isMine:false});
   });
@@ -50,7 +61,8 @@ async function loadDay(){
   list.innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
   const {data:rows,error}=await db.from('entry_teachers')
     .select('is_attendance_taker, timetable_entries!inner(id,period_no,room,section_id,day_of_week,academic_year_id,sections(code),subjects(code))')
-    .eq('staff_id',S.ME.id).eq('timetable_entries.day_of_week',dow).eq('timetable_entries.academic_year_id',S.YEAR.id);
+    .eq('staff_id',S.ME.id).eq('timetable_entries.day_of_week',dow).eq('timetable_entries.academic_year_id',S.YEAR.id)
+    .eq('timetable_entries.is_meeting',false);
   if(error){ list.innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   MY_LESSONS=(rows||[]).map(r=>({
     entry_id:r.timetable_entries.id, period_no:r.timetable_entries.period_no,

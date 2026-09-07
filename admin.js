@@ -1,5 +1,5 @@
 /* admin.js — شاشة الأدمن: الإحصاءات واستيراد الطالبات والمنتسبات والجدول */
-import { db, $, S, normDigits, clean, normName, chunk, toast, bindDrop, readSheet, mkProg, showWarns, registerTab } from './core.js';
+import { db, $, S, normDigits, clean, normName, chunk, toast, bindDrop, readSheet, mkProg, showWarns, getCurrentSemester, registerTab } from './core.js';
 
 async function refreshStats(){
   $('stYear').textContent = S.YEAR?S.YEAR.name:'—';
@@ -167,7 +167,7 @@ bindDrop($('stfDrop'),$('stfFile'), async file=>{
     const dept = col.dept>=0?normDept(r[col.dept]):'';
     if(dept&&!depts.has(dept)) depts.set(dept,{name:dept,kind:deptKind(dept)});
     const tRaw = col.title>=0?clean(r[col.title]):'';
-    const title = /أولى|اولى|منسق/.test(tRaw)?'senior_teacher':/معلم/.test(tRaw)?'teacher':'staff';
+    const title = /أولى|اولى/.test(tRaw)?'senior_teacher':/معلم/.test(tRaw)?'teacher':'staff';
     if(title==='senior_teacher') seniors++;
     staffRows.push({ personal_number:pers, full_name:name,
       email: col.mail>=0?clean(r[col.mail])||null:null, _dept:dept||null, title });
@@ -207,7 +207,8 @@ $('ttTpl').addEventListener('click',()=>{
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([TT_HEAD,
     ['1وحد1','الأحد',1,'عرب102','نرجس عادل','',''],
-    ['1وحد1','الأحد',2,'تقن108','بشرى المطيع','امينة محمد موسى','مختبر 505']]);
+    ['1وحد1','الأحد',2,'تقن108','بشرى المطيع','امينة محمد موسى','مختبر 505'],
+    ['اجتماع','الأحد',6,'اجتماع تطوير - قسم اللغة الإنجليزية','نرجس عادل','','']]);
   ws['!cols']=TT_HEAD.map(()=>({wch:24}));
   XLSX.utils.book_append_sheet(wb,ws,'الجدول');
   XLSX.writeFile(wb,'قالب_الجدول_الدراسي.xlsx');
@@ -230,14 +231,31 @@ bindDrop($('ttDrop'),$('ttFile'), async file=>{
     t1:H.findIndex(h=>h.includes('معلمة')&&!h.includes('ثانية')),
     t2:H.findIndex(h=>h.includes('ثانية')), room:find('قاعة') };
   if(col.sec<0||col.day<0||col.per<0||col.subj<0||col.t1<0){ alert('الملف لا يطابق القالب — نزلي القالب واستخدميه.'); return; }
-  const warns=[],slots=new Map(),subjects=new Set(),secs=new Set(); let skipped=0;
+  const warns=[],slots=new Map(),meetingSlots=new Map(),subjects=new Set(),secs=new Set(); let skipped=0,meetingCount=0;
   for(let i=1;i<rows.length;i++){
     const r=rows[i];
-    const secCode=normDigits(r[col.sec]).replace(/\s/g,'');
-    if(!secCode&&!clean(r[col.subj])) continue;
+    const secRaw=clean(r[col.sec]);
+    const isMeeting = /^اجتماع/.test(secRaw);
     const day=dayNum(r[col.day]); const per=+normDigits(r[col.per]);
-    const subj=normDigits(r[col.subj]).replace(/\s/g,'');
     const t1=clean(r[col.t1]); const t2=col.t2>=0?clean(r[col.t2]):'';
+    if(isMeeting){
+      const label=clean(r[col.subj]);
+      if(!day||!per||per<1||per>7||!label||!t1){ skipped++; warns.push(`سطر ${i+1}: بيانات اجتماع ناقصة.`); continue; }
+      const key=`${label}|${day}|${per}`;
+      if(meetingSlots.has(key)){
+        const m=meetingSlots.get(key);
+        if(t1&&!m.teachers.includes(t1)) m.teachers.push(t1);
+        if(t2&&!m.teachers.includes(t2)) m.teachers.push(t2);
+      } else {
+        const teachers=[t1]; if(t2) teachers.push(t2);
+        meetingSlots.set(key,{label,day,per,teachers});
+      }
+      meetingCount++;
+      continue;
+    }
+    const secCode=normName(normDigits(r[col.sec]).replace(/\s/g,''));
+    if(!secCode&&!clean(r[col.subj])) continue;
+    const subj=normDigits(r[col.subj]).replace(/\s/g,'');
     if(!secCode||!day||!per||per<1||per>7||!subj||!t1){ skipped++; warns.push(`سطر ${i+1}: بيانات ناقصة أو غير مفهومة.`); continue; }
     const key=`${secCode}|${day}|${per}`;
     if(slots.has(key)){
@@ -250,10 +268,12 @@ bindDrop($('ttDrop'),$('ttFile'), async file=>{
     slots.set(key,{secCode,day,per,subj,teachers,room:col.room>=0?clean(r[col.room])||null:null});
     subjects.add(subj); secs.add(secCode);
   }
-  TT={slots:[...slots.values()]};
+  TT={slots:[...slots.values()], meetingSlots:[...meetingSlots.values()]};
   $('ttPv1').textContent=slots.size; $('ttPv2').textContent=secs.size;
   $('ttPv3').textContent=subjects.size; $('ttPv4').textContent=skipped;
-  showWarns('ttWarns',warns); $('ttPreview').style.display='block';
+  if(meetingCount) showWarns('ttWarns',[`ℹ️ ${meetingSlots.size} حصة اجتماع اكتُشفت (توثيق بس، بدون رصد غياب).`,...warns]);
+  else showWarns('ttWarns',warns);
+  $('ttPreview').style.display='block';
 });
 $('ttCancel').addEventListener('click',()=>{TT=null;$('ttPreview').style.display='none';});
 $('ttRun').addEventListener('click', async ()=>{
@@ -279,7 +299,9 @@ $('ttRun').addEventListener('click', async ()=>{
     }
     prog(12,'جلب الشعب والمنتسبات…');
     const {data:allSec,error:e1}=await db.from('sections').select('id,code,semester').eq('academic_year_id',S.YEAR.id); if(e1) throw e1;
-    const secBy=Object.fromEntries(allSec.map(s=>[s.code,s]));
+    /* توحيد الهمزات (أ/إ/آ) وتاء التأنيث قبل المطابقة — عشان اختلاف
+       التهجئة البسيط (زي "أدب" مقابل "ادب") ما يرفض الشعبة بصمت. */
+    const secBy=Object.fromEntries(allSec.map(s=>[normName(s.code),s]));
     const {data:allStf,error:e2}=await db.from('staff').select('id,full_name,personal_number'); if(e2) throw e2;
     const stfByPers=Object.fromEntries(allStf.map(s=>[s.personal_number,s.id]));
     const stfByName={}; for(const s of allStf) stfByName[normName(s.full_name)]=s.id;
@@ -295,19 +317,34 @@ $('ttRun').addEventListener('click', async ()=>{
       const sec=secBy[s.secCode];
       if(!sec){ warns.push(`شعبة غير موجودة بالنظام: ${s.secCode}`); continue; }
       entries.push({ academic_year_id:S.YEAR.id, semester:sec.semester, section_id:sec.id,
-        subject_id:subjId[s.subj]??null, day_of_week:s.day, period_no:s.per, room:s.room });
+        subject_id:subjId[s.subj]??null, day_of_week:s.day, period_no:s.per, room:s.room, is_meeting:false });
       teacherPlan.push({key:`${sec.id}|${s.day}|${s.per}`, teachers:s.teachers});
     }
     for(const c of chunk(entries,300)){ const{error}=await db.from('timetable_entries').upsert(c,{onConflict:'section_id,day_of_week,period_no'}); if(error) throw error; }
+
+    /* حصص الاجتماع: بلا شعبة ولا مقرر — توثيق بس (تُستثنى من رصد الغياب). */
+    const meetingEntries=(TT.meetingSlots||[]).map(m=>({
+      academic_year_id:S.YEAR.id, semester:getCurrentSemester(), section_id:null, subject_id:null,
+      day_of_week:m.day, period_no:m.per, room:null, is_meeting:true, meeting_label:m.label }));
+    if(meetingEntries.length){
+      const {error}=await db.from('timetable_entries').upsert(meetingEntries,{onConflict:'meeting_label,day_of_week,period_no'});
+      if(error) throw error;
+    }
+    const meetingPlan=(TT.meetingSlots||[]).map(m=>({key:`${m.label}|${m.day}|${m.per}`, teachers:m.teachers}));
+
     prog(65,'ربط المعلمات…');
     const {data:allEnt,error:e4}=await db.from('timetable_entries')
-      .select('id,section_id,day_of_week,period_no').eq('academic_year_id',S.YEAR.id); if(e4) throw e4;
-    const entId={}; for(const e of allEnt) entId[`${e.section_id}|${e.day_of_week}|${e.period_no}`]=e.id;
-    const ids=teacherPlan.map(p=>entId[p.key]).filter(Boolean);
+      .select('id,section_id,day_of_week,period_no,is_meeting,meeting_label').eq('academic_year_id',S.YEAR.id); if(e4) throw e4;
+    const entId={}, meetId={};
+    for(const e of allEnt){
+      if(e.is_meeting) meetId[`${e.meeting_label}|${e.day_of_week}|${e.period_no}`]=e.id;
+      else entId[`${e.section_id}|${e.day_of_week}|${e.period_no}`]=e.id;
+    }
+    const ids=[...teacherPlan.map(p=>entId[p.key]), ...meetingPlan.map(p=>meetId[p.key])].filter(Boolean);
     for(const c of chunk(ids,200)){ const{error}=await db.from('entry_teachers').delete().in('entry_id',c); if(error) throw error; }
     const links=[]; const unknownNames=new Set();
-    for(const p of teacherPlan){
-      const eid=entId[p.key]; if(!eid) continue;
+    for(const p of [...teacherPlan.map(p=>({...p,eid:entId[p.key]})), ...meetingPlan.map(p=>({...p,eid:meetId[p.key]}))]){
+      const eid=p.eid; if(!eid) continue;
       p.teachers.forEach((t,i)=>{
         const sid=findTeacher(t);
         if(!sid){ unknownNames.add(t); return; }
@@ -318,10 +355,10 @@ $('ttRun').addEventListener('click', async ()=>{
     for(const c of chunk(links,400)){ const{error}=await db.from('entry_teachers').insert(c); if(error) throw error; }
     prog(90,'توثيق…');
     await db.from('audit_log').insert({actor_id:S.ME.id,action:'import',entity:'timetable',
-      details:{entries:entries.length,links:links.length,unknown_teachers:unknownT,deleted_old:deleted}});
+      details:{entries:entries.length,meetings:meetingEntries.length,links:links.length,unknown_teachers:unknownT,deleted_old:deleted}});
     prog(100,'اكتمل');
     R.className='result ok';
-    R.innerHTML=`✅ اكتمل استيراد الجدول:<br>• ${entries.length} حصة<br>• ${links.length} ربط معلمة${deleted?`<br>• حُذفت ${deleted} حصة قديمة غير مرصودة`:''}${unknownT?`<br><br>⚠️ أسماء لم تُربط (${unknownT}) — صححيها كما وردت في المنتسبات أو استخدمي الرقم الشخصي ثم أعيدي الرفع:<br>${[...unknownNames].map(n=>'• «'+n+'»').join('<br>')}`:''}`;
+    R.innerHTML=`✅ اكتمل استيراد الجدول:<br>• ${entries.length} حصة${meetingEntries.length?`<br>• ${meetingEntries.length} حصة اجتماع (توثيق بس)`:''}<br>• ${links.length} ربط معلمة${deleted?`<br>• حُذفت ${deleted} حصة قديمة غير مرصودة`:''}${unknownT?`<br><br>⚠️ أسماء لم تُربط (${unknownT}) — صححيها كما وردت في المنتسبات أو استخدمي الرقم الشخصي ثم أعيدي الرفع:<br>${[...unknownNames].map(n=>'• «'+n+'»').join('<br>')}`:''}`;
     showWarns('ttWarns',warns); if(warns.length) $('ttWarns').style.display='block';
     refreshStats();
   }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
