@@ -18,12 +18,14 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div data-vt="add">
     <div class="panel">
       <h3>تسجيل مخالفة سلوكية</h3>
-      <div class="field" style="position:relative;max-width:420px">
-        <label>اسم الطالبة</label>
-        <input type="text" id="vAddStuSearch" placeholder="ابحثي عن اسم طالبة…" autocomplete="off">
-        <div class="sugg" id="vAddStuSugg"></div>
+      <div class="field" style="max-width:420px">
+        <label>الصف / الشعبة</label>
+        <select id="vAddSecPick"><option value="">اختاري الصف…</option></select>
       </div>
-      <div id="vAddStuPicked" class="viol-picked" style="display:none"></div>
+      <div class="field" style="max-width:420px">
+        <label>اسم الطالبة</label>
+        <select id="vAddStuPick" disabled><option value="">اختاري الصف أولاً…</option></select>
+      </div>
       <div class="field"><label>الفئة</label>
         <div class="viol-cats" id="vAddCats"></div>
       </div>
@@ -174,27 +176,22 @@ async function initViolTeacher(){
     $('vAddTypeWrap').style.display='block';
   }));
 
-  let searchTimer=null;
-  $('vAddStuSearch').addEventListener('input',()=>{
-    clearTimeout(searchTimer);
-    const q=clean($('vAddStuSearch').value);
-    if(q.length<2){ $('vAddStuSugg').innerHTML=''; return; }
-    searchTimer=setTimeout(async ()=>{
-      const {data}=await db.from('students').select('id,full_name,academic_number,enrollments!inner(section_id,to_date,sections(code))')
-        .ilike('full_name',`%${q}%`).is('enrollments.to_date',null).limit(8);
-      $('vAddStuSugg').innerHTML=(data||[]).map(s=>`<div class="opt" data-id="${s.id}" data-name="${s.full_name}" data-acad="${s.academic_number}" data-secid="${s.enrollments?.[0]?.section_id||''}" data-sec="${s.enrollments?.[0]?.sections?.code||''}">${s.full_name}<small>${s.academic_number} — ${s.enrollments?.[0]?.sections?.code||''}</small></div>`).join('');
-      $('vAddStuSugg').querySelectorAll('.opt').forEach(el=>el.addEventListener('click',()=>{
-        PICKED_STU={id:el.dataset.id,full_name:el.dataset.name,academic_number:el.dataset.acad,section_id:el.dataset.secid||null,section_code:el.dataset.sec};
-        $('vAddStuPicked').style.display='flex';
-        $('vAddStuPicked').innerHTML=`${PICKED_STU.full_name} (${PICKED_STU.academic_number} — ${PICKED_STU.section_code}) <button type="button" id="vAddStuClear">✕</button>`;
-        $('vAddStuClear').addEventListener('click',()=>{ PICKED_STU=null; $('vAddStuPicked').style.display='none'; });
-        $('vAddStuSearch').value=''; $('vAddStuSugg').innerHTML='';
-      }));
-    },250);
+  const {data:sections}=await db.from('sections').select('id,code').eq('academic_year_id',S.YEAR.id).order('code');
+  $('vAddSecPick').innerHTML='<option value="">اختاري الصف…</option>'+(sections||[]).map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+  $('vAddSecPick').addEventListener('change', async ()=>{
+    const secId=$('vAddSecPick').value;
+    $('vAddStuPick').innerHTML='<option value="">جارٍ التحميل…</option>'; $('vAddStuPick').disabled=true;
+    if(!secId){ $('vAddStuPick').innerHTML='<option value="">اختاري الصف أولاً…</option>'; return; }
+    const {data}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
+    const stus=(data||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+    $('vAddStuPick').innerHTML='<option value="">اختاري الطالبة…</option>'+stus.map(s=>`<option value="${s.id}" data-acad="${s.academic_number}" data-name="${s.full_name}">${s.full_name} (${s.academic_number})</option>`).join('');
+    $('vAddStuPick').disabled=false;
   });
 
   $('vAddSave').addEventListener('click', async ()=>{
-    if(!PICKED_STU){ toast('اختاري الطالبة'); return; }
+    const secId=$('vAddSecPick').value;
+    const stuOpt=$('vAddStuPick').selectedOptions[0];
+    if(!secId||!$('vAddStuPick').value){ toast('اختاري الصف ثم الطالبة'); return; }
     const catBtn=$('vAddCats').querySelector('.viol-cat-btn.on');
     if(!catBtn){ toast('اختاري الفئة'); return; }
     const cat=CATEGORIES.find(c=>c.id===catBtn.dataset.cat);
@@ -203,14 +200,14 @@ async function initViolTeacher(){
     const btn=$('vAddSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
     try{
       const isTier4=cat.tier===4;
-      const {error}=await db.from('violations').insert({
-        academic_year_id:S.YEAR.id, student_id:PICKED_STU.id, section_id:PICKED_STU.section_id, category_id:cat.id, type_id:typeId,
+      const {data:saved,error}=await db.from('violations').insert({
+        academic_year_id:S.YEAR.id, student_id:$('vAddStuPick').value, section_id:secId, category_id:cat.id, type_id:typeId,
         reported_by:S.ME.id, notes:notes||null, date:new Date().toISOString().slice(0,10),
         status:isTier4?'escalated':'new', escalated_at:isTier4?new Date().toISOString():null, escalated_by:isTier4?S.ME.id:null
-      });
+      }).select('code').single();
       if(error) throw error;
-      toast(isTier4?'تم الحفظ — مخالفة فئة رابعة تُحوَّل مباشرة لمكتب الإرشاد':'تم حفظ المخالفة');
-      PICKED_STU=null; $('vAddStuPicked').style.display='none';
+      toast(`${isTier4?'تم الحفظ — مخالفة فئة رابعة تُحوَّل مباشرة لمكتب الإرشاد':'تم حفظ المخالفة'} — رمزها: #${saved.code}`);
+      $('vAddSecPick').value=''; $('vAddStuPick').innerHTML='<option value="">اختاري الصف أولاً…</option>'; $('vAddStuPick').disabled=true;
       $('vAddNotes').value=''; catBtn.classList.remove('on'); $('vAddTypeWrap').style.display='none';
     }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
     finally{ btn.disabled=false; btn.textContent='حفظ المخالفة'; }
@@ -230,7 +227,7 @@ const STATUS_LABEL={new:'جديدة',admin_action:'تحت الإجراء',archiv
 function violCard(v, showActions){
   return `<div class="viol-card">
     <div class="viol-card-head">
-      <div><b>${v.students?.full_name||'—'}</b> <span class="viol-meta">(${v.students?.academic_number||''})</span></div>
+      <div><b>${v.students?.full_name||'—'}</b> <span class="viol-meta">(${v.students?.academic_number||''}) — رمز #${v.code}</span></div>
       ${tierBadge(v.violation_categories)}
     </div>
     <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · الحالة: ${STATUS_LABEL[v.status]||v.status}</div>
@@ -270,7 +267,7 @@ async function loadNewViolations(){
   $('vaNewList').innerHTML=data.map(v=>`
     <div class="viol-card">
       <div class="viol-card-head">
-        <div><b>${v.students?.full_name||'—'}</b> <span class="viol-meta">(${v.students?.academic_number||''} — ${v.sections?.code||''})</span></div>
+        <div><b>${v.students?.full_name||'—'}</b> <span class="viol-meta">(${v.students?.academic_number||''} — ${v.sections?.code||''}) — رمز #${v.code}</span></div>
         ${tierBadge(v.violation_categories)}
       </div>
       <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · رصدتها: ${v.staff?.full_name||''}</div>
@@ -312,7 +309,7 @@ async function loadAlerts(){
     .eq('status','escalated').order('escalated_at',{ascending:false});
   const onlyAutoT4=(t4||[]).filter(v=>!v.admin_action_text); // اللي انحولت تلقائياً (مو عن طريق التكرار)
   $('vaTier4List').innerHTML=onlyAutoT4.length
-    ? onlyAutoT4.map(v=>`<div class="viol-card"><div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">${v.students?.academic_number} — ${v.sections?.code||''}</span></div><div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}<div class="viol-meta">↗️ محوَّلة مباشرة لمكتب الإرشاد الاجتماعي — لا يوجد إجراء إشرافي مطلوب هنا.</div></div>`).join('')
+    ? onlyAutoT4.map(v=>`<div class="viol-card"><div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">${v.students?.academic_number} — ${v.sections?.code||''} — رمز #${v.code}</span></div><div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}<div class="viol-meta">↗️ محوَّلة مباشرة لمكتب الإرشاد الاجتماعي — لا يوجد إجراء إشرافي مطلوب هنا.</div></div>`).join('')
     : '<div class="empty-day">لا مخالفات فئة رابعة حالياً.</div>';
 }
 
@@ -324,7 +321,7 @@ async function openStudentModal(studentId){
   const stuSec=stu.enrollments?.[0]?.sections?.code||'';
   $('vaModalBody').innerHTML=`
     <h3>${stu.full_name} <small class="viol-meta">(${stu.academic_number} — ${stuSec})</small></h3>
-    ${(data||[]).map(v=>`<div class="viol-card"><div class="viol-card-head">${tierBadge(v.violation_categories)}<span class="viol-meta">${v.date}</span></div><div class="viol-meta">${v.violation_types?.name||''} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}</div>`).join('')}
+    ${(data||[]).map(v=>`<div class="viol-card"><div class="viol-card-head">${tierBadge(v.violation_categories)}<span class="viol-meta">${v.date} — رمز #${v.code}</span></div><div class="viol-meta">${v.violation_types?.name||''} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}</div>`).join('')}
     <div class="field"><label>إجراءات الإشراف الإداري</label><textarea id="vaModalAction" rows="3" placeholder="اكتبي الإجراء المتخذ مع الطالبة…"></textarea></div>
     <button class="btn gold" id="vaModalEscalate" style="width:auto;padding:10px 22px">تحويل الطالبة إلى مكتب الإرشاد الاجتماعي</button>
   `;
@@ -350,7 +347,7 @@ async function loadEscalatedList(){
   if(error){ $('vaEscList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   $('vaEscList').innerHTML=(data||[]).length ? data.map(v=>`
     <div class="viol-card">
-      <div class="viol-card-head"><b>${v.students?.full_name}</b>${tierBadge(v.violation_categories)}</div>
+      <div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">رمز #${v.code}</span>${tierBadge(v.violation_categories)}</div>
       <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · الحالة: ${STATUS_LABEL[v.status]}</div>
       ${v.admin_action_text?`<div class="viol-notes"><b>إجراء الإشراف الإداري:</b> ${v.admin_action_text}</div>`:''}
       ${v.guidance_action_text?`<div class="viol-notes"><b>إجراء الإرشاد الاجتماعي:</b> ${v.guidance_action_text}</div>`:''}
@@ -384,7 +381,7 @@ async function loadGuidancePending(){
   if(!(data||[]).length){ $('vgPendingList').innerHTML='<div class="empty-day">لا مخالفات بانتظار المتابعة 🎉</div>'; return; }
   $('vgPendingList').innerHTML=data.map(v=>`
     <div class="viol-card">
-      <div class="viol-card-head"><b>${v.students?.full_name}</b>${tierBadge(v.violation_categories)}</div>
+      <div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">رمز #${v.code}</span>${tierBadge(v.violation_categories)}</div>
       <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} — ${v.sections?.code||''}</div>
       ${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}
       ${v.admin_action_text?`<div class="viol-notes"><b>إجراء الإشراف الإداري:</b> ${v.admin_action_text}</div>`:''}
@@ -408,7 +405,7 @@ async function loadGuidanceArchive(){
   if(error){ $('vgArchiveList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   $('vgArchiveList').innerHTML=(data||[]).length ? data.map(v=>`
     <div class="viol-card">
-      <div class="viol-card-head"><b>${v.students?.full_name}</b>${tierBadge(v.violation_categories)}</div>
+      <div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">رمز #${v.code}</span>${tierBadge(v.violation_categories)}</div>
       <div class="viol-meta">${v.violation_types?.name||''} · ${v.date}</div>
       <div class="viol-notes"><b>إجراء الإرشاد الاجتماعي:</b> ${v.guidance_action_text}</div>
     </div>`).join('') : '<div class="empty-day">لا مخالفات مؤرشَفة بعد.</div>';
@@ -470,8 +467,8 @@ async function runStats(panelId){
   if(level) rows=rows.filter(r=>String(r.sections?.level)===level);
   STATS_ROWS[panelId]=rows;
   $(`${panelId}-tbl`).innerHTML = rows.length
-    ? '<tr><th>الطالبة</th><th>الشعبة</th><th>الفئة</th><th>النوع</th><th>التاريخ</th><th>الحالة</th></tr>'+
-      rows.map(v=>`<tr><td>${v.students?.full_name||'—'}</td><td class="c">${v.sections?.code||'—'}</td><td class="c">${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td class="c">${v.date}</td><td class="c">${STATUS_LABEL[v.status]||v.status}</td></tr>`).join('')
+    ? '<tr><th>الرمز</th><th>الطالبة</th><th>الشعبة</th><th>الفئة</th><th>النوع</th><th>التاريخ</th><th>الحالة</th></tr>'+
+      rows.map(v=>`<tr><td class="c">#${v.code}</td><td>${v.students?.full_name||'—'}</td><td class="c">${v.sections?.code||'—'}</td><td class="c">${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td class="c">${v.date}</td><td class="c">${STATUS_LABEL[v.status]||v.status}</td></tr>`).join('')
     : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">لا نتائج</td></tr>';
 }
 
@@ -480,8 +477,8 @@ function printStats(panelId){
   if(!rows.length){ toast('لا بيانات للطباعة'); return; }
   $('printAreaViol').innerHTML=`${printHeaderHtml('تقرير المخالفات السلوكية')}
     <table class="viol-print-tbl">
-      <tr><th>الطالبة</th><th>الشعبة</th><th>الفئة</th><th>النوع</th><th>التاريخ</th><th>الحالة</th></tr>
-      ${rows.map(v=>`<tr><td>${v.students?.full_name||'—'}</td><td>${v.sections?.code||'—'}</td><td>${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td>${v.date}</td><td>${STATUS_LABEL[v.status]||v.status}</td></tr>`).join('')}
+      <tr><th>الرمز</th><th>الطالبة</th><th>الشعبة</th><th>الفئة</th><th>النوع</th><th>التاريخ</th><th>الحالة</th></tr>
+      ${rows.map(v=>`<tr><td>#${v.code}</td><td>${v.students?.full_name||'—'}</td><td>${v.sections?.code||'—'}</td><td>${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td>${v.date}</td><td>${STATUS_LABEL[v.status]||v.status}</td></tr>`).join('')}
     </table>`;
   printWithTitle('تقرير_المخالفات','printAreaViol');
 }
@@ -491,8 +488,8 @@ async function exportStats(panelId){
   if(!rows.length){ toast('لا بيانات للتصدير'); return; }
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('المخالفات',{views:[{rightToLeft:true}]});
-  ws.addRow(['الطالبة','الرقم الأكاديمي','الشعبة','الفئة','النوع','التاريخ','الحالة']).eachCell(c=>{ c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD0E8D8'}}; });
-  rows.forEach(v=>ws.addRow([v.students?.full_name||'—', v.students?.academic_number||'', v.sections?.code||'', v.violation_categories?.name||'', v.violation_types?.name||'', v.date, STATUS_LABEL[v.status]||v.status]));
+  ws.addRow(['الرمز','الطالبة','الرقم الأكاديمي','الشعبة','الفئة','النوع','التاريخ','الحالة']).eachCell(c=>{ c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD0E8D8'}}; });
+  rows.forEach(v=>ws.addRow([v.code, v.students?.full_name||'—', v.students?.academic_number||'', v.sections?.code||'', v.violation_categories?.name||'', v.violation_types?.name||'', v.date, STATUS_LABEL[v.status]||v.status]));
   ws.columns.forEach(c=>c.width=20);
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
