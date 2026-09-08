@@ -10,7 +10,7 @@ export const S = { ME:null, YEAR:null, PERIODS:[], FLAGS:{}, SETTINGS:{school_na
 export const roleNames = {admin:'الدعم الفني',leadership:'القيادة العليا',project_lead:'مسؤولة مشروع',
   committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات',
   attendance_lead:'مسؤولة متابعة الغياب', complaints_lead:'مسؤولة متابعة الشكاوى',
-  strategic_plan_lead:'رئيسة متابعة الخطة الاستراتيجية'};
+  strategic_plan_lead:'رئيسة متابعة الخطة الاستراتيجية', violations_lead:'مسؤولة المخالفات'};
 export const titleNames = {teacher:'معلمة',senior_teacher:'معلمة أولى',leadership:'قيادة عليا',staff:'منتسبة'};
 export const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 export const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
@@ -180,6 +180,7 @@ async function boot(session){
     isTeacher: staff.title==='teacher'||staff.title==='senior_teacher',
     isAttendanceLead: (roles||[]).some(r=>r.role==='attendance_lead'),
     isComplaintsLead: (roles||[]).some(r=>r.role==='complaints_lead'),
+    isViolationsLead: (roles||[]).some(r=>r.role==='violations_lead'),
     isProjectLead: (roles||[]).some(r=>r.role==='project_lead'),
     isStrategicPlanLead: (roles||[]).some(r=>r.role==='strategic_plan_lead'),
     isAnalysis: (roles||[]).some(r=>r.role==='analysis_supervisor'),
@@ -192,6 +193,21 @@ async function boot(session){
   $('appView').style.display='flex';
   const { data: yr } = await db.from('academic_years').select('*').eq('is_active',true).maybeSingle();
   S.YEAR = yr;
+
+  /* "مسؤولة مشروع" (role='project_lead') عام لأي مشروع، وما يحدد مشروع "اترك بصمة"
+     تحديداً. فحص مستقل هنا يمنع أي معلمة قائدة لمشروع ثاني (قطوف، نافذة على المستقبل...)
+     من فقدان تبويب "فعاليات" العادي بالغلط. */
+  let isLeaveMarkLead=false;
+  if(S.YEAR){
+    const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id);
+    const lmProject=(projects||[]).find(p=>normName(p.name)===normName('اترك بصمة')) || (projects||[]).find(p=>normName(p.name).includes(normName('اترك بصمة')));
+    if(lmProject){
+      const {data:leadRow}=await db.from('staff_project_leads').select('id').eq('staff_id',staff.id).eq('project_id',lmProject.id).maybeSingle();
+      isLeaveMarkLead=!!leadRow;
+    }
+  }
+  S.FLAGS.isLeaveMarkLead = isLeaveMarkLead;
+
   const { data: pat } = await db.from('timetable_patterns').select('id').eq('is_active',true).maybeSingle();
   if(pat){
     const { data: pp } = await db.from('pattern_periods').select('*').eq('pattern_id',pat.id).order('period_no');

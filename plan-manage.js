@@ -108,8 +108,17 @@ let MY_PROJECTS=[], CUR_PROJECT=null, INITIATIVES=[], CUR_INITIATIVE=null, ACTIO
 async function initManage(){
   if($('pmProjectPick').dataset.ready) return;
   $('pmProjectPick').dataset.ready='1';
-  const {data:leads}=await db.from('staff_project_leads').select('project_id, plan_projects(id,name)').eq('staff_id',S.ME.id);
-  MY_PROJECTS=(leads||[]).map(l=>l.plan_projects).filter(Boolean);
+  const canSeeStrategic = S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead;
+  if(canSeeStrategic){
+    /* مسؤولة التخطيط الاستراتيجي (والقيادة العليا) تحتاج توصل لكل
+       المشاريع عشان تتابع المبادرات الأساسية بكل مشروع، مو مشروعها
+       الشخصي بس. */
+    const {data:allProj}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id).order('sort_order');
+    MY_PROJECTS=allProj||[];
+  } else {
+    const {data:leads}=await db.from('staff_project_leads').select('project_id, plan_projects(id,name)').eq('staff_id',S.ME.id);
+    MY_PROJECTS=(leads||[]).map(l=>l.plan_projects).filter(Boolean);
+  }
   if(!MY_PROJECTS.length){ $('pmProjectPick').innerHTML='<option value="">لا مشاريع مسنَدة لك بعد</option>'; return; }
   $('pmProjectPick').innerHTML=MY_PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   CUR_PROJECT=MY_PROJECTS[0];
@@ -155,9 +164,12 @@ function bindRespSearch(){
 
 async function loadInitiatives(){
   if(!CUR_PROJECT) return;
-  const {data,error}=await db.from('plan_initiatives').select('id,name').eq('project_id',CUR_PROJECT.id).order('created_at');
+  const {data,error}=await db.from('plan_initiatives').select('id,name,is_strategic').eq('project_id',CUR_PROJECT.id).order('created_at');
   if(error){ toast('تعذر التحميل: '+error.message); return; }
-  INITIATIVES=data||[];
+  /* المبادرات "الاستراتيجية" (الأساسية بالخطة الاستراتيجية) ما تظهر لرئيسة
+     المشروع العادية — تظل لمسؤولة التخطيط الاستراتيجي والقيادة العليا بس. */
+  const canSeeStrategic = S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead;
+  INITIATIVES = canSeeStrategic ? (data||[]) : (data||[]).filter(i=>!i.is_strategic);
   $('pmInitPick').innerHTML='<option value="">اختاري مبادرة موجودة…</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
   $('pmFilterInit').innerHTML='<option value="">كل المبادرات</option>'+INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
   $('pmMergeTarget').innerHTML=INITIATIVES.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
@@ -190,7 +202,8 @@ async function createInitiative(){
   if(!CUR_PROJECT){ toast('لا مشروع محدَّد'); return; }
   const name=clean($('pmNewInitName').value);
   if(!name){ toast('اكتبي اسم المبادرة'); return; }
-  const {data,error}=await db.from('plan_initiatives').insert({project_id:CUR_PROJECT.id, name, created_by:S.ME.id}).select('id,name').single();
+  const canSeeStrategic = S.FLAGS.isAdmin||S.FLAGS.isLead||S.FLAGS.isStrategicPlanLead;
+  const {data,error}=await db.from('plan_initiatives').insert({project_id:CUR_PROJECT.id, name, created_by:S.ME.id, is_strategic:canSeeStrategic}).select('id,name').single();
   if(error){ toast('تعذر الإنشاء: '+error.message); return; }
   $('pmNewInitName').value='';
   toast('تم إنشاء المبادرة');

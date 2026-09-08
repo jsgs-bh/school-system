@@ -2,11 +2,25 @@
    عرض للمراجعة: مجال ← برنامج ← هدف استراتيجي ← معيار ← مؤشر ← هدف
    فرعي. مستخرجة من صورة الخريطة الاستراتيجية الرسمية — راجعيها هنا
    وقارنيها بالأصل قبل ما نربط المشاريع بالأهداف الفرعية. */
-import { db, $, S, registerTab } from './core.js';
+import { db, $, S, clean, toast, bindDrop, readSheet, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="strategicTree" style="display:none">
   <div class="warnbox">هذي البيانات مستخرجة من قراءة صورة الخريطة الاستراتيجية — راجعيها وقارنيها بالأصل، وأخبرينا بأي تصحيح قبل ما نربط المشاريع بالأهداف الفرعية.</div>
+
+  <div class="panel" id="stiPanel" style="display:none">
+    <h3>استيراد المبادرات الأساسية (الخطة الاستراتيجية)</h3>
+    <div class="sub">ملف بعمودين: اسم المشروع (لازم يطابق اسم مشروع موجود بالضبط) + اسم المبادرة. كل مبادرة تُعلَّم تلقائياً "استراتيجية" — ما تظهر لرئيسة المشروع، تظهر بس لك وللقيادة العليا.</div>
+    <div class="dropzone" id="stiDrop"><b id="stiFileLabel">اختاري ملف الإكسل</b><p>اضغطي لاختيار الملف أو اسحبيه هنا</p><input type="file" id="stiFile" hidden accept=".xlsx,.xls"></div>
+    <button class="btn ghost" id="stiTpl" style="width:auto;padding:8px 16px;margin-top:8px">⬇️ تنزيل قالب فاضي</button>
+    <div id="stiPreview" style="display:none;margin-top:14px">
+      <div class="stats"><div class="stat"><b id="stiPv1">0</b><span>مبادرة صالحة</span></div><div class="stat"><b id="stiPv2">0</b><span>مشاريع غير موجودة</span></div></div>
+      <div id="stiWarns"></div>
+      <button class="btn gold" id="stiRun" style="width:auto;padding:10px 24px">تأكيد الاستيراد</button>
+    </div>
+    <div id="stiResult" class="result" style="display:none"></div>
+  </div>
+
   <div id="stTree"></div>
 </div>
 <style>
@@ -20,7 +34,64 @@ $('appView').insertAdjacentHTML('beforeend', `
   .st-subgoal::before{content:"–";position:absolute;right:38px}
 </style>`);
 
+const STI_HEAD=['اسم المشروع','اسم المبادرة'];
+let STI=null;
+
+async function initStrategicImport(){
+  if(!(S.FLAGS.isAdmin||S.FLAGS.isStrategicPlanLead)) return;
+  $('stiPanel').style.display='block';
+  if($('stiDrop').dataset.ready) return;
+  $('stiDrop').dataset.ready='1';
+
+  $('stiTpl').addEventListener('click', async ()=>{
+    const {data:projects}=await db.from('plan_projects').select('name').eq('academic_year_id',S.YEAR.id).order('sort_order');
+    const ws=XLSX.utils.aoa_to_sheet([STI_HEAD, [projects?.[0]?.name||'بإتقاني أرتقي','مبادرة أساسية مثال']]);
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'المبادرات');
+    XLSX.writeFile(wb,'قالب_المبادرات_الأساسية.xlsx');
+  });
+
+  bindDrop($('stiDrop'),$('stiFile'), async file=>{
+    $('stiFileLabel').textContent=file.name;
+    const rows=await readSheet(file);
+    if(!rows.length){ toast('الملف فاضي'); return; }
+    const head=rows[0].map(clean);
+    const colProj=head.findIndex(h=>/مشروع/.test(h));
+    const colInit=head.findIndex(h=>/مبادرة/.test(h));
+    if(colProj<0||colInit<0){ toast('الملف لازم يحتوي عمودي "اسم المشروع" و"اسم المبادرة".'); return; }
+    const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id);
+    const projBy=Object.fromEntries((projects||[]).map(p=>[p.name.trim(),p]));
+    const valid=[], missing=new Set();
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i]; const projName=clean(r[colProj]); const initName=clean(r[colInit]);
+      if(!projName&&!initName) continue;
+      const proj=projBy[projName];
+      if(!proj){ missing.add(projName); continue; }
+      if(!initName) continue;
+      valid.push({project_id:proj.id, name:initName});
+    }
+    STI={valid};
+    $('stiPv1').textContent=valid.length; $('stiPv2').textContent=missing.size;
+    $('stiWarns').innerHTML = missing.size ? `<div class="warnbox">مشاريع غير موجودة بالضبط: ${[...missing].map(m=>'«'+m+'»').join('، ')}</div>` : '';
+    $('stiPreview').style.display='block';
+  });
+
+  $('stiRun').addEventListener('click', async ()=>{
+    if(!STI?.valid?.length){ toast('لا مبادرات صالحة'); return; }
+    const btn=$('stiRun'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
+    try{
+      const rows=STI.valid.map(v=>({project_id:v.project_id, name:v.name, is_strategic:true, created_by:S.ME.id}));
+      const {error}=await db.from('plan_initiatives').insert(rows);
+      if(error) throw error;
+      $('stiResult').style.display='block';
+      $('stiResult').innerHTML=`✅ تم استيراد ${rows.length} مبادرة أساسية بنجاح.`;
+      toast('تم الحفظ');
+    }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
+    finally{ btn.disabled=false; btn.textContent='تأكيد الاستيراد'; }
+  });
+}
+
 async function initTree(){
+  await initStrategicImport();
   if($('stTree').dataset.ready) return;
   $('stTree').dataset.ready='1';
   const {data:domains}=await db.from('strategic_domains').select('id,name,sort_order').eq('academic_year_id',S.YEAR.id).order('sort_order');
