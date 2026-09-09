@@ -1,18 +1,16 @@
 /* violations.js — منظومة المخالفات السلوكية، بحسب استمارة "متابعة المخالفات
-   السلوكية" المعتمدة (٤ فئات، كل فئة فيها أنواع محددة + "أخرى").
-   ثلاث شاشات:
-   1) المعلمة: تسجيل مخالفة + عرض مخالفاتها.
-   2) مسؤولة المخالفات (الإشراف الإداري): مخالفات جديدة، إحصائيات،
-      تنبيهات (٣+ مخالفات لنفس الطالبة، وفئة رابعة تُحوَّل تلقائياً)،
-      المخالفات المحوّلة.
-   3) مكتب الإرشاد الاجتماعي: مخالفات للمتابعة، إحصائيات، أرشيف. */
+   السلوكية" المعتمدة (٤ فئات). تدفق الحالة:
+   جديدة (new) ← اعتماد (approved) أو أرشفة (archived، قابلة للاسترجاع)
+   الفئة ٣/٤ أو ٣+ مخالفات لنفس الطالبة ← محوَّلة (escalated) لمكتب الإرشاد
+   ← مغلقة (closed) بعد متابعة الإرشاد.
+   ثلاث شاشات: المعلمة، مسؤولة المخالفات/الأدمن، مكتب الإرشاد الاجتماعي. */
 import { db, $, S, clean, toast, printHeaderHtml, printWithTitle, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="violTeacher" style="display:none">
   <div class="lm-subnav" id="vtSubnav">
-    <button class="lm-subnav-btn" data-vt="add">➕ تسجيل مخالفة</button>
-    <button class="lm-subnav-btn" data-vt="mine">📋 مخالفاتي</button>
+    <button class="lm-subnav-btn" data-vt="add">➕ إضافة مخالفة</button>
+    <button class="lm-subnav-btn" data-vt="mine">📋 المخالفات المرصودة</button>
   </div>
 
   <div data-vt="add">
@@ -40,20 +38,27 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 
   <div data-vt="mine" style="display:none">
-    <div class="panel"><h3>مخالفاتي المسجَّلة</h3><div id="vMineList"></div></div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <h3 style="margin:0">المخالفات المرصودة (اللي سجّلتيها)</h3>
+        <button class="btn ghost" id="vMinePrint" style="width:auto;padding:8px 18px;font-size:12.5px">🖨️ طباعة تقرير PDF</button>
+      </div>
+      <div id="vMineList"></div>
+    </div>
   </div>
 </div>
 
 <div class="app-main wide" id="violAdmin" style="display:none">
   <div class="lm-subnav" id="vaSubnav">
     <button class="lm-subnav-btn" data-va="new">🆕 مخالفات جديدة</button>
-    <button class="lm-subnav-btn" data-va="stats">📊 إحصائيات</button>
+    <button class="lm-subnav-btn" data-va="stats">📊 متابعة المخالفات</button>
     <button class="lm-subnav-btn" data-va="alerts">🚨 تنبيهات</button>
     <button class="lm-subnav-btn" data-va="escalated">↗️ المخالفات المحوَّلة</button>
+    <button class="lm-subnav-btn" data-va="archive">🗂️ الأرشيف</button>
   </div>
 
   <div data-va="new">
-    <div class="panel"><h3>مخالفات جديدة (بانتظار الإجراء)</h3><div id="vaNewList"></div></div>
+    <div class="panel"><h3>مخالفات جديدة (بانتظار الاعتماد)</h3><div id="vaNewList"></div></div>
   </div>
 
   <div data-va="stats" style="display:none">
@@ -62,17 +67,18 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div data-va="alerts" style="display:none">
     <div class="panel">
-      <h3>طالبات لديهن ٣ مخالفات فأكثر</h3>
+      <h3>تنبيهات</h3>
+      <div class="sub">طالبات لديهن ٣ مخالفات فأكثر، أو مخالفة من الفئة الثالثة/الرابعة (تظهر بالأحمر — محوَّلة تلقائياً لمكتب الإرشاد والقيادة العليا).</div>
       <div id="vaRepeatList"></div>
-    </div>
-    <div class="panel">
-      <h3>مخالفات الفئة الرابعة (محوَّلة تلقائياً لمكتب الإرشاد)</h3>
-      <div id="vaTier4List"></div>
     </div>
   </div>
 
   <div data-va="escalated" style="display:none">
     <div class="panel"><h3>المخالفات المحوَّلة لمكتب الإرشاد الاجتماعي</h3><div id="vaEscList"></div></div>
+  </div>
+
+  <div data-va="archive" style="display:none">
+    <div class="panel"><h3>الأرشيف</h3><div id="vaArchiveList"></div></div>
   </div>
 
   <div id="vaStudentModal" class="viol-modal" style="display:none">
@@ -109,12 +115,11 @@ $('appView').insertAdjacentHTML('beforeend', `
   .lm-subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;border-bottom:2px solid var(--line);padding-bottom:10px}
   .lm-subnav-btn{background:var(--sand);border:1.5px solid var(--line);border-radius:9px;padding:9px 16px;font:inherit;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer}
   .lm-subnav-btn.active{background:var(--gold);border-color:var(--gold);color:#fff}
-  .viol-picked{background:var(--sand);border-radius:9px;padding:10px 14px;margin:6px 0 14px;font-size:13.5px;display:flex;justify-content:space-between;align-items:center}
-  .viol-picked button{background:none;border:none;color:var(--err);cursor:pointer;font-size:13px}
   .viol-cats{display:flex;gap:8px;flex-wrap:wrap}
   .viol-cat-btn{border:2px solid var(--line);border-radius:10px;padding:10px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:#fff}
   .viol-cat-btn.on{border-color:var(--navy);box-shadow:0 0 0 2px var(--navy) inset}
   .viol-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+  .viol-card.viol-danger{background:#fff3f2;border-color:#e57373}
   .viol-card-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px}
   .viol-tag{display:inline-block;border-radius:99px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#3a2e00}
   .viol-meta{font-size:12px;color:#6b7683}
@@ -124,8 +129,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   .viol-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center}
   .viol-modal-box{background:#fff;border-radius:14px;padding:22px;max-width:640px;width:92%;max-height:85vh;overflow:auto;position:relative}
   .viol-modal-close{position:absolute;top:12px;left:12px;background:none;border:none;font-size:18px;cursor:pointer;color:#8a93a0}
-  .viol-repeat-row{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer}
-  .viol-repeat-row:hover{border-color:var(--gold);background:var(--gold-soft)}
+  .viol-repeat-row{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+  .viol-repeat-row.danger{background:#fff3f2;border-color:#e57373}
+  .viol-repeat-row .viol-name{cursor:pointer;flex:1}
+  .viol-repeat-row .viol-name:hover{text-decoration:underline}
   .viol-print-tbl{width:100%;border-collapse:collapse;font-size:10.5pt;margin-top:8px}
   .viol-print-tbl th{background:#eef1f5;border:1px solid #333;padding:6px}
   .viol-print-tbl td{border:1px solid #333;padding:6px;text-align:center}
@@ -137,7 +144,8 @@ $('appView').insertAdjacentHTML('beforeend', `
 </style>`);
 
 const TIER_COLORS={1:'#c8e6cf',2:'#ffe6a8',3:'#ffc79e',4:'#f3aaa8'};
-let CATEGORIES=[], TYPES=[], PICKED_STU=null;
+const STATUS_LABEL={new:'جديدة',approved:'معتمدة',admin_action:'تحت الإجراء',archived:'مؤرشَفة',escalated:'محوَّلة للإرشاد',guidance_action:'تحت متابعة الإرشاد',closed:'مغلقة'};
+let CATEGORIES=[], TYPES=[];
 
 async function loadCatsTypes(){
   if(CATEGORIES.length) return;
@@ -147,10 +155,7 @@ async function loadCatsTypes(){
   ]);
   CATEGORIES=cats||[]; TYPES=types||[];
 }
-
-function tierBadge(cat){
-  return `<span class="viol-tag" style="background:${TIER_COLORS[cat?.tier]||'#eee'}">${cat?.name||'—'}</span>`;
-}
+function tierBadge(cat){ return `<span class="viol-tag" style="background:${TIER_COLORS[cat?.tier]||'#eee'}">${cat?.name||'—'}</span>`; }
 
 /* ============ شاشة المعلمة ============ */
 function switchVt(tab){
@@ -165,13 +170,13 @@ async function initViolTeacher(){
   await loadCatsTypes();
   $('vtSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.addEventListener('click',()=>switchVt(b.dataset.vt)));
   switchVt('add');
+  bindMinePrint();
 
   $('vAddCats').innerHTML=CATEGORIES.map(c=>`<button type="button" class="viol-cat-btn" data-cat="${c.id}" style="border-color:${TIER_COLORS[c.tier]}">${c.name}</button>`).join('');
   $('vAddCats').querySelectorAll('.viol-cat-btn').forEach(b=>b.addEventListener('click',()=>{
     $('vAddCats').querySelectorAll('.viol-cat-btn').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');
-    const catId=b.dataset.cat;
-    const opts=TYPES.filter(t=>t.category_id===catId);
+    const opts=TYPES.filter(t=>t.category_id===b.dataset.cat);
     $('vAddType').innerHTML=opts.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
     $('vAddTypeWrap').style.display='block';
   }));
@@ -184,13 +189,12 @@ async function initViolTeacher(){
     if(!secId){ $('vAddStuPick').innerHTML='<option value="">اختاري الصف أولاً…</option>'; return; }
     const {data}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
     const stus=(data||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
-    $('vAddStuPick').innerHTML='<option value="">اختاري الطالبة…</option>'+stus.map(s=>`<option value="${s.id}" data-acad="${s.academic_number}" data-name="${s.full_name}">${s.full_name} (${s.academic_number})</option>`).join('');
+    $('vAddStuPick').innerHTML='<option value="">اختاري الطالبة…</option>'+stus.map(s=>`<option value="${s.id}">${s.full_name} (${s.academic_number})</option>`).join('');
     $('vAddStuPick').disabled=false;
   });
 
   $('vAddSave').addEventListener('click', async ()=>{
     const secId=$('vAddSecPick').value;
-    const stuOpt=$('vAddStuPick').selectedOptions[0];
     if(!secId||!$('vAddStuPick').value){ toast('اختاري الصف ثم الطالبة'); return; }
     const catBtn=$('vAddCats').querySelector('.viol-cat-btn.on');
     if(!catBtn){ toast('اختاري الفئة'); return; }
@@ -199,14 +203,17 @@ async function initViolTeacher(){
     const notes=clean($('vAddNotes').value);
     const btn=$('vAddSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
     try{
-      const isTier4=cat.tier===4;
+      /* الفئتان الثالثة والرابعة تُحوَّل تلقائياً ومباشرة لمكتب الإرشاد
+         الاجتماعي، وتظهر بالتنبيهات بالأحمر، بدون ما تمر على "مخالفات
+         جديدة" — القيادة العليا تشوفها بعد ضمن نفس شاشة التنبيهات. */
+      const isHighTier=cat.tier>=3;
       const {data:saved,error}=await db.from('violations').insert({
         academic_year_id:S.YEAR.id, student_id:$('vAddStuPick').value, section_id:secId, category_id:cat.id, type_id:typeId,
         reported_by:S.ME.id, notes:notes||null, date:new Date().toISOString().slice(0,10),
-        status:isTier4?'escalated':'new', escalated_at:isTier4?new Date().toISOString():null, escalated_by:isTier4?S.ME.id:null
+        status:isHighTier?'escalated':'new', escalated_at:isHighTier?new Date().toISOString():null, escalated_by:isHighTier?S.ME.id:null
       }).select('code').single();
       if(error) throw error;
-      toast(`${isTier4?'تم الحفظ — مخالفة فئة رابعة تُحوَّل مباشرة لمكتب الإرشاد':'تم حفظ المخالفة'} — رمزها: #${saved.code}`);
+      toast(`${isHighTier?'تم الحفظ — مخالفة من فئة عالية تُحوَّل مباشرة لمكتب الإرشاد':'تم حفظ المخالفة'} — رمزها: #${saved.code}`);
       $('vAddSecPick').value=''; $('vAddStuPick').innerHTML='<option value="">اختاري الصف أولاً…</option>'; $('vAddStuPick').disabled=true;
       $('vAddNotes').value=''; catBtn.classList.remove('on'); $('vAddTypeWrap').style.display='none';
     }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
@@ -214,18 +221,31 @@ async function initViolTeacher(){
   });
 }
 
+let MINE_ROWS=[];
 async function loadMineViolations(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), violation_categories(name,tier), violation_types(name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)')
     .eq('reported_by',S.ME.id).order('created_at',{ascending:false});
   if(error){ $('vMineList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
-  if(!(data||[]).length){ $('vMineList').innerHTML='<div class="empty-day">ما سجّلتِ أي مخالفة بعد.</div>'; return; }
-  $('vMineList').innerHTML=data.map(v=>violCard(v,false)).join('');
+  MINE_ROWS=data||[];
+  if(!MINE_ROWS.length){ $('vMineList').innerHTML='<div class="empty-day">ما سجّلتِ أي مخالفة بعد.</div>'; return; }
+  $('vMineList').innerHTML=MINE_ROWS.map(v=>violCard(v)).join('');
 }
 
-const STATUS_LABEL={new:'جديدة',admin_action:'تحت الإجراء',archived:'مؤرشَفة',escalated:'محوَّلة للإرشاد',guidance_action:'تحت متابعة الإرشاد',closed:'مغلقة'};
+function bindMinePrint(){
+  if($('vMinePrint').dataset.ready) return;
+  $('vMinePrint').dataset.ready='1';
+  $('vMinePrint').addEventListener('click',()=>{
+    if(!MINE_ROWS.length){ toast('لا مخالفات للطباعة'); return; }
+    $('printAreaViol').innerHTML=`${printHeaderHtml('تقرير المخالفات المرصودة')}
+      <table class="viol-print-tbl"><tr><th>الرمز</th><th>الطالبة</th><th>الشعبة</th><th>الفئة</th><th>النوع</th><th>التاريخ</th><th>الحالة</th></tr>
+      ${MINE_ROWS.map(v=>`<tr><td>#${v.code}</td><td>${v.students?.full_name||'—'}</td><td>${v.sections?.code||'—'}</td><td>${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td>${v.date}</td><td>${STATUS_LABEL[v.status]||v.status}</td></tr>`).join('')}
+      </table>`;
+    printWithTitle('تقرير_مخالفاتي','printAreaViol');
+  });
+}
 
-function violCard(v, showActions){
-  return `<div class="viol-card">
+function violCard(v){
+  return `<div class="viol-card ${v.violation_categories?.tier>=3?'viol-danger':''}">
     <div class="viol-card-head">
       <div><b>${v.students?.full_name||'—'}</b> <span class="viol-meta">(${v.students?.academic_number||''}) — رمز #${v.code}</span></div>
       ${tierBadge(v.violation_categories)}
@@ -248,6 +268,7 @@ function switchVa(tab){
   if(tab==='stats') initStatsPanel('vaStatsPanel');
   if(tab==='alerts') loadAlerts();
   if(tab==='escalated') loadEscalatedList();
+  if(tab==='archive') loadArchiveList();
 }
 
 async function initViolAdmin(){
@@ -263,7 +284,7 @@ async function loadNewViolations(){
   const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)')
     .eq('status','new').order('created_at',{ascending:false});
   if(error){ $('vaNewList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
-  if(!(data||[]).length){ $('vaNewList').innerHTML='<div class="empty-day">لا مخالفات جديدة بانتظار الإجراء 🎉</div>'; return; }
+  if(!(data||[]).length){ $('vaNewList').innerHTML='<div class="empty-day">لا مخالفات جديدة بانتظار الاعتماد 🎉</div>'; return; }
   $('vaNewList').innerHTML=data.map(v=>`
     <div class="viol-card">
       <div class="viol-card-head">
@@ -273,58 +294,95 @@ async function loadNewViolations(){
       <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · رصدتها: ${v.staff?.full_name||''}</div>
       ${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}
       <div class="viol-actions">
-        <textarea placeholder="الإجراء المتخذ…" data-note="${v.id}"></textarea>
-        <button class="btn gold" data-save="${v.id}" style="width:auto;padding:8px 18px;font-size:12.5px">حفظ الإجراء</button>
-        <button class="btn ghost" data-archive="${v.id}" style="width:auto;padding:8px 18px;font-size:12.5px">أرشفة (تجاوز)</button>
+        <button class="btn gold" data-approve="${v.id}" style="width:auto;padding:8px 18px;font-size:12.5px">✔️ اعتماد</button>
+        <button class="btn ghost" data-archive="${v.id}" style="width:auto;padding:8px 18px;font-size:12.5px">🗂️ أرشفة</button>
       </div>
     </div>`).join('');
-  $('vaNewList').querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click', async ()=>{
-    const id=b.dataset.save; const text=clean($('vaNewList').querySelector(`textarea[data-note="${id}"]`).value);
-    if(!text){ toast('اكتبي الإجراء المتخذ'); return; }
-    const {error}=await db.from('violations').update({status:'admin_action', admin_action_text:text, admin_action_by:S.ME.id, admin_action_at:new Date().toISOString(), closed_at:new Date().toISOString()}).eq('id',id);
-    if(error){ toast('تعذر الحفظ: '+error.message); return; }
-    toast('تم حفظ الإجراء'); loadNewViolations();
+  $('vaNewList').querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click', async ()=>{
+    const {error}=await db.from('violations').update({status:'approved', admin_action_by:S.ME.id, admin_action_at:new Date().toISOString()}).eq('id',b.dataset.approve);
+    if(error){ toast('تعذر: '+error.message); return; }
+    toast('تم اعتماد المخالفة'); loadNewViolations();
   }));
   $('vaNewList').querySelectorAll('[data-archive]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('أرشفة هذي المخالفة (تجاوز بدون إجراء)؟')) return;
+    if(!confirm('أرشفة هذي المخالفة؟')) return;
     const {error}=await db.from('violations').update({status:'archived'}).eq('id',b.dataset.archive);
     if(error){ toast('تعذر: '+error.message); return; }
     toast('تم الأرشفة'); loadNewViolations();
   }));
 }
 
+async function loadArchiveList(){
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)')
+    .eq('status','archived').order('created_at',{ascending:false});
+  if(error){ $('vaArchiveList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  if(!(data||[]).length){ $('vaArchiveList').innerHTML='<div class="empty-day">الأرشيف فاضي حالياً.</div>'; return; }
+  $('vaArchiveList').innerHTML=data.map(v=>`
+    <div class="viol-card">
+      <div class="viol-card-head">
+        <div><b>${v.students?.full_name||'—'}</b> <span class="viol-meta">(${v.students?.academic_number||''} — ${v.sections?.code||''}) — رمز #${v.code}</span></div>
+        ${tierBadge(v.violation_categories)}
+      </div>
+      <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · رصدتها: ${v.staff?.full_name||''}</div>
+      ${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}
+      <div class="viol-actions">
+        <button class="btn gold" data-restore="${v.id}" style="width:auto;padding:8px 18px;font-size:12.5px">↩️ استرجاع لمخالفات جديدة</button>
+      </div>
+    </div>`).join('');
+  $('vaArchiveList').querySelectorAll('[data-restore]').forEach(b=>b.addEventListener('click', async ()=>{
+    const {error}=await db.from('violations').update({status:'new'}).eq('id',b.dataset.restore);
+    if(error){ toast('تعذر: '+error.message); return; }
+    toast('تم الاسترجاع — راجعيها بتبويب "مخالفات جديدة"'); loadArchiveList();
+  }));
+}
+
 async function loadAlerts(){
-  const {data,error}=await db.from('violations').select('student_id, students(full_name,academic_number), sections(code)')
-    .not('status','in','(archived)');
+  const {data,error}=await db.from('violations').select('student_id, students(full_name,academic_number), sections(code), violation_categories(tier)')
+    .neq('status','archived');
   if(error){ $('vaRepeatList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   const byStu={};
-  for(const v of data||[]){ const k=v.student_id; (byStu[k] ??= {count:0, s:v.students}).count++; }
-  const repeats=Object.entries(byStu).filter(([,v])=>v.count>=3).sort((a,b)=>b[1].count-a[1].count);
-  $('vaRepeatList').innerHTML=repeats.length
-    ? repeats.map(([sid,v])=>`<div class="viol-repeat-row" data-stu="${sid}"><span>${v.s?.full_name} <small class="viol-meta">(${v.s?.academic_number} — ${v.s?.sections?.code||''})</small></span><b>${v.count} مخالفات</b></div>`).join('')
-    : '<div class="empty-day">لا طالبات وصلن ٣ مخالفات فأكثر حالياً.</div>';
-  $('vaRepeatList').querySelectorAll('.viol-repeat-row').forEach(el=>el.addEventListener('click',()=>openStudentModal(el.dataset.stu)));
-
-  const {data:t4}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_types(name), staff:reported_by(full_name)')
-    .eq('status','escalated').order('escalated_at',{ascending:false});
-  const onlyAutoT4=(t4||[]).filter(v=>!v.admin_action_text); // اللي انحولت تلقائياً (مو عن طريق التكرار)
-  $('vaTier4List').innerHTML=onlyAutoT4.length
-    ? onlyAutoT4.map(v=>`<div class="viol-card"><div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">${v.students?.academic_number} — ${v.sections?.code||''} — رمز #${v.code}</span></div><div class="viol-meta">${v.violation_types?.name||''} · ${v.date} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}<div class="viol-meta">↗️ محوَّلة مباشرة لمكتب الإرشاد الاجتماعي — لا يوجد إجراء إشرافي مطلوب هنا.</div></div>`).join('')
-    : '<div class="empty-day">لا مخالفات فئة رابعة حالياً.</div>';
+  for(const v of data||[]){
+    const k=v.student_id;
+    const e=(byStu[k] ??= {count:0, highTier:false, s:v.students, sec:v.sections});
+    e.count++;
+    if((v.violation_categories?.tier||0)>=3) e.highTier=true;
+  }
+  const alerts=Object.entries(byStu).filter(([,v])=>v.count>=3||v.highTier)
+    .sort((a,b)=>(b[1].highTier-a[1].highTier)||(b[1].count-a[1].count));
+  $('vaRepeatList').innerHTML=alerts.length
+    ? alerts.map(([sid,v])=>`
+      <div class="viol-repeat-row ${v.highTier?'danger':''}">
+        <span class="viol-name" data-stu="${sid}">${v.s?.full_name} <small class="viol-meta">(${v.s?.academic_number} — ${v.sec?.code||''}) — ${v.count} مخالفات${v.highTier?' — فئة عالية':''}</small></span>
+        ${v.highTier ? '<small class="viol-meta">↗️ محوَّلة تلقائياً</small>' : `<button class="btn gold" data-transfer="${sid}" style="width:auto;padding:7px 16px;font-size:12px">تحويل لمكتب الإرشاد</button>`}
+      </div>`).join('')
+    : '<div class="empty-day">لا تنبيهات حالياً.</div>';
+  $('vaRepeatList').querySelectorAll('.viol-name, [data-transfer]').forEach(el=>el.addEventListener('click',()=>openStudentModal(el.dataset.stu||el.dataset.transfer)));
 }
 
 async function openStudentModal(studentId){
   const {data,error}=await db.from('violations').select('*, violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)')
-    .eq('student_id',studentId).not('status','in','(archived)').order('date',{ascending:false});
+    .eq('student_id',studentId).neq('status','archived').order('date',{ascending:false});
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const {data:stu}=await db.from('students').select('full_name,academic_number,enrollments!inner(section_id,to_date,sections(code))').eq('id',studentId).is('enrollments.to_date',null).single();
   const stuSec=stu.enrollments?.[0]?.sections?.code||'';
+  const existingAction=(data||[]).find(v=>v.admin_action_text)?.admin_action_text||'';
   $('vaModalBody').innerHTML=`
     <h3>${stu.full_name} <small class="viol-meta">(${stu.academic_number} — ${stuSec})</small></h3>
-    ${(data||[]).map(v=>`<div class="viol-card"><div class="viol-card-head">${tierBadge(v.violation_categories)}<span class="viol-meta">${v.date} — رمز #${v.code}</span></div><div class="viol-meta">${v.violation_types?.name||''} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}</div>`).join('')}
-    <div class="field"><label>إجراءات الإشراف الإداري</label><textarea id="vaModalAction" rows="3" placeholder="اكتبي الإجراء المتخذ مع الطالبة…"></textarea></div>
-    <button class="btn gold" id="vaModalEscalate" style="width:auto;padding:10px 22px">تحويل الطالبة إلى مكتب الإرشاد الاجتماعي</button>
+    ${(data||[]).map(v=>`<div class="viol-card ${v.violation_categories?.tier>=3?'viol-danger':''}"><div class="viol-card-head">${tierBadge(v.violation_categories)}<span class="viol-meta">${v.date} — رمز #${v.code}</span></div><div class="viol-meta">${v.violation_types?.name||''} · رصدتها: ${v.staff?.full_name||''}</div>${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}</div>`).join('')}
+    <div class="field"><label>إجراءات الإشراف الإداري</label><textarea id="vaModalAction" rows="3" placeholder="اكتبي الإجراء المتخذ مع الطالبة…">${existingAction}</textarea></div>
+    <div class="viol-actions">
+      <button class="btn ghost" id="vaModalPrint" style="width:auto;padding:10px 20px">🖨️ طباعة التقرير</button>
+      <button class="btn gold" id="vaModalEscalate" style="width:auto;padding:10px 22px">تحويل الطالبة إلى مكتب الإرشاد الاجتماعي</button>
+    </div>
   `;
+  $('vaModalPrint').addEventListener('click',()=>{
+    $('printAreaViol').innerHTML=`${printHeaderHtml(`تقرير مخالفات الطالبة: ${stu.full_name}`)}
+      <p>الرقم الأكاديمي: ${stu.academic_number} — الشعبة: ${stuSec}</p>
+      <table class="viol-print-tbl"><tr><th>الرمز</th><th>الفئة</th><th>النوع</th><th>التاريخ</th><th>رصدتها</th></tr>
+      ${(data||[]).map(v=>`<tr><td>#${v.code}</td><td>${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td>${v.date}</td><td>${v.staff?.full_name||''}</td></tr>`).join('')}
+      </table>
+      ${$('vaModalAction').value?`<p><b>إجراءات الإشراف الإداري:</b> ${clean($('vaModalAction').value)}</p>`:''}`;
+    printWithTitle(`تقرير_مخالفات_${stu.full_name}`,'printAreaViol');
+  });
   $('vaModalEscalate').addEventListener('click', async ()=>{
     const text=clean($('vaModalAction').value);
     if(!text){ toast('اكتبي إجراءات الإشراف الإداري أولاً'); return; }
@@ -380,7 +438,7 @@ async function loadGuidancePending(){
   if(error){ $('vgPendingList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   if(!(data||[]).length){ $('vgPendingList').innerHTML='<div class="empty-day">لا مخالفات بانتظار المتابعة 🎉</div>'; return; }
   $('vgPendingList').innerHTML=data.map(v=>`
-    <div class="viol-card">
+    <div class="viol-card ${v.violation_categories?.tier>=3?'viol-danger':''}">
       <div class="viol-card-head"><b>${v.students?.full_name}</b><span class="viol-meta">رمز #${v.code}</span>${tierBadge(v.violation_categories)}</div>
       <div class="viol-meta">${v.violation_types?.name||''} · ${v.date} — ${v.sections?.code||''}</div>
       ${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}
@@ -421,16 +479,13 @@ async function initStatsPanel(panelId){
   panel.dataset.ready='1';
   const {data:sections}=await db.from('sections').select('id,code,level').eq('academic_year_id',S.YEAR.id).order('code');
   panel.innerHTML=`
-    <h3>إحصائيات المخالفات</h3>
+    <h3>متابعة المخالفات</h3>
     <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
       <input type="text" id="${panelId}-stu" placeholder="اسم طالبة…" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
       <select id="${panelId}-sec"><option value="">كل الشعب</option>${(sections||[]).map(s=>`<option value="${s.id}">${s.code}</option>`).join('')}</select>
       <select id="${panelId}-level"><option value="">كل المستويات</option><option value="1">الأول</option><option value="2">الثاني</option><option value="3">الثالث</option></select>
       <select id="${panelId}-cat"><option value="">كل الفئات</option>${CATEGORIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select>
       <select id="${panelId}-type"><option value="">كل الأنواع</option>${TYPES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}</select>
-      <input type="month" id="${panelId}-month">
-      <input type="date" id="${panelId}-from" title="من تاريخ">
-      <input type="date" id="${panelId}-to" title="إلى تاريخ">
       <button class="btn gold" id="${panelId}-go" style="width:auto;padding:9px 20px">فرز</button>
       <button class="btn ghost" id="${panelId}-print" style="width:auto;padding:9px 20px">🖨️ PDF</button>
       <button class="btn ghost" id="${panelId}-xls" style="width:auto;padding:9px 20px">⬇️ Excel</button>
@@ -451,15 +506,9 @@ async function runStats(panelId){
   const level=$(`${panelId}-level`).value;
   const cat=$(`${panelId}-cat`).value;
   const type=$(`${panelId}-type`).value;
-  const month=$(`${panelId}-month`).value;
-  const from=$(`${panelId}-from`).value;
-  const to=$(`${panelId}-to`).value;
   if(sec) q=q.eq('section_id',sec);
   if(cat) q=q.eq('category_id',cat);
   if(type) q=q.eq('type_id',type);
-  if(from) q=q.gte('date',from);
-  if(to) q=q.lte('date',to);
-  if(month){ const [y,m]=month.split('-'); const start=`${y}-${m}-01`; const end=new Date(+y,+m,0).toISOString().slice(0,10); q=q.gte('date',start).lte('date',end); }
   const {data,error}=await q.order('date',{ascending:false});
   if(error){ $(`${panelId}-tbl`).innerHTML=`<tr><td>تعذر التحميل: ${error.message}</td></tr>`; return; }
   let rows=data||[];
