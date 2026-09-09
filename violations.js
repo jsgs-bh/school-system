@@ -113,7 +113,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 
 <style>
   .lm-subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;border-bottom:2px solid var(--line);padding-bottom:10px}
-  .lm-subnav-btn{background:var(--sand);border:1.5px solid var(--line);border-radius:9px;padding:9px 16px;font:inherit;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer}
+  .lm-subnav-btn{background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:9px 16px;font:inherit;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lm-subnav-btn.active{background:var(--gold);border-color:var(--gold);color:#fff}
   .viol-cats{display:flex;gap:8px;flex-wrap:wrap}
   .viol-cat-btn{border:2px solid var(--line);border-radius:10px;padding:10px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:#fff}
