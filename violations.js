@@ -159,7 +159,7 @@ function tierBadge(cat){ return `<span class="viol-tag" style="background:${TIER
 
 /* ============ شاشة المعلمة ============ */
 function switchVt(tab){
-  document.querySelectorAll('#violTeacher [data-vt]').forEach(el=>{ if(el.id!=='vtSubnav') el.style.display=el.dataset.vt===tab?'block':'none'; });
+  document.querySelectorAll('#violTeacher > [data-vt]').forEach(el=>{ el.style.display=el.dataset.vt===tab?'block':'none'; });
   $('vtSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active',b.dataset.vt===tab));
   if(tab==='mine') loadMineViolations();
 }
@@ -262,7 +262,7 @@ registerTab({id:'violTeacher', label:'المخالفات', group:'violations', g
 
 /* ============ شاشة مسؤولة المخالفات ============ */
 function switchVa(tab){
-  document.querySelectorAll('#violAdmin [data-va]').forEach(el=>{ if(el.id!=='vaSubnav') el.style.display=el.dataset.va===tab?'block':'none'; });
+  document.querySelectorAll('#violAdmin > [data-va]').forEach(el=>{ el.style.display=el.dataset.va===tab?'block':'none'; });
   $('vaSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active',b.dataset.va===tab));
   if(tab==='new') loadNewViolations();
   if(tab==='stats') initStatsPanel('vaStatsPanel');
@@ -417,7 +417,7 @@ registerTab({id:'violAdmin', label:'إدارة المخالفات', group:'viola
 
 /* ============ شاشة مكتب الإرشاد الاجتماعي ============ */
 function switchVg(tab){
-  document.querySelectorAll('#violGuidance [data-vg]').forEach(el=>{ if(el.id!=='vgSubnav') el.style.display=el.dataset.vg===tab?'block':'none'; });
+  document.querySelectorAll('#violGuidance > [data-vg]').forEach(el=>{ el.style.display=el.dataset.vg===tab?'block':'none'; });
   $('vgSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active',b.dataset.vg===tab));
   if(tab==='pending') loadGuidancePending();
   if(tab==='stats') initStatsPanel('vgStatsPanel');
