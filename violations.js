@@ -420,17 +420,42 @@ function groupByBatch(rows){
   return Object.values(groups).sort((a,b)=>(b.escalated_at||'').localeCompare(a.escalated_at||''));
 }
 
+async function printBatchReport(studentId, escalatedAt){
+  const {data:rows,error}=await db.from('violations').select('*, violation_categories(name,tier), violation_types(name), staff:admin_action_by(full_name)')
+    .eq('student_id',studentId).eq('escalated_at',escalatedAt);
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  const {data:stu}=await db.from('students').select('full_name,academic_number,enrollments!inner(section_id,to_date,sections(code))').eq('id',studentId).is('enrollments.to_date',null).single();
+  const stuSec=stu?.enrollments?.[0]?.sections?.code||'';
+  const v0=(rows||[])[0];
+  const officerName=v0?.staff?.full_name||'—';
+  $('printAreaViol').innerHTML=`
+    ${printHeaderHtml('استمارة متابعة المخالفات السلوكية')}
+    <p style="font-size:13pt"><b>اسم الطالبة:</b> ${stu?.full_name||''} &nbsp;&nbsp; <b>الصف:</b> ${stuSec} &nbsp;&nbsp; <b>الرقم الأكاديمي:</b> ${stu?.academic_number||''}</p>
+    <p style="font-size:13pt"><b>تاريخ تحويل الطالبة للمكتب:</b> ${new Date(escalatedAt).toLocaleDateString('ar')}</p>
+    <h4>تفاصيل المخالفات</h4>
+    <table class="viol-print-tbl"><tr><th>الرمز</th><th>الفئة</th><th>النوع</th><th>التاريخ</th></tr>
+      ${(rows||[]).map(v=>`<tr><td>#${v.code}</td><td>${v.violation_categories?.name||''}</td><td>${v.violation_types?.name||''}</td><td>${v.date}</td></tr>`).join('')}
+    </table>
+    ${v0?.admin_action_text?`<p style="font-size:13pt"><b>إجراءات الإشراف الإداري:</b> ${v0.admin_action_text}</p>`:''}
+    ${v0?.guidance_action_text?`<p style="font-size:13pt"><b>إجراءات المكتب (الإرشاد الاجتماعي):</b> ${v0.guidance_action_text}</p>`:''}
+    <div class="shared-print-footer"><div><b>مسؤولة المخالفات</b>${officerName}</div></div>`;
+  printWithTitle(`استمارة_متابعة_${stu?.full_name||''}`,'printAreaViol');
+}
+
 async function loadEscalatedList(){
   const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id)
     .in('status',['escalated','guidance_action','closed']).order('escalated_at',{ascending:false});
   if(error){ $('vaEscList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   const batches=groupByBatch(data||[]);
   $('vaEscList').innerHTML=batches.length ? batches.map(b=>`
-    <div class="viol-repeat-row" data-batch-stu="${b.student_id}" data-batch-at="${b.escalated_at}">
-      <span class="viol-name">${b.s?.full_name} <small class="viol-meta">(${b.rows.length} مخالفات محوَّلة — ${new Date(b.escalated_at).toLocaleDateString('ar')}) — الحالة: ${STATUS_LABEL[b.rows[0].status]}</small></span>
-      <small class="viol-meta">▸ اضغطي لعرض التفاصيل</small>
+    <div class="viol-repeat-row">
+      <span class="viol-name" data-batch-stu="${b.student_id}" data-batch-at="${b.escalated_at}">${b.s?.full_name} <small class="viol-meta">(${b.rows.length} مخالفات محوَّلة — ${new Date(b.escalated_at).toLocaleDateString('ar')}) — الحالة: ${STATUS_LABEL[b.rows[0].status]}</small></span>
+      <button class="btn ghost" data-print-batch="${b.student_id}|${b.escalated_at}" style="width:auto;padding:7px 14px;font-size:12px">🖨️ طباعة</button>
     </div>`).join('') : '<div class="empty-day">لا مخالفات محوَّلة حالياً.</div>';
   $('vaEscList').querySelectorAll('[data-batch-stu]').forEach(el=>el.addEventListener('click',()=>openBatchModal(el.dataset.batchStu, el.dataset.batchAt)));
+  $('vaEscList').querySelectorAll('[data-print-batch]').forEach(el=>el.addEventListener('click',()=>{
+    const [sid,eat]=el.dataset.printBatch.split('|'); printBatchReport(sid,eat);
+  }));
 }
 
 /* عرض دفعة تحويل محدّدة (قراءة فقط، من "المخالفات المحوَّلة") */
@@ -446,7 +471,9 @@ async function openBatchModal(studentId, escalatedAt){
     ${v0?.admin_action_text?`<div class="viol-notes"><b>إجراءات الإشراف الإداري:</b> ${v0.admin_action_text}</div>`:''}
     ${v0?.guidance_action_text?`<div class="viol-notes"><b>إجراء الإرشاد الاجتماعي:</b> ${v0.guidance_action_text}</div>`:''}
     <div class="viol-meta" style="margin-top:8px">الحالة: ${STATUS_LABEL[v0?.status]||''}</div>
+    <button class="btn ghost" id="vaBatchPrint" style="width:auto;padding:9px 20px;margin-top:10px">🖨️ طباعة التقرير</button>
   `;
+  $('vaBatchPrint').addEventListener('click',()=>printBatchReport(studentId,escalatedAt));
   $('vaStudentModal').style.display='flex';
 }
 
@@ -479,7 +506,7 @@ async function loadGuidancePending(){
   $('vgPendingList').innerHTML=batches.map(b=>{
     const hasHigh=b.rows.some(v=>v.violation_categories?.tier>=3);
     return `<div class="viol-card ${hasHigh?'viol-danger':''}">
-      <div class="viol-card-head"><b>${b.s?.full_name}</b><span class="viol-meta">${b.rows.length} مخالفات — ${new Date(b.escalated_at).toLocaleDateString('ar')}</span></div>
+      <div class="viol-card-head"><b>${b.s?.full_name}</b><span class="viol-meta">${b.rows.length} مخالفات — ${new Date(b.escalated_at).toLocaleDateString('ar')}</span><button class="btn ghost" data-print-batch="${b.student_id}|${b.escalated_at}" style="width:auto;padding:6px 14px;font-size:12px">🖨️ طباعة</button></div>
       ${b.rows.map(v=>`<div class="viol-meta">#${v.code} — ${tierBadge(v.violation_categories)} ${v.violation_types?.name||''} · ${v.date}${v.notes?' — '+v.notes:''}</div>`).join('')}
       ${b.rows[0].admin_action_text?`<div class="viol-notes"><b>إجراء الإشراف الإداري:</b> ${b.rows[0].admin_action_text}</div>`:''}
       <div class="viol-actions">
@@ -496,6 +523,9 @@ async function loadGuidancePending(){
     if(error){ toast('تعذر الحفظ: '+error.message); return; }
     toast('تم إغلاق المتابعة'); loadGuidancePending();
   }));
+  $('vgPendingList').querySelectorAll('[data-print-batch]').forEach(el=>el.addEventListener('click',()=>{
+    const [sid,eat]=el.dataset.printBatch.split('|'); printBatchReport(sid,eat);
+  }));
 }
 
 async function loadGuidanceArchive(){
@@ -505,10 +535,13 @@ async function loadGuidanceArchive(){
   const batches=groupByBatch(data||[]);
   $('vgArchiveList').innerHTML=batches.length ? batches.map(b=>`
     <div class="viol-card">
-      <div class="viol-card-head"><b>${b.s?.full_name}</b><span class="viol-meta">${b.rows.length} مخالفات — ${new Date(b.escalated_at).toLocaleDateString('ar')}</span></div>
+      <div class="viol-card-head"><b>${b.s?.full_name}</b><span class="viol-meta">${b.rows.length} مخالفات — ${new Date(b.escalated_at).toLocaleDateString('ar')}</span><button class="btn ghost" data-print-batch="${b.student_id}|${b.escalated_at}" style="width:auto;padding:6px 14px;font-size:12px">🖨️ طباعة</button></div>
       ${b.rows.map(v=>`<div class="viol-meta">#${v.code} — ${tierBadge(v.violation_categories)} ${v.violation_types?.name||''} · ${v.date}</div>`).join('')}
       <div class="viol-notes"><b>إجراء الإرشاد الاجتماعي:</b> ${b.rows[0].guidance_action_text}</div>
     </div>`).join('') : '<div class="empty-day">لا مخالفات مؤرشَفة بعد.</div>';
+  $('vgArchiveList').querySelectorAll('[data-print-batch]').forEach(el=>el.addEventListener('click',()=>{
+    const [sid,eat]=el.dataset.printBatch.split('|'); printBatchReport(sid,eat);
+  }));
 }
 
 registerTab({id:'violGuidance', label:'متابعة المخالفات', group:'violations', groupLabel:'المخالفات',
