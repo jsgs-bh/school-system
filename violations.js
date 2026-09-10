@@ -336,44 +336,56 @@ async function loadArchiveList(){
 }
 
 async function loadAlerts(){
-  const {data,error}=await db.from('violations').select('student_id, created_at, escalated_at, students(full_name,academic_number), sections(code), violation_categories(tier)').eq('academic_year_id',S.YEAR.id)
+  const {data,error}=await db.from('violations').select('id, student_id, status, date, code, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id)
     .neq('status','archived');
   if(error){ $('vaRepeatList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
+  const ESCALATED_STATES=['escalated','guidance_action','closed'];
   const byStu={};
   for(const v of data||[]){
     const k=v.student_id;
     (byStu[k] ??= {rows:[], s:v.students, sec:v.sections}).rows.push(v);
   }
-  const alerts=[];
+  /* بند منفصل تماماً لكل شي: (أ) تنبيه "٣ مخالفات فأكثر" يقوم بس على
+     المخالفات اللي لسا ما تحوَّلت (حالتها new/approved/admin_action) —
+     كل تحويل سابق يصفّر هالعدّاد لأنه يخرجها من هالحالة. (ب) كل مخالفة
+     فئة ٣/٤ تحوَّلت تلقائياً تطلع بصف مستقل بروحها، بدون ما تنخلط مع
+     غيرها ولا تحتاج زر تحويل (محوَّلة أصلاً). */
+  const countAlerts=[], tierAlerts=[];
   for(const [sid,v] of Object.entries(byStu)){
-    /* بعد أي تحويل سابق للطالبة، نبدأ عدّ المخالفات من جديد — المخالفات
-       اللي قبل آخر تحويل تبقى بسجلها التاريخي بس ما تُحتسب مرة ثانية
-       لتنبيه "٣ مخالفات فأكثر" الحالي. */
-    const lastEscalation=v.rows.reduce((max,r)=>r.escalated_at&&(!max||r.escalated_at>max)?r.escalated_at:max,null);
-    const fresh=lastEscalation ? v.rows.filter(r=>r.created_at>lastEscalation) : v.rows;
-    const count=fresh.length;
-    const highTier=fresh.some(r=>(r.violation_categories?.tier||0)>=3);
-    if(count>=3||highTier) alerts.push([sid,{count,highTier,s:v.s,sec:v.sec}]);
+    const pending=v.rows.filter(r=>!ESCALATED_STATES.includes(r.status));
+    if(pending.length>=3) countAlerts.push({sid, count:pending.length, s:v.s, sec:v.sec});
+    for(const r of v.rows){
+      if((r.violation_categories?.tier||0)>=3 && ESCALATED_STATES.includes(r.status)){
+        tierAlerts.push({sid, s:v.s, sec:v.sec, v:r});
+      }
+    }
   }
-  alerts.sort((a,b)=>(b[1].highTier-a[1].highTier)||(b[1].count-a[1].count));
-  $('vaRepeatList').innerHTML=alerts.length
-    ? alerts.map(([sid,v])=>`
-      <div class="viol-repeat-row ${v.highTier?'danger':''}">
-        <span class="viol-name" data-stu="${sid}">${v.s?.full_name} <small class="viol-meta">(${v.s?.academic_number} — ${v.sec?.code||''}) — ${v.count} مخالفات${v.highTier?' — فئة عالية':''}</small></span>
-        ${v.highTier ? '<small class="viol-meta">↗️ محوَّلة تلقائياً</small>' : `<button class="btn gold" data-transfer="${sid}" style="width:auto;padding:7px 16px;font-size:12px">تحويل لمكتب الإرشاد</button>`}
+  countAlerts.sort((a,b)=>b.count-a.count);
+  $('vaRepeatList').innerHTML = (countAlerts.length+tierAlerts.length)===0
+    ? '<div class="empty-day">لا تنبيهات حالياً.</div>'
+    : countAlerts.map(a=>`
+      <div class="viol-repeat-row">
+        <span class="viol-name" data-stu="${a.sid}">${a.s?.full_name} <small class="viol-meta">(${a.s?.academic_number} — ${a.sec?.code||''}) — ${a.count} مخالفات</small></span>
+        <button class="btn gold" data-transfer="${a.sid}" style="width:auto;padding:7px 16px;font-size:12px">تحويل لمكتب الإرشاد</button>
       </div>`).join('')
-    : '<div class="empty-day">لا تنبيهات حالياً.</div>';
-  $('vaRepeatList').querySelectorAll('.viol-name, [data-transfer]').forEach(el=>el.addEventListener('click',()=>openStudentModal(el.dataset.stu||el.dataset.transfer)));
+    + tierAlerts.map(a=>`
+      <div class="viol-repeat-row danger">
+        <span class="viol-name" data-batch-stu="${a.sid}" data-batch-at="${a.v.escalated_at||''}">${a.s?.full_name} <small class="viol-meta">(${a.s?.academic_number} — ${a.sec?.code||''}) — #${a.v.code} ${a.v.violation_categories?.name||''}: ${a.v.violation_types?.name||''} — ${a.v.date}</small></span>
+        <small class="viol-meta">↗️ محوَّلة تلقائياً</small>
+      </div>`).join('');
+  $('vaRepeatList').querySelectorAll('.viol-name[data-stu], [data-transfer]').forEach(el=>el.addEventListener('click',()=>openStudentModal(el.dataset.stu||el.dataset.transfer)));
+  $('vaRepeatList').querySelectorAll('.viol-name[data-batch-stu]').forEach(el=>el.addEventListener('click',()=>openBatchModal(el.dataset.batchStu, el.dataset.batchAt)));
 }
 
 async function openStudentModal(studentId){
-  /* دورة "تنبيهات" الحالية بس — لازم نتوقف عند آخر تحويل سابق (لو فيه)،
-     عشان ما نرجع نحوّل مخالفات اتحوّلت أصلاً بدفعة سابقة. */
+  /* بس المخالفات اللي لسا ما تحوَّلت (حالتها مو escalated/guidance_action/
+     closed) — أي مخالفة فئة ٣/٤ تحوَّلت تلقائياً من قبل تُستبعد تماماً
+     وما تنخلط مع دفعة التحويل الجديدة هذي. */
+  const ESCALATED_STATES=['escalated','guidance_action','closed'];
   const {data:allV,error}=await db.from('violations').select('*, violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)').eq('academic_year_id',S.YEAR.id)
     .eq('student_id',studentId).neq('status','archived').order('date',{ascending:false});
   if(error){ toast('تعذر التحميل: '+error.message); return; }
-  const lastEscalation=(allV||[]).reduce((max,r)=>r.escalated_at&&(!max||r.escalated_at>max)?r.escalated_at:max,null);
-  const data=lastEscalation ? (allV||[]).filter(v=>v.created_at>lastEscalation) : (allV||[]);
+  const data=(allV||[]).filter(v=>!ESCALATED_STATES.includes(v.status));
   const {data:stu}=await db.from('students').select('full_name,academic_number,enrollments!inner(section_id,to_date,sections(code))').eq('id',studentId).is('enrollments.to_date',null).single();
   const stuSec=stu.enrollments?.[0]?.sections?.code||'';
   const existingAction=(data||[]).find(v=>v.admin_action_text)?.admin_action_text||'';
