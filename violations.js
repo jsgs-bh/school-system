@@ -628,10 +628,12 @@ async function generateReport(panelId){
     return;
   }
 
-  // إحصائية الفئات
+  // إحصائية الفئات (عدد + نسبة + رسم بياني — يظهر دايماً بغض النظر عن عدد الأشهر)
   const catCounts={};
   for(const r of rows) catCounts[r.violation_categories?.name||'—']=(catCounts[r.violation_categories?.name||'—']||0)+1;
-  const catTable=`<table class="board"><tr><th>الفئة</th><th>العدد</th></tr>${Object.entries(catCounts).map(([n,c])=>`<tr><td>${n}</td><td class="c">${c}</td></tr>`).join('')}</table>`;
+  const total=rows.length;
+  const catTable=`<table class="board"><tr><th>الفئة</th><th>العدد</th><th>النسبة</th></tr>${Object.entries(catCounts).map(([n,c])=>`<tr><td>${n}</td><td class="c">${c}</td><td class="c">${Math.round(c/total*100)}٪</td></tr>`).join('')}</table>`;
+  const catChartHtml=`<h4>رسم بياني — عدد المخالفات لكل فئة</h4>${simpleBarChart(Object.entries(catCounts))}`;
 
   // إحصائية شهرية (لو أكثر من شهر وحد)
   const monthCounts={};
@@ -670,6 +672,7 @@ async function generateReport(panelId){
     <div class="viol-notes">${desc}</div>
     <h4>عدد المخالفات لكل فئة</h4>
     ${catTable}
+    ${catChartHtml}
     ${sectionChartHtml}
     ${monthHtml}
     <h4>قائمة المخالفات${type!=='student'?' (' + rows.length + ')':''}</h4>
