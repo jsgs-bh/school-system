@@ -258,7 +258,7 @@ function violCard(v){
 }
 
 registerTab({id:'violTeacher', label:'المخالفات', group:'violations', groupLabel:'المخالفات',
-  show:f=>f.isTeacher||f.isSeniorTeacher, init:initViolTeacher});
+  show:()=>true, init:initViolTeacher});
 
 /* ============ شاشة مسؤولة المخالفات ============ */
 function switchVa(tab){
