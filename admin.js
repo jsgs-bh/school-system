@@ -167,10 +167,15 @@ bindDrop($('stfDrop'),$('stfFile'), async file=>{
     const dept = col.dept>=0?normDept(r[col.dept]):'';
     if(dept&&!depts.has(dept)) depts.set(dept,{name:dept,kind:deptKind(dept)});
     const tRaw = col.title>=0?clean(r[col.title]):'';
-    const title = /أولى|اولى/.test(tRaw)?'senior_teacher':/معلم/.test(tRaw)?'teacher':'staff';
+    const title = /مديرة مساعدة|مساعدة مديرة|قيادة عليا|قياده عليا/.test(tRaw)?'leadership'
+      :/أولى|اولى|منسق/.test(tRaw)?'senior_teacher'
+      :/معلم/.test(tRaw)?'teacher':'staff';
+    /* المنسّقة تاخذ صلاحيات معلمة أولى، بس لازم يبقى مكتوب "منسّقة" تحت
+       اسمها (مو "معلمة أولى") — نحفظ المسمى الأصلي كعرض مستقل. */
+    const displayTitle = /منسق/.test(tRaw) ? 'منسّقة' : null;
     if(title==='senior_teacher') seniors++;
     staffRows.push({ personal_number:pers, full_name:name,
-      email: col.mail>=0?clean(r[col.mail])||null:null, _dept:dept||null, title });
+      email: col.mail>=0?clean(r[col.mail])||null:null, _dept:dept||null, title, display_title:displayTitle });
   }
   STF={staffRows,depts:[...depts.values()]};
   $('stfPv1').textContent=staffRows.length; $('stfPv2').textContent=depts.size;

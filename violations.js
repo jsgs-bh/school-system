@@ -223,7 +223,7 @@ async function initViolTeacher(){
 
 let MINE_ROWS=[];
 async function loadMineViolations(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id)
     .eq('reported_by',S.ME.id).order('created_at',{ascending:false});
   if(error){ $('vMineList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   MINE_ROWS=data||[];
@@ -281,7 +281,7 @@ async function initViolAdmin(){
 }
 
 async function loadNewViolations(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)').eq('academic_year_id',S.YEAR.id)
     .eq('status','new').order('created_at',{ascending:false});
   if(error){ $('vaNewList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   if(!(data||[]).length){ $('vaNewList').innerHTML='<div class="empty-day">لا مخالفات جديدة بانتظار الاعتماد 🎉</div>'; return; }
@@ -312,7 +312,7 @@ async function loadNewViolations(){
 }
 
 async function loadArchiveList(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)').eq('academic_year_id',S.YEAR.id)
     .eq('status','archived').order('created_at',{ascending:false});
   if(error){ $('vaArchiveList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   if(!(data||[]).length){ $('vaArchiveList').innerHTML='<div class="empty-day">الأرشيف فاضي حالياً.</div>'; return; }
@@ -336,18 +336,26 @@ async function loadArchiveList(){
 }
 
 async function loadAlerts(){
-  const {data,error}=await db.from('violations').select('student_id, students(full_name,academic_number), sections(code), violation_categories(tier)')
+  const {data,error}=await db.from('violations').select('student_id, created_at, escalated_at, students(full_name,academic_number), sections(code), violation_categories(tier)').eq('academic_year_id',S.YEAR.id)
     .neq('status','archived');
   if(error){ $('vaRepeatList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   const byStu={};
   for(const v of data||[]){
     const k=v.student_id;
-    const e=(byStu[k] ??= {count:0, highTier:false, s:v.students, sec:v.sections});
-    e.count++;
-    if((v.violation_categories?.tier||0)>=3) e.highTier=true;
+    (byStu[k] ??= {rows:[], s:v.students, sec:v.sections}).rows.push(v);
   }
-  const alerts=Object.entries(byStu).filter(([,v])=>v.count>=3||v.highTier)
-    .sort((a,b)=>(b[1].highTier-a[1].highTier)||(b[1].count-a[1].count));
+  const alerts=[];
+  for(const [sid,v] of Object.entries(byStu)){
+    /* بعد أي تحويل سابق للطالبة، نبدأ عدّ المخالفات من جديد — المخالفات
+       اللي قبل آخر تحويل تبقى بسجلها التاريخي بس ما تُحتسب مرة ثانية
+       لتنبيه "٣ مخالفات فأكثر" الحالي. */
+    const lastEscalation=v.rows.reduce((max,r)=>r.escalated_at&&(!max||r.escalated_at>max)?r.escalated_at:max,null);
+    const fresh=lastEscalation ? v.rows.filter(r=>r.created_at>lastEscalation) : v.rows;
+    const count=fresh.length;
+    const highTier=fresh.some(r=>(r.violation_categories?.tier||0)>=3);
+    if(count>=3||highTier) alerts.push([sid,{count,highTier,s:v.s,sec:v.sec}]);
+  }
+  alerts.sort((a,b)=>(b[1].highTier-a[1].highTier)||(b[1].count-a[1].count));
   $('vaRepeatList').innerHTML=alerts.length
     ? alerts.map(([sid,v])=>`
       <div class="viol-repeat-row ${v.highTier?'danger':''}">
@@ -359,7 +367,7 @@ async function loadAlerts(){
 }
 
 async function openStudentModal(studentId){
-  const {data,error}=await db.from('violations').select('*, violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)')
+  const {data,error}=await db.from('violations').select('*, violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)').eq('academic_year_id',S.YEAR.id)
     .eq('student_id',studentId).neq('status','archived').order('date',{ascending:false});
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const {data:stu}=await db.from('students').select('full_name,academic_number,enrollments!inner(section_id,to_date,sections(code))').eq('id',studentId).is('enrollments.to_date',null).single();
@@ -400,7 +408,7 @@ async function openStudentModal(studentId){
 }
 
 async function loadEscalatedList(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id)
     .in('status',['escalated','guidance_action','closed']).order('escalated_at',{ascending:false});
   if(error){ $('vaEscList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   $('vaEscList').innerHTML=(data||[]).length ? data.map(v=>`
@@ -433,7 +441,7 @@ async function initViolGuidance(){
 }
 
 async function loadGuidancePending(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id)
     .eq('status','escalated').order('escalated_at',{ascending:true});
   if(error){ $('vgPendingList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   if(!(data||[]).length){ $('vgPendingList').innerHTML='<div class="empty-day">لا مخالفات بانتظار المتابعة 🎉</div>'; return; }
@@ -458,7 +466,7 @@ async function loadGuidancePending(){
 }
 
 async function loadGuidanceArchive(){
-  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)')
+  const {data,error}=await db.from('violations').select('*, students(full_name,academic_number), sections(code), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id)
     .eq('status','closed').not('guidance_action_text','is',null).order('closed_at',{ascending:false});
   if(error){ $('vgArchiveList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   $('vgArchiveList').innerHTML=(data||[]).length ? data.map(v=>`
@@ -479,7 +487,28 @@ async function initStatsPanel(panelId){
   panel.dataset.ready='1';
   const {data:sections}=await db.from('sections').select('id,code,level').eq('academic_year_id',S.YEAR.id).order('code');
   panel.innerHTML=`
-    <h3>متابعة المخالفات</h3>
+    <h3>تقرير مفصّل</h3>
+    <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <select id="${panelId}-rtype">
+        <option value="student">تقرير طالبة</option>
+        <option value="section">تقرير صف</option>
+        <option value="level">تقرير مستوى</option>
+        <option value="school">تقرير المدرسة</option>
+      </select>
+      <select id="${panelId}-rsec" style="display:none"><option value="">اختاري الصف…</option>${(sections||[]).map(s=>`<option value="${s.id}">${s.code}</option>`).join('')}</select>
+      <select id="${panelId}-rlevel" style="display:none"><option value="1">الأول</option><option value="2">الثاني</option><option value="3">الثالث</option></select>
+      <div style="position:relative;display:none" id="${panelId}-rstuWrap">
+        <input type="text" id="${panelId}-rstu" placeholder="ابحثي عن اسم طالبة…" autocomplete="off" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;min-width:220px">
+        <div class="sugg" id="${panelId}-rstuSugg"></div>
+      </div>
+      <span class="viol-meta">من</span><input type="date" id="${panelId}-rfrom">
+      <span class="viol-meta">إلى</span><input type="date" id="${panelId}-rto">
+      <button class="btn gold" id="${panelId}-rgo" style="width:auto;padding:9px 20px">توليد التقرير</button>
+      <button class="btn ghost" id="${panelId}-rprint" style="width:auto;padding:9px 20px;display:none">🖨️ طباعة</button>
+    </div>
+    <div id="${panelId}-report"></div>
+
+    <h3 style="margin-top:26px">فرز سريع</h3>
     <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
       <input type="text" id="${panelId}-stu" placeholder="اسم طالبة…" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
       <select id="${panelId}-sec"><option value="">كل الشعب</option>${(sections||[]).map(s=>`<option value="${s.id}">${s.code}</option>`).join('')}</select>
@@ -496,11 +525,170 @@ async function initStatsPanel(panelId){
   $(`${panelId}-print`).addEventListener('click',()=>printStats(panelId));
   $(`${panelId}-xls`).addEventListener('click',()=>exportStats(panelId));
   run();
+  bindReportUI(panelId);
+}
+
+/* ============ محرّك التقرير المفصّل (طالبة / صف / مستوى / المدرسة) ============ */
+let REPORT_STU_PICK={};
+function bindReportUI(panelId){
+  const rtype=$(`${panelId}-rtype`);
+  const showFor=()=>{
+    const t=rtype.value;
+    $(`${panelId}-rsec`).style.display = t==='section' ? 'inline-block' : 'none';
+    $(`${panelId}-rlevel`).style.display = t==='level' ? 'inline-block' : 'none';
+    $(`${panelId}-rstuWrap`).style.display = t==='student' ? 'inline-block' : 'none';
+  };
+  rtype.addEventListener('change',showFor); showFor();
+
+  let searchTimer=null;
+  $(`${panelId}-rstu`).addEventListener('input',()=>{
+    clearTimeout(searchTimer);
+    const q=clean($(`${panelId}-rstu`).value);
+    REPORT_STU_PICK[panelId]=null;
+    if(q.length<2){ $(`${panelId}-rstuSugg`).innerHTML=''; return; }
+    searchTimer=setTimeout(async ()=>{
+      const {data}=await db.from('students').select('id,full_name,academic_number,enrollments!inner(section_id,to_date,sections(code))')
+        .ilike('full_name',`%${q}%`).is('enrollments.to_date',null).limit(8);
+      $(`${panelId}-rstuSugg`).innerHTML=(data||[]).map(s=>`<div class="opt" data-id="${s.id}" data-name="${s.full_name}" data-acad="${s.academic_number}" data-sec="${s.enrollments?.[0]?.sections?.code||''}">${s.full_name}<small>${s.academic_number} — ${s.enrollments?.[0]?.sections?.code||''}</small></div>`).join('');
+      $(`${panelId}-rstuSugg`).querySelectorAll('.opt').forEach(el=>el.addEventListener('click',()=>{
+        REPORT_STU_PICK[panelId]={id:el.dataset.id,full_name:el.dataset.name,academic_number:el.dataset.acad,section_code:el.dataset.sec};
+        $(`${panelId}-rstu`).value=el.dataset.name; $(`${panelId}-rstuSugg`).innerHTML='';
+      }));
+    },250);
+  });
+
+  $(`${panelId}-rgo`).addEventListener('click',()=>generateReport(panelId));
+  $(`${panelId}-rprint`).addEventListener('click',()=>printReport(panelId));
+}
+
+function monthKey(d){ return d.slice(0,7); } // YYYY-MM
+function monthLabel(k){
+  const [y,m]=k.split('-');
+  const names=['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  return `${names[+m]} ${y}`;
+}
+function simpleBarChart(pairs){ // [[label,count],...]
+  if(!pairs.length) return '';
+  const max=Math.max(...pairs.map(p=>p[1]),1);
+  return `<div style="display:flex;align-items:flex-end;gap:10px;height:160px;padding:10px 4px;border-bottom:1.5px solid var(--line);overflow-x:auto">
+    ${pairs.map(([label,val])=>`
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:52px">
+        <div style="font-size:11px;color:var(--navy);font-weight:700;margin-bottom:4px">${val}</div>
+        <div style="width:30px;height:${Math.max(6,Math.round(val/max*120))}px;background:var(--gold);border-radius:5px 5px 0 0"></div>
+        <div style="font-size:10.5px;color:#6b7683;margin-top:6px;text-align:center;max-width:60px;white-space:normal">${label}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+let REPORT_LAST={};
+async function generateReport(panelId){
+  const type=$(`${panelId}-rtype`).value;
+  const from=$(`${panelId}-rfrom`).value, to=$(`${panelId}-rto`).value;
+  let q=db.from('violations').select('*, students(full_name,academic_number), sections(code,level), violation_categories(name,tier), violation_types(name)')
+    .eq('academic_year_id',S.YEAR.id).neq('status','archived');
+  if(from) q=q.gte('date',from);
+  if(to) q=q.lte('date',to);
+
+  let title='', rows=[], headerHtml='';
+  if(type==='student'){
+    const stu=REPORT_STU_PICK[panelId];
+    if(!stu){ toast('اختاري طالبة من نتائج البحث أولاً'); return; }
+    const {data,error}=await q.eq('student_id',stu.id).order('date',{ascending:false});
+    if(error){ toast('تعذر التحميل: '+error.message); return; }
+    rows=data||[];
+    title=`تقرير الطالبة: ${stu.full_name}`;
+    headerHtml=`<p style="font-size:14px"><b>${stu.full_name}</b> — الرقم الأكاديمي: ${stu.academic_number} — الشعبة: ${stu.section_code}</p>`;
+  } else if(type==='section'){
+    const secId=$(`${panelId}-rsec`).value;
+    if(!secId){ toast('اختاري الصف'); return; }
+    const secCode=$(`${panelId}-rsec`).selectedOptions[0].textContent;
+    const {data,error}=await q.eq('section_id',secId).order('date',{ascending:false});
+    if(error){ toast('تعذر التحميل: '+error.message); return; }
+    rows=data||[];
+    title=`تقرير الصف: ${secCode}`;
+    headerHtml=`<p style="font-size:14px"><b>الشعبة: ${secCode}</b> — عدد الطالبات المخالِفات: ${new Set(rows.map(r=>r.student_id)).size}</p>`;
+  } else if(type==='level'){
+    const level=$(`${panelId}-rlevel`).value;
+    const {data,error}=await q.order('date',{ascending:false});
+    if(error){ toast('تعذر التحميل: '+error.message); return; }
+    rows=(data||[]).filter(r=>String(r.sections?.level)===level);
+    title=`تقرير المستوى ${['','الأول','الثاني','الثالث'][+level]}`;
+    headerHtml=`<p style="font-size:14px"><b>${title}</b> — عدد الطالبات المخالِفات: ${new Set(rows.map(r=>r.student_id)).size}</p>`;
+  } else {
+    const {data,error}=await q.order('date',{ascending:false});
+    if(error){ toast('تعذر التحميل: '+error.message); return; }
+    rows=data||[];
+    title='تقرير المدرسة الشامل';
+    headerHtml=`<p style="font-size:14px"><b>كل المدرسة</b> — عدد الطالبات المخالِفات: ${new Set(rows.map(r=>r.student_id)).size}</p>`;
+  }
+
+  if(!rows.length){
+    $(`${panelId}-report`).innerHTML='<div class="empty-day">لا مخالفات ضمن هذا النطاق/الفترة.</div>';
+    $(`${panelId}-rprint`).style.display='none';
+    return;
+  }
+
+  // إحصائية الفئات
+  const catCounts={};
+  for(const r of rows) catCounts[r.violation_categories?.name||'—']=(catCounts[r.violation_categories?.name||'—']||0)+1;
+  const catTable=`<table class="board"><tr><th>الفئة</th><th>العدد</th></tr>${Object.entries(catCounts).map(([n,c])=>`<tr><td>${n}</td><td class="c">${c}</td></tr>`).join('')}</table>`;
+
+  // إحصائية شهرية (لو أكثر من شهر وحد)
+  const monthCounts={};
+  for(const r of rows) monthCounts[monthKey(r.date)]=(monthCounts[monthKey(r.date)]||0)+1;
+  const months=Object.keys(monthCounts).sort();
+  const monthHtml = months.length>1
+    ? `<h4>توزيع المخالفات شهرياً</h4>
+       <table class="board"><tr>${months.map(m=>`<th>${monthLabel(m)}</th>`).join('')}</tr><tr>${months.map(m=>`<td class="c">${monthCounts[m]}</td>`).join('')}</tr></table>
+       ${simpleBarChart(months.map(m=>[monthLabel(m),monthCounts[m]]))}`
+    : '';
+
+  // مقارنة الشعب (لمستوى/مدرسة بس)
+  let sectionChartHtml='';
+  if(type==='level'||type==='school'){
+    const secCounts={};
+    for(const r of rows) secCounts[r.sections?.code||'—']=(secCounts[r.sections?.code||'—']||0)+1;
+    const pairs=Object.entries(secCounts).sort((a,b)=>b[1]-a[1]);
+    sectionChartHtml=`<h4>عدد المخالفات لكل شعبة</h4>${simpleBarChart(pairs)}`;
+  }
+
+  // وصف نصي تلقائي
+  const topCat=Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+  const topMonth=months.length ? Object.entries(monthCounts).sort((a,b)=>b[1]-a[1])[0] : null;
+  let desc=`سُجّلت ${rows.length} مخالفة ضمن هذا النطاق`;
+  if(from||to) desc+=` خلال الفترة ${from||'—'} إلى ${to||'—'}`;
+  desc+=`. الفئة الأكثر تكراراً: ${topCat[0]} (${topCat[1]} مخالفة)`;
+  if(topMonth) desc+=`، وأعلى شهر كان ${monthLabel(topMonth[0])} بعدد ${topMonth[1]} مخالفة`;
+  desc+='.';
+
+  const listHtml=`<table class="board"><tr><th>الرمز</th><th>الطالبة</th><th>الشعبة</th><th>الفئة</th><th>النوع</th><th>التاريخ</th></tr>
+    ${rows.map(r=>`<tr><td class="c">#${r.code}</td><td>${r.students?.full_name||'—'}</td><td class="c">${r.sections?.code||'—'}</td><td class="c">${r.violation_categories?.name||''}</td><td>${r.violation_types?.name||''}</td><td class="c">${r.date}</td></tr>`).join('')}
+  </table>`;
+
+  const html=`
+    ${headerHtml}
+    <div class="viol-notes">${desc}</div>
+    <h4>عدد المخالفات لكل فئة</h4>
+    ${catTable}
+    ${sectionChartHtml}
+    ${monthHtml}
+    <h4>قائمة المخالفات${type!=='student'?' (' + rows.length + ')':''}</h4>
+    ${listHtml}`;
+  $(`${panelId}-report`).innerHTML=html;
+  $(`${panelId}-rprint`).style.display='inline-block';
+  REPORT_LAST[panelId]={title, html};
+}
+
+function printReport(panelId){
+  const r=REPORT_LAST[panelId];
+  if(!r){ toast('ولّدي تقرير أولاً'); return; }
+  $('printAreaViol').innerHTML=`${printHeaderHtml(r.title)}<div style="font-size:12pt">${r.html.replace(/class="board"/g,'class="viol-print-tbl"')}</div>`;
+  printWithTitle(r.title.replace(/\s+/g,'_'),'printAreaViol');
 }
 
 let STATS_ROWS={};
 async function runStats(panelId){
-  let q=db.from('violations').select('*, students(full_name,academic_number), sections(code,level), violation_categories(name,tier), violation_types(name)').neq('status','archived');
+  let q=db.from('violations').select('*, students(full_name,academic_number), sections(code,level), violation_categories(name,tier), violation_types(name)').eq('academic_year_id',S.YEAR.id).neq('status','archived');
   const stu=clean($(`${panelId}-stu`).value);
   const sec=$(`${panelId}-sec`).value;
   const level=$(`${panelId}-level`).value;

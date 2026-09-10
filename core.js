@@ -10,7 +10,8 @@ export const S = { ME:null, YEAR:null, PERIODS:[], FLAGS:{}, SETTINGS:{school_na
 export const roleNames = {admin:'الدعم الفني',leadership:'القيادة العليا',project_lead:'مسؤولة مشروع',
   committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات',
   attendance_lead:'مسؤولة متابعة الغياب', complaints_lead:'مسؤولة متابعة الشكاوى',
-  strategic_plan_lead:'رئيسة متابعة الخطة الاستراتيجية', violations_lead:'مسؤولة المخالفات'};
+  strategic_plan_lead:'رئيسة متابعة الخطة الاستراتيجية', violations_lead:'مسؤولة المخالفات',
+  talents_lead:'مسؤولة متابعة الموهوبات'};
 export const titleNames = {teacher:'معلمة',senior_teacher:'معلمة أولى',leadership:'قيادة عليا',staff:'منتسبة'};
 export const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 export const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
@@ -181,6 +182,7 @@ async function boot(session){
     isAttendanceLead: (roles||[]).some(r=>r.role==='attendance_lead'),
     isComplaintsLead: (roles||[]).some(r=>r.role==='complaints_lead'),
     isViolationsLead: (roles||[]).some(r=>r.role==='violations_lead'),
+    isTalentsLead: (roles||[]).some(r=>r.role==='talents_lead'),
     isProjectLead: (roles||[]).some(r=>r.role==='project_lead'),
     isStrategicPlanLead: (roles||[]).some(r=>r.role==='strategic_plan_lead'),
     isAnalysis: (roles||[]).some(r=>r.role==='analysis_supervisor'),
@@ -188,7 +190,7 @@ async function boot(session){
     isCommitteeMember: S.MY_COMMITTEE_IDS.length>0,
   };
   $('userName').textContent = staff.full_name;
-  $('userRole').textContent = (roles||[]).map(r=>roleNames[r.role]).join(' · ') || titleNames[staff.title] || 'منتسبة';
+  $('userRole').textContent = (roles||[]).map(r=>roleNames[r.role]).join(' · ') || staff.display_title || titleNames[staff.title] || 'منتسبة';
   $('loginView').style.display='none';
   $('appView').style.display='flex';
   const { data: yr } = await db.from('academic_years').select('*').eq('is_active',true).maybeSingle();

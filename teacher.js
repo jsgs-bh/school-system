@@ -120,7 +120,7 @@ async function openRoster(lesson){
     .eq('section_id',ent.section_id).is('to_date',null);
   if(error){ $('stuGrid').innerHTML=`<div style="grid-column:1/-1;color:var(--err)">تعذر التحميل: ${error.message}</div>`; return; }
   ROSTER.students=(enr||[]).map(e=>e.students).filter(Boolean)
-    .sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
+    .sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'ar',{numeric:true}));
   const {data:sess}=await db.from('attendance_sessions')
     .select('id,recorded_by,recorded_name,staff(full_name)')
     .eq('entry_id',lesson.entry_id).eq('date',dstr(CUR_DATE)).maybeSingle();
