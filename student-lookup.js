@@ -15,10 +15,10 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="socStudents" style="display:none">
   <div class="panel">
     <h3>بيانات طالبة</h3>
-    <div class="sub">اكتبي الرقم الأكاديمي أو الرقم الشخصي للطالبة.</div>
-    <div class="row" style="display:flex;gap:10px;margin-top:10px">
-      <input type="text" id="ssSearchInput" placeholder="الرقم الأكاديمي أو الرقم الشخصي…" style="flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
-      <button class="btn gold" id="ssSearchBtn" style="width:auto;padding:10px 24px">بحث</button>
+    <div class="sub">اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي.</div>
+    <div class="row" style="display:flex;gap:10px;margin-top:10px;position:relative">
+      <input type="text" id="ssSearchInput" placeholder="اسم الطالبة أو رقمها…" autocomplete="off" style="flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
+      <div class="sugg" id="ssSugg"></div>
     </div>
     <div id="ssResult" style="margin-top:18px"></div>
   </div>
@@ -54,30 +54,43 @@ registerTab({id:'myStudents', label:'طالباتي', group:'teacherArea', group
   show:f=>f.isTeacher||f.isSeniorTeacher, init:initMyStudents});
 
 /* ============ بحث الإشراف/الإرشاد الاجتماعي ============ */
-function initSocStudents(){
-  if($('ssSearchBtn').dataset.ready) return;
-  $('ssSearchBtn').dataset.ready='1';
-  const run=async ()=>{
-    const q=clean($('ssSearchInput').value);
-    if(!q){ toast('اكتبي رقماً للبحث'); return; }
-    $('ssResult').innerHTML='<div class="empty-day">جارٍ البحث…</div>';
-    const {data,error}=await db.from('students').select('full_name,academic_number,personal_number,email,contact1,contact2,enrollments(section_id,to_date,sections(code))')
-      .or(`academic_number.eq.${q},personal_number.eq.${q}`).limit(5);
-    if(error){ $('ssResult').innerHTML=`<div class="empty-day">تعذر البحث: ${error.message}</div>`; return; }
-    if(!data?.length){ $('ssResult').innerHTML='<div class="empty-day">ما فيه طالبة بهذا الرقم.</div>'; return; }
-    $('ssResult').innerHTML=data.map(s=>{
-      const sec=(s.enrollments||[]).find(e=>!e.to_date)?.sections?.code||'—';
-      return `<div class="ss-card">
-        <div class="ss-row"><b>الاسم</b><span>${s.full_name}</span></div>
-        <div class="ss-row"><b>الصف</b><span>${sec}</span></div>
-        <div class="ss-row"><b>الرقم الأكاديمي</b><span>${s.academic_number}</span></div>
-        <div class="ss-row"><b>البريد الإلكتروني</b><span>${s.email||'—'}</span></div>
-        <div class="ss-row"><b>رقم التواصل 1</b><span>${s.contact1||'—'}</span></div>
-        <div class="ss-row"><b>رقم التواصل 2</b><span>${s.contact2||'—'}</span></div>
-      </div>`;
-    }).join('<div style="height:12px"></div>');
-  };
-  $('ssSearchBtn').addEventListener('click',run);
-  $('ssSearchInput').addEventListener('keydown',e=>{ if(e.key==='Enter') run(); });
+function showStudentCard(s){
+  const sec=(s.enrollments||[]).find(e=>!e.to_date)?.sections?.code||'—';
+  $('ssResult').innerHTML=`<div class="ss-card">
+    <div class="ss-row"><b>الاسم</b><span>${s.full_name}</span></div>
+    <div class="ss-row"><b>الصف</b><span>${sec}</span></div>
+    <div class="ss-row"><b>الرقم الأكاديمي</b><span>${s.academic_number}</span></div>
+    <div class="ss-row"><b>البريد الإلكتروني</b><span>${s.email||'—'}</span></div>
+    <div class="ss-row"><b>رقم التواصل 1</b><span>${s.contact1||'—'}</span></div>
+    <div class="ss-row"><b>رقم التواصل 2</b><span>${s.contact2||'—'}</span></div>
+  </div>`;
 }
-registerTab({id:'socStudents', label:'طالبات', show:f=>f.isAdmin||f.isLead||f.isSocial, init:initSocStudents});
+
+let SS_RESULTS=[];
+function initSocStudents(){
+  if($('ssSearchInput').dataset.ready) return;
+  $('ssSearchInput').dataset.ready='1';
+  let searchTimer=null;
+  $('ssSearchInput').addEventListener('input',()=>{
+    clearTimeout(searchTimer);
+    const q=clean($('ssSearchInput').value);
+    if(q.length<2){ $('ssSugg').innerHTML=''; return; }
+    searchTimer=setTimeout(async ()=>{
+      const {data,error}=await db.from('students')
+        .select('id,full_name,academic_number,personal_number,email,contact1,contact2,enrollments(section_id,to_date,sections(code))')
+        .or(`full_name.ilike.%${q}%,academic_number.eq.${q},personal_number.eq.${q}`).limit(8);
+      if(error){ $('ssSugg').innerHTML=''; return; }
+      SS_RESULTS=data||[];
+      $('ssSugg').innerHTML=SS_RESULTS.map(s=>{
+        const sec=(s.enrollments||[]).find(e=>!e.to_date)?.sections?.code||'';
+        return `<div class="opt" data-id="${s.id}">${s.full_name}<small>${s.academic_number} — ${sec}</small></div>`;
+      }).join('');
+      $('ssSugg').querySelectorAll('.opt').forEach(el=>el.addEventListener('click',()=>{
+        const stu=SS_RESULTS.find(s=>s.id===el.dataset.id);
+        if(stu) showStudentCard(stu);
+        $('ssSearchInput').value=stu?.full_name||''; $('ssSugg').innerHTML='';
+      }));
+    },250);
+  });
+}
+registerTab({id:'socStudents', label:'طالبات', show:f=>f.isSocial||f.isAcademicGuidance, init:initSocStudents});
