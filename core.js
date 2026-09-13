@@ -241,8 +241,11 @@ async function boot(session){
       if(g?.tabs.length) openTab(g.tabs[0].id);
     }));
   }
-  for(const t of topVisible) if(t.init) t.init();
-  for(const g of groupItems) for(const t of g.tabs) if(t.init) t.init();
+  /* لو تبويب معيّن فيه خطأ برمجي وقت التحميل، ما نخلّيه يوقف تشغيل بقية
+     التبويبات كلها (كل init() بمحاولة مستقلة). */
+  const safeInit = t => { try{ t.init?.(); }catch(err){ console.error(`init failed: ${t.id}`, err); } };
+  for(const t of topVisible) safeInit(t);
+  for(const g of groupItems) for(const t of g.tabs) safeInit(t);
   const firstNav = navItems[0];
   const firstId = firstNav
     ? (firstNav.kind==='t' ? firstNav.id : groupItems.find(g=>g.gid===firstNav.id)?.tabs[0]?.id)
