@@ -234,7 +234,15 @@ async function fetchGroupsForSubject(subjectId){
     .select('id,name,section_id,teacher_id,sections(code),staff:teacher_id(full_name)')
     .eq('subject_id',subjectId);
   if(error) return {error};
-  const filtered = SUPERVISED ? (groups||[]).filter(g=>SUPERVISED.has(g.teacher_id)) : (groups||[]);
+  /* "مجموعات التدريس" جدول مستقل عن الجدول الدراسي — لو تغيّرت معلمة
+     المادة بتحديث الجدول، الربط القديم هنا يضل عالق بدون تصحيح تلقائي.
+     نتحقق هنا: هل معلمة المجموعة لسا فعلاً مرتبطة بهذي المادة/الشعبة
+     بالجدول الحالي؟ لو لأ، نستبعد المجموعة (بدل ما تطلع بمعلمة قديمة). */
+  const {data:curLinks}=await db.from('entry_teachers').select('staff_id, timetable_entries!inner(section_id,subject_id,is_current)')
+    .eq('timetable_entries.subject_id',subjectId).eq('timetable_entries.is_current',true);
+  const validPairs=new Set((curLinks||[]).map(l=>`${l.timetable_entries.section_id}|${l.staff_id}`));
+  const stillValid = g => validPairs.has(`${g.section_id}|${g.teacher_id}`);
+  const filtered = (SUPERVISED ? (groups||[]).filter(g=>SUPERVISED.has(g.teacher_id)) : (groups||[])).filter(stillValid);
   const secMap={};
   for(const g of filtered){
     const code=g.sections?.code||'؟';

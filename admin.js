@@ -339,7 +339,7 @@ $('ttRun').addEventListener('click', async ()=>{
 
     prog(65,'ربط المعلمات…');
     const {data:allEnt,error:e4}=await db.from('timetable_entries')
-      .select('id,section_id,day_of_week,period_no,is_meeting,meeting_label').eq('academic_year_id',S.YEAR.id); if(e4) throw e4;
+      .select('id,section_id,subject_id,day_of_week,period_no,is_meeting,meeting_label').eq('academic_year_id',S.YEAR.id); if(e4) throw e4;
 
     /* الحصص القديمة اللي عليها رصد غياب سابق وما عاد لها مكان بالجدول
        الجديد (تغيّرت حصتها/معلمتها) تبقى محفوظة للتاريخ (ما تُحذف ولا
@@ -370,6 +370,32 @@ $('ttRun').addEventListener('click', async ()=>{
     }
     const unknownT=unknownNames.size;
     for(const c of chunk(links,400)){ const{error}=await db.from('entry_teachers').insert(c); if(error) throw error; }
+
+    prog(85,'مزامنة مجموعات التدريس غير المنقسمة…');
+    /* لو تغيّرت معلمة مادة غير منقسمة (مجموعة تدريس واحدة) بهالتحديث،
+       نصحّح ربطها تلقائياً — بشرط إن المعلمة الجديدة الوحيدة معروفة
+       بدون لبس (ما نخمّن لو المادة صارت منقسمة بين أكثر من معلمة). */
+    const {data:tgRows}=await db.from('teaching_groups').select('id,section_id,subject_id,teacher_id').eq('name','المجموعة الوحيدة');
+    const curTeacherBySlot={}; // "section|subject" -> Set(staff_id)
+    // نبني الخريطة من entry_teachers الجديدة مباشرة بدل إعادة الاستعلام
+    const freshLinks=links.map(l=>{ const ent=allEnt.find(e=>e.id===l.entry_id); return ent?{section_id:ent.section_id, subject_id:ent.subject_id, staff_id:l.staff_id}:null; }).filter(Boolean);
+    for(const l of freshLinks){
+      const k=`${l.section_id}|${l.subject_id}`;
+      (curTeacherBySlot[k] ??= new Set()).add(l.staff_id);
+    }
+    let syncedGroups=0;
+    for(const tg of tgRows||[]){
+      const k=`${tg.section_id}|${tg.subject_id}`;
+      const teachers=curTeacherBySlot[k];
+      if(teachers && teachers.size===1){
+        const only=[...teachers][0];
+        if(only!==tg.teacher_id){
+          const {error}=await db.from('teaching_groups').update({teacher_id:only}).eq('id',tg.id);
+          if(!error) syncedGroups++;
+        }
+      }
+    }
+
     prog(90,'توثيق…');
     await db.from('audit_log').insert({actor_id:S.ME.id,action:'import',entity:'timetable',
       details:{entries:entries.length,meetings:meetingEntries.length,links:links.length,unknown_teachers:unknownT,deleted_old:deleted}});
