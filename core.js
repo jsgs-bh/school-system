@@ -219,12 +219,22 @@ async function boot(session){
   const groupItems = Object.entries(GROUPS)
     .map(([gid,g])=>({gid, label:g.label, tabs:g.tabs.filter(t=>t.show(S.FLAGS))}))
     .filter(g=>g.tabs.length);
-  const navCount = topVisible.length + groupItems.length;
+
+  /* ترتيب موحّد لكل التبويبات (مستقلة أو مجموعات): "حصصي" دايماً أول
+     شي للمعلمات، "الخطة الاستراتيجية" أول شي لغيرهن (لو ظاهرة)،
+     و"الإعدادات" دايماً آخر شي — أي تبويب جديد ينضاف بينهم تلقائياً. */
+  const NAV_PRIORITY = {teacherArea:0, plan:1, settings:1000};
+  const navItems = [
+    ...topVisible.map((t,i)=>({kind:'t', id:t.id, label:t.label, _p:NAV_PRIORITY[t.id]??500, _i:i})),
+    ...groupItems.map((g,i)=>({kind:'g', id:g.gid, label:g.label, _p:NAV_PRIORITY[g.gid]??500, _i:1000+i})),
+  ].sort((a,b)=>(a._p-b._p)||(a._i-b._i));
+
+  const navCount = navItems.length;
   if(navCount>1){
     $('tabsNav').style.display='flex';
-    $('tabsNav').innerHTML =
-      topVisible.map(t=>`<button data-t="${t.id}">${t.label}</button>`).join('') +
-      groupItems.map(g=>`<button data-g="${g.gid}">${g.label}</button>`).join('');
+    $('tabsNav').innerHTML = navItems.map(n=>
+      n.kind==='t' ? `<button data-t="${n.id}">${n.label}</button>` : `<button data-g="${n.id}">${n.label}</button>`
+    ).join('');
     $('tabsNav').querySelectorAll('button[data-t]').forEach(b=>b.addEventListener('click',()=>openTab(b.dataset.t)));
     $('tabsNav').querySelectorAll('button[data-g]').forEach(b=>b.addEventListener('click',()=>{
       const g=groupItems.find(x=>x.gid===b.dataset.g);
@@ -233,8 +243,11 @@ async function boot(session){
   }
   for(const t of topVisible) if(t.init) t.init();
   for(const g of groupItems) for(const t of g.tabs) if(t.init) t.init();
-  const firstId = topVisible[0]?.id || groupItems[0]?.tabs[0]?.id || 'teacherMain';
-  openTab(firstId);
+  const firstNav = navItems[0];
+  const firstId = firstNav
+    ? (firstNav.kind==='t' ? firstNav.id : groupItems.find(g=>g.gid===firstNav.id)?.tabs[0]?.id)
+    : null;
+  openTab(firstId || 'teacherMain');
 }
 async function login(){
   const btn=$('loginBtn'), m=$('loginMsg');

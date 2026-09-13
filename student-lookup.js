@@ -28,6 +28,18 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ss-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
   .ss-row:last-child{border-bottom:none}
   .ss-row b{min-width:150px;color:var(--navy)}
+  #socStudents .sugg, #myStudents .sugg{
+    position:absolute; top:100%; right:0; left:0; z-index:50; margin-top:4px;
+    background:#fff; border:1.5px solid var(--line); border-radius:10px;
+    box-shadow:0 6px 18px rgba(0,0,0,.12); max-height:280px; overflow-y:auto;
+  }
+  #socStudents .sugg:empty, #myStudents .sugg:empty{ display:none; }
+  #socStudents .sugg .opt, #myStudents .sugg .opt{
+    padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line); font-size:13.5px;
+  }
+  #socStudents .sugg .opt:last-child, #myStudents .sugg .opt:last-child{ border-bottom:none; }
+  #socStudents .sugg .opt:hover, #myStudents .sugg .opt:hover{ background:var(--sand); }
+  #socStudents .sugg .opt small{ display:block; color:#8a93a0; font-size:11.5px; margin-top:2px; }
 </style>`);
 
 /* ============ طالباتي ============ */
@@ -79,12 +91,12 @@ function initSocStudents(){
       const {data,error}=await db.from('students')
         .select('id,full_name,academic_number,personal_number,email,contact1,contact2,enrollments(section_id,to_date,sections(code))')
         .or(`full_name.ilike.%${q}%,academic_number.eq.${q},personal_number.eq.${q}`).limit(8);
-      if(error){ $('ssSugg').innerHTML=''; return; }
+      if(error){ $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">تعذر البحث: ${error.message}</div>`; return; }
       SS_RESULTS=data||[];
-      $('ssSugg').innerHTML=SS_RESULTS.map(s=>{
+      $('ssSugg').innerHTML = SS_RESULTS.length ? SS_RESULTS.map(s=>{
         const sec=(s.enrollments||[]).find(e=>!e.to_date)?.sections?.code||'';
         return `<div class="opt" data-id="${s.id}">${s.full_name}<small>${s.academic_number} — ${sec}</small></div>`;
-      }).join('');
+      }).join('') : `<div class="opt" style="color:#8a93a0">لا نتائج لـ"${q}"</div>`;
       $('ssSugg').querySelectorAll('.opt').forEach(el=>el.addEventListener('click',()=>{
         const stu=SS_RESULTS.find(s=>s.id===el.dataset.id);
         if(stu) showStudentCard(stu);
