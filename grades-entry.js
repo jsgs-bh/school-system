@@ -277,7 +277,7 @@ async function loadMySubjects(){
   $('gSubjList').innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
   const {data:rows,error}=await db.from('entry_teachers')
     .select('timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code,semester),subjects(code,exam_total))')
-    .eq('staff_id',S.ME.id).eq('timetable_entries.academic_year_id',S.YEAR.id);
+    .eq('staff_id',S.ME.id).eq('timetable_entries.academic_year_id',S.YEAR.id).eq('timetable_entries.is_current',true);
   if(error){ $('gSubjList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   const seen=new Map();
   for(const r of rows||[]){
@@ -1047,7 +1047,7 @@ async function loadRemedial(){
 
   const {data:rows,error}=await db.from('entry_teachers')
     .select('timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code))')
-    .eq('timetable_entries.subject_id',subjId).eq('timetable_entries.academic_year_id',S.YEAR.id);
+    .eq('timetable_entries.subject_id',subjId).eq('timetable_entries.academic_year_id',S.YEAR.id).eq('timetable_entries.is_current',true);
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const secMap={};
   for(const r of rows||[]){ const e=r.timetable_entries; secMap[e.sections?.code||'؟']=e.section_id; }

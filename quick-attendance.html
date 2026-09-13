@@ -166,7 +166,7 @@ async function loadDay(){
   const {data:rows,error}=await db.from('entry_teachers')
     .select('is_attendance_taker, timetable_entries!inner(id,period_no,room,section_id,day_of_week,academic_year_id,sections(code),subjects(code))')
     .eq('staff_id',ME.id).eq('timetable_entries.day_of_week',dow).eq('timetable_entries.academic_year_id',YEAR.id)
-    .eq('timetable_entries.is_meeting',false);
+    .eq('timetable_entries.is_meeting',false).eq('timetable_entries.is_current',true);
   if(error){ list.innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   MY_LESSONS=(rows||[]).map(r=>({
     entry_id:r.timetable_entries.id, period_no:r.timetable_entries.period_no,

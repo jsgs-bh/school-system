@@ -322,7 +322,7 @@ $('ttRun').addEventListener('click', async ()=>{
       const sec=secBy[s.secCode];
       if(!sec){ warns.push(`شعبة غير موجودة بالنظام: ${s.secCode}`); continue; }
       entries.push({ academic_year_id:S.YEAR.id, semester:sec.semester, section_id:sec.id,
-        subject_id:subjId[s.subj]??null, day_of_week:s.day, period_no:s.per, room:s.room, is_meeting:false });
+        subject_id:subjId[s.subj]??null, day_of_week:s.day, period_no:s.per, room:s.room, is_meeting:false, is_current:true });
       teacherPlan.push({key:`${sec.id}|${s.day}|${s.per}`, teachers:s.teachers});
     }
     for(const c of chunk(entries,300)){ const{error}=await db.from('timetable_entries').upsert(c,{onConflict:'section_id,day_of_week,period_no'}); if(error) throw error; }
@@ -340,6 +340,18 @@ $('ttRun').addEventListener('click', async ()=>{
     prog(65,'ربط المعلمات…');
     const {data:allEnt,error:e4}=await db.from('timetable_entries')
       .select('id,section_id,day_of_week,period_no,is_meeting,meeting_label').eq('academic_year_id',S.YEAR.id); if(e4) throw e4;
+
+    /* الحصص القديمة اللي عليها رصد غياب سابق وما عاد لها مكان بالجدول
+       الجديد (تغيّرت حصتها/معلمتها) تبقى محفوظة للتاريخ (ما تُحذف ولا
+       غيابها يضيع)، بس نعلّمها "غير حالية" عشان ما تختلط بجدول المادة
+       الفعلي بشاشات الدرجات ومتابعة الاختبارات — نفس فكرة "جدولي" اللي
+       أصلاً صحيحة لأنها تعتمد على الربط الجديد بس. */
+    const currentKeys=new Set(entries.map(e=>`${e.section_id}|${e.day_of_week}|${e.period_no}`));
+    const orphanIds=(allEnt||[]).filter(e=>!e.is_meeting && !currentKeys.has(`${e.section_id}|${e.day_of_week}|${e.period_no}`)).map(e=>e.id);
+    for(const c of chunk(orphanIds,200)){
+      const {error}=await db.from('timetable_entries').update({is_current:false}).in('id',c); if(error) throw error;
+    }
+
     const entId={}, meetId={};
     for(const e of allEnt){
       if(e.is_meeting) meetId[`${e.meeting_label}|${e.day_of_week}|${e.period_no}`]=e.id;

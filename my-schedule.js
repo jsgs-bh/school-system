@@ -37,7 +37,7 @@ async function loadMySchedule(){
   $('msTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
   const {data:rows,error}=await db.from('entry_teachers')
     .select('timetable_entries!inner(id,day_of_week,period_no,academic_year_id,is_meeting,meeting_label,sections(code),subjects(code))')
-    .eq('staff_id',S.ME.id).eq('timetable_entries.academic_year_id',S.YEAR.id);
+    .eq('staff_id',S.ME.id).eq('timetable_entries.academic_year_id',S.YEAR.id).eq('timetable_entries.is_current',true);
   if(error){ $('msTable').innerHTML=`<tr><td style="padding:30px;text-align:center;color:#8a93a0">تعذر التحميل: ${error.message}</td></tr>`; return; }
 
   const grid={};

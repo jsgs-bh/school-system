@@ -159,7 +159,22 @@ async function initAnalysis(){
 
   const semSubjIds=await getSemesterSubjectIds();
   const {data:subs}=await db.from('subjects').select('id,code,exam_total').order('code');
-  SUBJECTS=(subs||[]).filter(s=>semSubjIds.includes(s.id));
+  let visible=(subs||[]).filter(s=>semSubjIds.includes(s.id));
+
+  /* مقررات ما عليها درجات أصلاً (حصص دعم/إرشاد/بدء يوم...) ما تدخل هذي
+     الشاشة إطلاقاً — بدع/رشد/قرأ/مصد، أو أي مقرر رمزه الرقمي يبدأ بـ٩. */
+  const isGradeable = code => !/^(بدع|رشد|قرأ|مصد)/.test(code) && !/^[\u0600-\u06FF]+9\d*$/.test(code);
+  visible = visible.filter(s=>isGradeable(s.code));
+
+  /* لمعلمة أولى: نقصر القائمة على مقررات معلمات قسمها بس (SUPERVISED) —
+     مو كل مقررات المدرسة. */
+  if(SUPERVISED){
+    const {data:mySubjEnts}=await db.from('entry_teachers').select('staff_id, timetable_entries!inner(subject_id,is_current)').in('staff_id',[...SUPERVISED]).eq('timetable_entries.is_current',true);
+    const mySubjIds=new Set((mySubjEnts||[]).map(e=>e.timetable_entries?.subject_id).filter(Boolean));
+    visible = visible.filter(s=>mySubjIds.has(s.id));
+  }
+
+  SUBJECTS = visible;
   $('gaSubject').innerHTML=SUBJECTS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
   $('brSubjectList').innerHTML=SUBJECTS.map(s=>`<label class="ga-cmp-check"><input type="checkbox" value="${s.id}"> ${s.code}</label>`).join('')
     || '<span style="color:#8a93a0;font-size:13px">لا مقررات بعد.</span>';
@@ -200,7 +215,7 @@ async function getSupervisedTeacherIds(){
 async function fetchUniqueSectionsForSubject(subjectId){
   const {data:rows,error}=await db.from('entry_teachers')
     .select('staff_id, staff(full_name), timetable_entries!inner(section_id,subject_id,academic_year_id,sections(code))')
-    .eq('timetable_entries.subject_id',subjectId).eq('timetable_entries.academic_year_id',S.YEAR.id);
+    .eq('timetable_entries.subject_id',subjectId).eq('timetable_entries.academic_year_id',S.YEAR.id).eq('timetable_entries.is_current',true);
   if(error) return {error};
   const secMap={};
   for(const r of rows||[]){

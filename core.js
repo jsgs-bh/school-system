@@ -128,7 +128,7 @@ export async function getSemesterSubjectIds(semester, yearId){
   const {data:secs} = await db.from('sections').select('id').eq('academic_year_id', yid).eq('semester', sem);
   const sectionIds = (secs||[]).map(s=>s.id);
   if(!sectionIds.length) return [];
-  const {data:ents} = await db.from('timetable_entries').select('subject_id').in('section_id', sectionIds);
+  const {data:ents} = await db.from('timetable_entries').select('subject_id').in('section_id', sectionIds).eq('is_current',true);
   return [...new Set((ents||[]).map(e=>e.subject_id).filter(Boolean))];
 }
 /* رابط شعار المدرسة (لو مرفوع) — يُستخدم كهيدر في التقارير المصدَّرة. */
