@@ -336,14 +336,22 @@ async function loadExams(){
     ? exams.map(e=>`<div class="g-exam" data-id="${e.id}" data-name="${e.name}" data-total="${e.exam_total??''}">
         <div><b>${e.name}</b><small>${e.exam_date||''}${e.exam_total?' · من '+e.exam_total:''}</small></div>
         <button class="btn ghost g-comp-link" data-id="${e.id}" data-name="${e.name}" style="width:auto;padding:8px 16px;font-size:12.5px">📋 استمارة تحليل الكفايات</button>
+        ${e.created_by===S.ME.id?`<button class="btn ghost g-del-exam" data-id="${e.id}" data-name="${e.name}" style="width:auto;padding:8px 14px;font-size:12.5px;border-color:var(--err);color:var(--err)">🗑️ حذف</button>`:''}
       </div>`).join('')
     : '<div class="empty-day">لا اختبارات بعد — أنشئي واحداً أدناه.</div>';
   $('gExamList').querySelectorAll('.g-exam').forEach(el=>el.addEventListener('click',(e)=>{
-    if(e.target.closest('.g-comp-link')) return;
+    if(e.target.closest('.g-comp-link')||e.target.closest('.g-del-exam')) return;
     openExam({id:el.dataset.id,name:el.dataset.name,exam_total:el.dataset.total?+el.dataset.total:null});
   }));
   $('gExamList').querySelectorAll('.g-comp-link').forEach(el=>el.addEventListener('click',(e)=>{
     e.stopPropagation(); openCompetency({id:el.dataset.id,name:el.dataset.name});
+  }));
+  $('gExamList').querySelectorAll('.g-del-exam').forEach(el=>el.addEventListener('click', async (e)=>{
+    e.stopPropagation();
+    if(!confirm(`حذف اختبار "${el.dataset.name}" نهائياً؟ يمسح معه كل الدرجات المرصودة فيه.`)) return;
+    const {error}=await db.from('exams').delete().eq('id',el.dataset.id);
+    if(error){ toast('تعذر الحذف: '+error.message); return; }
+    toast('تم حذف الاختبار'); loadExams();
   }));
 }
 async function createExam(){

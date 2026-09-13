@@ -229,6 +229,7 @@ async function loadMineViolations(){
   MINE_ROWS=data||[];
   if(!MINE_ROWS.length){ $('vMineList').innerHTML='<div class="empty-day">ما سجّلتِ أي مخالفة بعد.</div>'; return; }
   $('vMineList').innerHTML=MINE_ROWS.map(v=>violCard(v)).join('');
+  bindMineDelete();
 }
 
 function bindMinePrint(){
@@ -254,7 +255,16 @@ function violCard(v){
     ${v.notes?`<div class="viol-notes">${v.notes}</div>`:''}
     ${v.admin_action_text?`<div class="viol-notes"><b>إجراء الإشراف الإداري:</b> ${v.admin_action_text}</div>`:''}
     ${v.guidance_action_text?`<div class="viol-notes"><b>إجراء الإرشاد الاجتماعي:</b> ${v.guidance_action_text}</div>`:''}
+    ${v.status==='new'?`<div class="viol-actions"><button class="btn ghost" data-del-viol="${v.id}" style="width:auto;padding:7px 16px;font-size:12px;border-color:var(--err);color:var(--err)">🗑️ حذف (قبل الاعتماد)</button></div>`:''}
   </div>`;
+}
+function bindMineDelete(){
+  $('vMineList').querySelectorAll('[data-del-viol]').forEach(b=>b.addEventListener('click', async ()=>{
+    if(!confirm('حذف هذي المخالفة نهائياً؟ (متاح بس قبل ما تُعتمد)')) return;
+    const {error}=await db.from('violations').delete().eq('id',b.dataset.delViol).eq('status','new').eq('reported_by',S.ME.id);
+    if(error){ toast('تعذر الحذف: '+error.message); return; }
+    toast('تم الحذف'); loadMineViolations();
+  }));
 }
 
 registerTab({id:'violTeacher', label:'المخالفات', group:'violations', groupLabel:'المخالفات',

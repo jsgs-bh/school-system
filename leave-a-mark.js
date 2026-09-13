@@ -445,12 +445,19 @@ async function loadMyEvents(){
       <input type="text" class="lm-result-input" data-id="${e.id}" placeholder="النتيجة/المركز" value="${e.result||''}" style="padding:6px 10px;border:1.5px solid var(--line);border-radius:7px;font:inherit;font-size:12.5px;width:140px">
       <button class="btn ghost lm-result-save" data-id="${e.id}" style="width:auto;padding:6px 12px;font-size:11px">حفظ</button>
     </span>`:''}
+    ${e.created_by===S.ME.id?`<button class="btn ghost lm-del-event" data-id="${e.id}" data-title="${e.title}" style="width:auto;padding:6px 12px;font-size:11px;border-color:var(--err);color:var(--err)">🗑️ حذف</button>`:''}
     </div>`).join('');
   $('lmMyList').querySelectorAll('.lm-result-save').forEach(b=>b.addEventListener('click', async ()=>{
     const inp=$('lmMyList').querySelector(`.lm-result-input[data-id="${b.dataset.id}"]`);
     const {error}=await db.from('event_records').update({result:clean(inp.value)||null}).eq('id',b.dataset.id);
     if(error){ toast('تعذر الحفظ: '+error.message); return; }
     toast('تم حفظ النتيجة');
+  }));
+  $('lmMyList').querySelectorAll('.lm-del-event').forEach(b=>b.addEventListener('click', async ()=>{
+    if(!confirm(`حذف فعالية "${b.dataset.title}" نهائياً؟`)) return;
+    const {error}=await db.from('event_records').delete().eq('id',b.dataset.id).eq('created_by',S.ME.id);
+    if(error){ toast('تعذر الحذف: '+error.message); return; }
+    toast('تم الحذف'); loadMyEvents();
   }));
 }
 

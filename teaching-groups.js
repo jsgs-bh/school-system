@@ -174,11 +174,41 @@ function renderGroups(){
         <div class="sugg" style="display:none"></div>
       </div>
       <span style="font-size:12px;color:#6b7683">${g.memberIds.size} طالبة</span>
+      <button class="btn ghost tg-paste-btn" data-gi="${gi}" style="width:auto;padding:6px 14px;font-size:12px">📋 لصق أرقام الطالبات</button>
       <button class="btn ghost tg-print-btn" data-gi="${gi}" style="width:auto;padding:6px 14px;font-size:12px">🖨️ طباعة قائمة المجموعة</button>
       ${GROUPS.length>1?`<button class="del" data-gi="${gi}">✕ حذف المجموعة</button>`:''}
+    </div>
+    <div class="tg-paste-box" data-gi="${gi}" style="display:none;background:var(--sand);border-radius:10px;padding:12px 14px;margin:-4px 0 10px">
+      <div class="sub" style="margin-bottom:6px">الصقي الأرقام الأكاديمية لطالبات "${g.name}" — رقم بكل سطر (أو مفصولة بفواصل/مسافات)، من أي مصدر (إكسل، واتساب، وورد...).</div>
+      <textarea class="tg-paste-input" rows="4" style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-size:13px" placeholder="مثال:&#10;2025-12&#10;2025-15&#10;2025-22"></textarea>
+      <button class="btn gold tg-paste-assign" data-gi="${gi}" style="width:auto;padding:8px 20px;margin-top:8px;font-size:12.5px">تعيين للمجموعة</button>
     </div>`).join('');
 
   $('tgGroupsList').querySelectorAll('.tg-print-btn').forEach(b=>b.addEventListener('click',()=>printGroupList(+b.dataset.gi)));
+  $('tgGroupsList').querySelectorAll('.tg-paste-btn').forEach(b=>b.addEventListener('click',()=>{
+    const box=$('tgGroupsList').querySelector(`.tg-paste-box[data-gi="${b.dataset.gi}"]`);
+    box.style.display=box.style.display==='none'?'block':'none';
+  }));
+  $('tgGroupsList').querySelectorAll('.tg-paste-assign').forEach(b=>b.addEventListener('click',()=>{
+    const gi=+b.dataset.gi;
+    const box=b.closest('.tg-paste-box');
+    const raw=box.querySelector('.tg-paste-input').value;
+    const tokens=raw.split(/[\n,\t، ]+/).map(t=>t.trim()).filter(Boolean);
+    if(!tokens.length){ toast('الصقي الأرقام الأكاديمية أولاً'); return; }
+    const byAcad={}; for(const s of ALL_STUDENTS) byAcad[String(s.academic_number).trim()]=s.id;
+    let matched=0, skipped=[];
+    for(const tok of tokens){
+      const sid=byAcad[tok];
+      if(!sid){ skipped.push(tok); continue; }
+      for(const g of GROUPS) g.memberIds.delete(sid);
+      GROUPS[gi].memberIds.add(sid);
+      matched++;
+    }
+    box.querySelector('.tg-paste-input').value='';
+    box.style.display='none';
+    renderGroups(); renderMembers();
+    toast(`تم تعيين ${matched} طالبة لـ"${GROUPS[gi].name}"${skipped.length?` — ${skipped.length} رقم غير موجود: ${skipped.slice(0,5).join('، ')}${skipped.length>5?'...':''}`:''}`);
+  }));
 
   $('tgGroupsList').querySelectorAll('.tg-name').forEach((inp,gi)=>inp.addEventListener('input',()=>{ GROUPS[gi].name=inp.value; }));
   $('tgGroupsList').querySelectorAll('.tg-teacher-search').forEach((inp,gi)=>{
