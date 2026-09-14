@@ -2,6 +2,7 @@
    ١) "طالباتي" (تحت حصصي) — لأي معلمة، قائمة طالبات شعبها الحالية.
    ٢) "طالبات" (لمكتب الإشراف/الإرشاد الاجتماعي) — بحث برقم أكاديمي/شخصي. */
 import { db, $, S, clean, toast, registerTab } from './core.js';
+console.log('%c✅ student-lookup.js تحمّل بنجاح', 'background:#0a0;color:#fff;font-size:16px;padding:6px');
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="myStudents" style="display:none">
@@ -15,7 +16,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="socStudents" style="display:none">
   <div class="panel">
     <h3>بيانات طالبة</h3>
-    <div class="sub">اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي.</div>
+    <div class="sub" id="ssDebugSub">اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: لسا الشاشة ما جهزت]</b></div>
     <div class="row" style="display:flex;gap:10px;margin-top:10px;position:relative">
       <input type="text" id="ssSearchInput" placeholder="اسم الطالبة أو رقمها…" autocomplete="off" style="flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
       <div class="sugg" id="ssSugg"></div>
@@ -82,8 +83,10 @@ let SS_RESULTS=[];
 function initSocStudents(){
   if($('ssSearchInput').dataset.ready) return;
   $('ssSearchInput').dataset.ready='1';
+  $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#080">[تشخيص: الشاشة جاهزة ✅]</b>';
   let searchTimer=null;
   $('ssSearchInput').addEventListener('input',()=>{
+    $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#08c">[تشخيص: استلمت كتابتك ✅ — جارٍ البحث...]</b>';
     clearTimeout(searchTimer);
     const q=clean($('ssSearchInput').value);
     if(q.length<2){ $('ssSugg').innerHTML=''; return; }
