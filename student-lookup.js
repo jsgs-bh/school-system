@@ -17,10 +17,10 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div class="panel">
     <h3>بيانات طالبة</h3>
     <div class="sub" id="ssDebugSub">اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: لسا الشاشة ما جهزت]</b></div>
-    <div class="row" style="display:flex;gap:10px;margin-top:10px;position:relative">
+    <div class="row" style="display:flex;gap:10px;margin-top:10px">
       <input type="text" id="ssSearchInput" placeholder="اسم الطالبة أو رقمها…" autocomplete="off" style="flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
-      <div class="sugg" id="ssSugg"></div>
     </div>
+    <div class="sugg" id="ssSugg"></div>
     <div id="ssResult" style="margin-top:18px"></div>
   </div>
 </div>
@@ -30,9 +30,9 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ss-row:last-child{border-bottom:none}
   .ss-row b{min-width:150px;color:var(--navy)}
   #socStudents .sugg, #myStudents .sugg{
-    position:absolute; top:100%; right:0; left:0; z-index:50; margin-top:4px;
+    margin-top:10px;
     background:#fff; border:1.5px solid var(--line); border-radius:10px;
-    box-shadow:0 6px 18px rgba(0,0,0,.12); max-height:280px; overflow-y:auto;
+    box-shadow:0 3px 10px rgba(0,0,0,.08); max-height:320px; overflow-y:auto;
   }
   #socStudents .sugg:empty, #myStudents .sugg:empty{ display:none; }
   #socStudents .sugg .opt, #myStudents .sugg .opt{
