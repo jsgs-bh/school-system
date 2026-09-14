@@ -67,16 +67,17 @@ registerTab({id:'myStudents', label:'طالباتي', group:'teacherArea', group
   show:f=>f.isTeacher||f.isSeniorTeacher, init:initMyStudents});
 
 /* ============ بحث الإشراف/الإرشاد الاجتماعي ============ */
-function showStudentCard(s){
-  const sec=(s.enrollments||[]).find(e=>!e.to_date)?.sections?.code||'—';
+async function showStudentCard(s){
   $('ssResult').innerHTML=`<div class="ss-card">
     <div class="ss-row"><b>الاسم</b><span>${s.full_name}</span></div>
-    <div class="ss-row"><b>الصف</b><span>${sec}</span></div>
+    <div class="ss-row"><b>الصف</b><span id="ssSecCell">جارٍ التحميل…</span></div>
     <div class="ss-row"><b>الرقم الأكاديمي</b><span>${s.academic_number}</span></div>
     <div class="ss-row"><b>البريد الإلكتروني</b><span>${s.email||'—'}</span></div>
     <div class="ss-row"><b>رقم التواصل 1</b><span>${s.contact1||'—'}</span></div>
     <div class="ss-row"><b>رقم التواصل 2</b><span>${s.contact2||'—'}</span></div>
   </div>`;
+  const {data:enr}=await db.from('enrollments').select('sections(code)').eq('student_id',s.id).is('to_date',null).maybeSingle();
+  const cell=$('ssSecCell'); if(cell) cell.textContent = enr?.sections?.code||'—';
 }
 
 let SS_RESULTS=[];
@@ -86,32 +87,38 @@ function initSocStudents(){
   $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#080">[تشخيص: الشاشة جاهزة ✅]</b>';
   let searchTimer=null;
   $('ssSearchInput').addEventListener('input',()=>{
-    $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#08c">[تشخيص: استلمت كتابتك ✅ — جارٍ البحث...]</b>';
     clearTimeout(searchTimer);
     const q=clean($('ssSearchInput').value);
     if(q.length<2){ $('ssSugg').innerHTML=''; return; }
+    $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#08c">[تشخيص: جارٍ البحث عن "${q}"...]</b>`;
     searchTimer=setTimeout(async ()=>{
       const timeoutMs=8000;
+      /* استعلام مبسَّط قصداً — بدون أي ربط متداخل، عشان نستبعد أي تعقيد ممكن يسبب تعليق. */
       const queryPromise=db.from('students')
-        .select('id,full_name,academic_number,personal_number,email,contact1,contact2,enrollments(section_id,to_date,sections(code))')
+        .select('id,full_name,academic_number,personal_number,email,contact1,contact2')
         .or(`full_name.ilike.%${q}%,academic_number.eq.${q},personal_number.eq.${q}`).limit(8);
       let data,error;
       try{
         const res=await Promise.race([
           queryPromise,
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('انتهت مهلة الاتصال (8 ثواني) — يمكن برنامج حماية بجهازك (زي Kaspersky) يعطّل الاتصال. جربي جهاز/شبكة ثانية.')),timeoutMs))
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),timeoutMs))
         ]);
         data=res.data; error=res.error;
       }catch(timeoutErr){
-        $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">${timeoutErr.message}</div>`;
+        $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: انتهت المهلة (٨ ثواني) بدون رد من الخادم]</b>';
+        $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">انتهت مهلة الاتصال — يمكن برنامج حماية بجهازك (زي Kaspersky) يعطّل الاتصال. جربي جهاز/شبكة ثانية.</div>`;
         return;
       }
-      if(error){ $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">تعذر البحث: ${error.message}</div>`; return; }
+      if(error){
+        $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: رجع خطأ من قاعدة البيانات]</b>`;
+        $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">تعذر البحث: ${error.message}</div>`;
+        return;
+      }
       SS_RESULTS=data||[];
-      $('ssSugg').innerHTML = SS_RESULTS.length ? SS_RESULTS.map(s=>{
-        const sec=(s.enrollments||[]).find(e=>!e.to_date)?.sections?.code||'';
-        return `<div class="opt" data-id="${s.id}">${s.full_name}<small>${s.academic_number} — ${sec}</small></div>`;
-      }).join('') : `<div class="opt" style="color:#8a93a0">لا نتائج لـ"${q}"</div>`;
+      $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#080">[تشخيص: رجع الرد — لقيت ${SS_RESULTS.length} نتيجة]</b>`;
+      $('ssSugg').innerHTML = SS_RESULTS.length ? SS_RESULTS.map(s=>
+        `<div class="opt" data-id="${s.id}">${s.full_name}<small>${s.academic_number}</small></div>`
+      ).join('') : `<div class="opt" style="color:#8a93a0">لا نتائج لـ"${q}"</div>`;
       $('ssSugg').querySelectorAll('.opt').forEach(el=>el.addEventListener('click',()=>{
         const stu=SS_RESULTS.find(s=>s.id===el.dataset.id);
         if(stu) showStudentCard(stu);
