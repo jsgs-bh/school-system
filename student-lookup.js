@@ -91,9 +91,21 @@ function initSocStudents(){
     const q=clean($('ssSearchInput').value);
     if(q.length<2){ $('ssSugg').innerHTML=''; return; }
     searchTimer=setTimeout(async ()=>{
-      const {data,error}=await db.from('students')
+      const timeoutMs=8000;
+      const queryPromise=db.from('students')
         .select('id,full_name,academic_number,personal_number,email,contact1,contact2,enrollments(section_id,to_date,sections(code))')
         .or(`full_name.ilike.%${q}%,academic_number.eq.${q},personal_number.eq.${q}`).limit(8);
+      let data,error;
+      try{
+        const res=await Promise.race([
+          queryPromise,
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('انتهت مهلة الاتصال (8 ثواني) — يمكن برنامج حماية بجهازك (زي Kaspersky) يعطّل الاتصال. جربي جهاز/شبكة ثانية.')),timeoutMs))
+        ]);
+        data=res.data; error=res.error;
+      }catch(timeoutErr){
+        $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">${timeoutErr.message}</div>`;
+        return;
+      }
       if(error){ $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">تعذر البحث: ${error.message}</div>`; return; }
       SS_RESULTS=data||[];
       $('ssSugg').innerHTML = SS_RESULTS.length ? SS_RESULTS.map(s=>{
