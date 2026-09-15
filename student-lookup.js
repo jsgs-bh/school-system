@@ -20,7 +20,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div class="row" style="display:flex;gap:10px;margin-top:10px">
       <input type="text" id="ssSearchInput" placeholder="اسم الطالبة أو رقمها…" autocomplete="off" style="flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
     </div>
-    <div class="sugg" id="ssSugg"></div>
+    <div class="board-wrap" style="margin-top:14px"><table class="board" id="ssSugg"></table></div>
     <div id="ssResult" style="margin-top:18px"></div>
   </div>
 </div>
@@ -29,18 +29,8 @@ $('appView').insertAdjacentHTML('beforeend', `
   .ss-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
   .ss-row:last-child{border-bottom:none}
   .ss-row b{min-width:150px;color:var(--navy)}
-  #socStudents .sugg, #myStudents .sugg{
-    margin-top:10px;
-    background:#fff; border:1.5px solid var(--line); border-radius:10px;
-    box-shadow:0 3px 10px rgba(0,0,0,.08); max-height:320px; overflow-y:auto;
-  }
-  #socStudents .sugg:empty, #myStudents .sugg:empty{ display:none; }
-  #socStudents .sugg .opt, #myStudents .sugg .opt{
-    padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line); font-size:13.5px;
-  }
-  #socStudents .sugg .opt:last-child, #myStudents .sugg .opt:last-child{ border-bottom:none; }
-  #socStudents .sugg .opt:hover, #myStudents .sugg .opt:hover{ background:var(--sand); }
-  #socStudents .sugg .opt small{ display:block; color:#8a93a0; font-size:11.5px; margin-top:2px; }
+  #ssSugg tr[data-id]{cursor:pointer}
+  #ssSugg tr[data-id]:hover{background:var(--sand)}
 </style>`);
 
 /* ============ طالباتي ============ */
@@ -89,7 +79,7 @@ function initSocStudents(){
   $('ssSearchInput').addEventListener('input',()=>{
     clearTimeout(searchTimer);
     const q=clean($('ssSearchInput').value);
-    if(q.length<2){ $('ssSugg').innerHTML=''; return; }
+      if(q.length<2){ $('ssSugg').innerHTML=''; return; }
     $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#08c">[تشخيص: جارٍ البحث عن "${q}"...]</b>`;
     searchTimer=setTimeout(async ()=>{
       const timeoutMs=8000;
@@ -106,20 +96,22 @@ function initSocStudents(){
         data=res.data; error=res.error;
       }catch(timeoutErr){
         $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: انتهت المهلة (٨ ثواني) بدون رد من الخادم]</b>';
-        $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">انتهت مهلة الاتصال — يمكن برنامج حماية بجهازك (زي Kaspersky) يعطّل الاتصال. جربي جهاز/شبكة ثانية.</div>`;
+        $('ssSugg').innerHTML=`<tr><td style="padding:14px;color:var(--err)">انتهت مهلة الاتصال — يمكن برنامج حماية بجهازك (زي Kaspersky) يعطّل الاتصال. جربي جهاز/شبكة ثانية.</td></tr>`;
         return;
       }
       if(error){
         $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: رجع خطأ من قاعدة البيانات]</b>`;
-        $('ssSugg').innerHTML=`<div class="opt" style="color:var(--err)">تعذر البحث: ${error.message}</div>`;
+        $('ssSugg').innerHTML=`<tr><td style="padding:14px;color:var(--err)">تعذر البحث: ${error.message}</td></tr>`;
         return;
       }
       SS_RESULTS=data||[];
       $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#080">[تشخيص: رجع الرد — لقيت ${SS_RESULTS.length} نتيجة]</b>`;
-      $('ssSugg').innerHTML = SS_RESULTS.length ? SS_RESULTS.map(s=>
-        `<div class="opt" data-id="${s.id}">${s.full_name}<small>${s.academic_number}</small></div>`
-      ).join('') : `<div class="opt" style="color:#8a93a0">لا نتائج لـ"${q}"</div>`;
-      $('ssSugg').querySelectorAll('.opt').forEach(el=>el.addEventListener('click',()=>{
+      $('ssSugg').innerHTML = SS_RESULTS.length
+        ? '<tr><th>الاسم</th><th>الرقم الأكاديمي</th></tr>' + SS_RESULTS.map(s=>
+            `<tr data-id="${s.id}"><td>${s.full_name}</td><td class="c">${s.academic_number}</td></tr>`
+          ).join('')
+        : `<tr><td style="padding:14px;color:#8a93a0">لا نتائج لـ"${q}"</td></tr>`;
+      $('ssSugg').querySelectorAll('tr[data-id]').forEach(el=>el.addEventListener('click',()=>{
         const stu=SS_RESULTS.find(s=>s.id===el.dataset.id);
         if(stu) showStudentCard(stu);
         $('ssSearchInput').value=stu?.full_name||''; $('ssSugg').innerHTML='';
