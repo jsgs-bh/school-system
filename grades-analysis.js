@@ -229,6 +229,20 @@ async function fetchUniqueSectionsForSubject(subjectId){
 }
 /* بمستوى "مجموعة التدريس" الفعلية — تفصل كل معلمة عن الأخرى داخل نفس
    الشعبة المنقسمة. تُستخدم في شاشة المتابعة التفاعلية والتحليل والمقارنة. */
+async function syncGroupMembers(sectionId, groupIds){
+  /* نفس إصلاح "رصد الدرجات" — طالبة انتقلت للشعبة بعد إنشاء مجموعة
+     التدريس تنضاف تلقائياً بدل ما تبقى ناقصة من التحليل. */
+  if(!sectionId||!groupIds?.length) return;
+  const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',sectionId).is('to_date',null);
+  const curIds=new Set((enr||[]).map(e=>e.student_id));
+  if(!curIds.size) return;
+  const {data:existing}=await db.from('teaching_group_members').select('student_id').in('group_id',groupIds);
+  const existingIds=new Set((existing||[]).map(e=>e.student_id));
+  const missing=[...curIds].filter(id=>!existingIds.has(id));
+  if(missing.length && groupIds.length===1){
+    await db.from('teaching_group_members').insert(missing.map(student_id=>({group_id:groupIds[0], student_id})));
+  }
+}
 async function fetchGroupsForSubject(subjectId){
   const {data:groups,error}=await db.from('teaching_groups')
     .select('id,name,section_id,teacher_id,sections(code),staff:teacher_id(full_name)')
@@ -261,6 +275,7 @@ async function loadGrid(){
   if(!labels.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا شعب ضمن نطاقك لهذا المقرر.</td></tr>'; return; }
 
   const groupIds=labels.map(l=>secMap[l].group_id);
+  for(const l of labels) await syncGroupMembers(secMap[l].section_id, [secMap[l].group_id]);
   const {data:members}=await db.from('teaching_group_members').select('group_id,student_id').in('group_id',groupIds);
   const groupOfStudent={}, totalByGroup={};
   for(const m of members||[]){ groupOfStudent[m.student_id]=m.group_id; totalByGroup[m.group_id]=(totalByGroup[m.group_id]||0)+1; }
@@ -297,6 +312,7 @@ async function loadGrid(){
 
 /* ============ شاشة التحليل التفصيلي ============ */
 async function buildDetail(groupId,secId,secCode,examId,examName,examTotal){
+  await syncGroupMembers(secId, [groupId]);
   const {data:mem}=await db.from('teaching_group_members').select('students(id,full_name,academic_number,special_case)').eq('group_id',groupId);
   const students=(mem||[]).map(m=>m.students).filter(Boolean);
   const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',examId);
@@ -528,6 +544,7 @@ async function runCompare(){
   const checked=[...$('gaCompareExamPick').querySelectorAll('input:checked')];
   if(checked.length<2){ toast('اختاري اختبارين على الأقل'); return; }
   const exams=checked.map(c=>({id:c.value,name:c.dataset.name,total:+c.dataset.total}));
+  await syncGroupMembers(CUR_DETAIL.secId, [CUR_DETAIL.groupId]);
   const {data:mem}=await db.from('teaching_group_members').select('students(id,full_name,academic_number)').eq('group_id',CUR_DETAIL.groupId);
   const students=(mem||[]).map(m=>m.students).filter(Boolean).sort((a,b)=>numKey(a.academic_number)-numKey(b.academic_number));
   const scoresByExam={};

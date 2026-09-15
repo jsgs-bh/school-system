@@ -374,11 +374,31 @@ async function createExam(){
   finally{ btn.disabled=false; }
 }
 
+async function syncGroupMembers(sectionId, groupIds){
+  /* الطالبات اللي انتقلن للشعبة بعد أول إنشاء لمجموعة التدريس ما كن
+     ينضفن تلقائياً لقائمة "الطالبات المدرَّسات". هذا يتأكد كل مرة: أي
+     طالبة مسجَّلة حالياً بالشعبة وناقصة من كل المجموعات، تنضاف تلقائياً
+     — بس لو مجموعة وحدة غير منقسمة (تفادياً لتخمين أي مجموعة تخص طالبة
+     جديدة بمادة منقسمة). */
+  if(!groupIds?.length) return;
+  const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',sectionId).is('to_date',null);
+  const curIds=new Set((enr||[]).map(e=>e.student_id));
+  if(!curIds.size) return;
+  const {data:existing}=await db.from('teaching_group_members').select('student_id').in('group_id',groupIds);
+  const existingIds=new Set((existing||[]).map(e=>e.student_id));
+  const missing=[...curIds].filter(id=>!existingIds.has(id));
+  if(!missing.length) return;
+  if(groupIds.length===1){
+    await db.from('teaching_group_members').insert(missing.map(student_id=>({group_id:groupIds[0], student_id})));
+  }
+}
+
 async function openExam(exam){
   CUR_EXAM=exam; CUR_EXAM_TOTAL=exam.exam_total ?? CUR_PAIR.exam_total; show('gGridView');
   $('gGridTitle').textContent=`${CUR_PAIR.section_code} — ${CUR_PAIR.subject_code} — ${exam.name}`;
   $('gGridSub').textContent=`الدرجة الكلية: ${CUR_EXAM_TOTAL}`;
   $('gGrid').innerHTML='<div class="empty-day">جارٍ تحميل الطالبات…</div>';
+  await syncGroupMembers(CUR_PAIR.section_id, CUR_PAIR.group_ids);
   const {data:enr,error}=await db.from('teaching_group_members')
     .select('students(id,full_name,academic_number,special_case)').in('group_id',CUR_PAIR.group_ids);
   if(error){ $('gGrid').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
@@ -670,6 +690,7 @@ async function openCompetency(exam){
   $('cCompList').innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
   $('cTemplateBanner').style.display='none';
 
+  await syncGroupMembers(CUR_PAIR.section_id, CUR_PAIR.group_ids);
   const {data:enr}=await db.from('teaching_group_members').select('student_id').in('group_id',CUR_PAIR.group_ids);
   COMP_ENROLLED=(enr||[]).length;
   $('cQN').textContent=COMP_ENROLLED;
@@ -850,6 +871,7 @@ async function runExtract(){
       const {data:ex}=await db.from('exams').select('id,exam_total').eq('section_id',p.section_id).eq('subject_id',p.subject_id).eq('name',name).maybeSingle();
       if(!ex) continue;
       const examTotal=ex.exam_total ?? p.exam_total;
+      await syncGroupMembers(p.section_id, p.group_ids);
       const {data:enr}=await db.from('teaching_group_members').select('students(id,full_name,academic_number)').in('group_id',p.group_ids);
       const {data:recs}=await db.from('grade_records').select('student_id,score').eq('exam_id',ex.id);
       const scoreBy={}; for(const r of recs||[]) if(r.score!=null) scoreBy[r.student_id]=r.score;
@@ -924,6 +946,7 @@ async function loadAlerts(){
   $('gAlertsTable').innerHTML='<tr><td style="padding:20px;text-align:center;color:#8a93a0">جارٍ التحميل…</td></tr>';
   const subjectStudentPairs=new Set();
   for(const p of MY_PAIRS){
+    await syncGroupMembers(p.section_id, p.group_ids);
     const {data:members}=await db.from('teaching_group_members').select('student_id').in('group_id',p.group_ids);
     for(const m of members||[]) subjectStudentPairs.add(`${p.subject_id}|${m.student_id}`);
   }
