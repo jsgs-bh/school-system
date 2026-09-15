@@ -231,16 +231,25 @@ async function fetchUniqueSectionsForSubject(subjectId){
    الشعبة المنقسمة. تُستخدم في شاشة المتابعة التفاعلية والتحليل والمقارنة. */
 async function syncGroupMembers(sectionId, groupIds){
   /* نفس إصلاح "رصد الدرجات" — طالبة انتقلت للشعبة بعد إنشاء مجموعة
-     التدريس تنضاف تلقائياً بدل ما تبقى ناقصة من التحليل. */
+     التدريس تنضاف تلقائياً، وطالبة انتقلت لشعبة ثانية فعلياً (مؤكَّدة)
+     تُحذف من هذي المجموعة (درجاتها القديمة تبقى بسجل قاعدة البيانات). */
   if(!sectionId||!groupIds?.length) return;
   const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',sectionId).is('to_date',null);
   const curIds=new Set((enr||[]).map(e=>e.student_id));
-  if(!curIds.size) return;
-  const {data:existing}=await db.from('teaching_group_members').select('student_id').in('group_id',groupIds);
-  const existingIds=new Set((existing||[]).map(e=>e.student_id));
-  const missing=[...curIds].filter(id=>!existingIds.has(id));
-  if(missing.length && groupIds.length===1){
-    await db.from('teaching_group_members').insert(missing.map(student_id=>({group_id:groupIds[0], student_id})));
+  const {data:existing}=await db.from('teaching_group_members').select('id,student_id').in('group_id',groupIds);
+  const existingRows=existing||[];
+  const existingIds=new Set(existingRows.map(e=>e.student_id));
+
+  if(curIds.size){
+    const missing=[...curIds].filter(id=>!existingIds.has(id));
+    if(missing.length && groupIds.length===1){
+      await db.from('teaching_group_members').insert(missing.map(student_id=>({group_id:groupIds[0], student_id})));
+    }
+  }
+
+  const staleCandidates=existingRows.filter(e=>!curIds.has(e.student_id));
+  if(staleCandidates.length){
+    await db.from('teaching_group_members').delete().in('id',staleCandidates.map(e=>e.id));
   }
 }
 async function fetchGroupsForSubject(subjectId){

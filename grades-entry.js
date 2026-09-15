@@ -379,17 +379,31 @@ async function syncGroupMembers(sectionId, groupIds){
      ينضفن تلقائياً لقائمة "الطالبات المدرَّسات". هذا يتأكد كل مرة: أي
      طالبة مسجَّلة حالياً بالشعبة وناقصة من كل المجموعات، تنضاف تلقائياً
      — بس لو مجموعة وحدة غير منقسمة (تفادياً لتخمين أي مجموعة تخص طالبة
-     جديدة بمادة منقسمة). */
+     جديدة بمادة منقسمة). وبالعكس: أي طالبة كانت هنا وانتقلت فعلياً
+     لشعبة ثانية (تأكدنا من تسجيلها الحالي بشعبة مختلفة) تُحذف من هذي
+     المجموعة — درجاتها القديمة تبقى محفوظة بسجل قاعدة البيانات، بس ما
+     تظهر بعدها بقائمة شعبتها القديمة. */
   if(!groupIds?.length) return;
   const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',sectionId).is('to_date',null);
   const curIds=new Set((enr||[]).map(e=>e.student_id));
-  if(!curIds.size) return;
-  const {data:existing}=await db.from('teaching_group_members').select('student_id').in('group_id',groupIds);
-  const existingIds=new Set((existing||[]).map(e=>e.student_id));
-  const missing=[...curIds].filter(id=>!existingIds.has(id));
-  if(!missing.length) return;
-  if(groupIds.length===1){
-    await db.from('teaching_group_members').insert(missing.map(student_id=>({group_id:groupIds[0], student_id})));
+  const {data:existing}=await db.from('teaching_group_members').select('id,student_id').in('group_id',groupIds);
+  const existingRows=existing||[];
+  const existingIds=new Set(existingRows.map(e=>e.student_id));
+
+  if(curIds.size){
+    const missing=[...curIds].filter(id=>!existingIds.has(id));
+    if(missing.length && groupIds.length===1){
+      await db.from('teaching_group_members').insert(missing.map(student_id=>({group_id:groupIds[0], student_id})));
+    }
+  }
+
+  /* أي طالبة بالمجموعة ماعادت مسجَّلة نشطة بنفس شعبة المجموعة — سواء
+     انتقلت لشعبة ثانية أو تخرَّجت أو انسحبت أو انتقلت لمدرسة ثانية —
+     تُحذف من قائمة المادة هذي. درجاتها القديمة تبقى محفوظة بسجل قاعدة
+     البيانات، بس ما تظهر بعدها بقائمة شعبتها القديمة. */
+  const staleCandidates=existingRows.filter(e=>!curIds.has(e.student_id));
+  if(staleCandidates.length){
+    await db.from('teaching_group_members').delete().in('id',staleCandidates.map(e=>e.id));
   }
 }
 
