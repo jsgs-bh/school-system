@@ -148,17 +148,53 @@ async function loadStudents(){
       const targetId=row.querySelector('.as-transfer').value;
       if(!targetId){ toast('اختاري الشعبة الهدف أولاً'); return; }
       const targetCode=SECTIONS.find(s=>s.id===targetId)?.code||'';
-      if(!confirm(`نقل هذي الطالبة إلى شعبة "${targetCode}"؟`)) return;
+      if(!confirm(`نقل هذي الطالبة إلى شعبة "${targetCode}"؟ درجاتها بالمقررات المشتركة (نفس اسم الاختبار) تنتقل معها تلقائياً — غيابها محفوظ أصلاً باسمها بغض النظر عن شعبتها.`)) return;
       try{
         await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).eq('id',enrollmentId);
         await db.from('enrollments').insert({section_id:targetId, student_id:studentId, from_date:new Date().toISOString().slice(0,10)});
-        // تنظيف عضوية مجموعات التدريس القديمة — نفس الدرس من مشكلة الترحيل السابقة
-        const {data:oldGroups}=await db.from('teaching_groups').select('id').eq('section_id',sectionId);
+
+        // مجموعات التدريس القديمة (الشعبة القديمة) — نشيلها منها
+        const {data:oldGroups}=await db.from('teaching_groups').select('id,subject_id').eq('section_id',sectionId);
         const oldGroupIds=(oldGroups||[]).map(g=>g.id);
         if(oldGroupIds.length){
           await db.from('teaching_group_members').delete().eq('student_id',studentId).in('group_id',oldGroupIds);
         }
-        toast('تم النقل بنجاح');
+
+        // مجموعات التدريس الجديدة (الشعبة الهدف) — لو موجودة (غير منقسمة) نضيفها لها،
+        // ونستفيد من نفس القائمة لمعرفة أي مواد مشتركة بين الشعبتين لنقل الدرجات.
+        const {data:newGroups}=await db.from('teaching_groups').select('id,subject_id,name').eq('section_id',targetId);
+        const newGroupBySubject={};
+        for(const g of newGroups||[]){
+          if(g.name==='المجموعة الوحيدة') newGroupBySubject[g.subject_id]=g.id;
+        }
+        const undividedNewGroupIds=Object.values(newGroupBySubject);
+        if(undividedNewGroupIds.length){
+          const rows=undividedNewGroupIds.map(group_id=>({group_id, student_id}));
+          await db.from('teaching_group_members').upsert(rows,{onConflict:'group_id,student_id',ignoreDuplicates:true});
+        }
+
+        // نقل الدرجات: لكل مادة مشتركة بين الشعبتين، ولكل اختبار بنفس
+        // الاسم موجود بالشعبتين، ننسخ درجتها من اختبار الشعبة القديمة
+        // لاختبار الشعبة الجديدة (لو ما عندها درجة هناك أصلاً).
+        const oldSubjectIds=(oldGroups||[]).map(g=>g.subject_id);
+        const sharedSubjectIds=oldSubjectIds.filter(id=>newGroupBySubject[id]);
+        let movedGrades=0;
+        if(sharedSubjectIds.length){
+          const {data:oldExams}=await db.from('exams').select('id,name,subject_id').eq('section_id',sectionId).in('subject_id',sharedSubjectIds);
+          const {data:newExams}=await db.from('exams').select('id,name,subject_id').eq('section_id',targetId).in('subject_id',sharedSubjectIds);
+          for(const oe of oldExams||[]){
+            const ne=(newExams||[]).find(e=>e.subject_id===oe.subject_id && e.name===oe.name);
+            if(!ne) continue;
+            const {data:oldScore}=await db.from('grade_records').select('score').eq('exam_id',oe.id).eq('student_id',studentId).maybeSingle();
+            if(oldScore?.score==null) continue;
+            const {data:already}=await db.from('grade_records').select('id').eq('exam_id',ne.id).eq('student_id',studentId).maybeSingle();
+            if(already) continue; // عندها درجة بالشعبة الجديدة أصلاً — ما نلمسها
+            await db.from('grade_records').insert({exam_id:ne.id, student_id:studentId, score:oldScore.score});
+            movedGrades++;
+          }
+        }
+
+        toast(`تم النقل بنجاح${movedGrades?` — انتقلت ${movedGrades} درجة معها`:''}`);
         loadStudents();
       }catch(err){ toast('تعذر النقل: '+(err.message||err)); }
     });

@@ -76,23 +76,68 @@ $('stuRun').addEventListener('click', async ()=>{
     prog(70,'قيد الطالبات…');
     const {data:open,error:e3}=await db.from('enrollments').select('id,student_id,section_id').is('to_date',null); if(e3) throw e3;
     const openBy=Object.fromEntries((open||[]).map(e=>[e.student_id,e]));
-    const inserts=[],closes=[];
+    const inserts=[],closes=[],transfers=[];
     for(const s of STU.students){
       const sid=stuId[s.academic_number], scId=secId[s._section];
       if(!sid||!scId) continue;
       const cur=openBy[sid];
       if(cur&&cur.section_id===scId) continue;
-      if(cur) closes.push(cur.id);
+      if(cur){ closes.push(cur.id); transfers.push({student_id:sid, old_section_id:cur.section_id, new_section_id:scId}); }
       inserts.push({student_id:sid,section_id:scId});
     }
     for(const c of chunk(closes,300)){ const{error}=await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).in('id',c); if(error) throw error; }
     for(const c of chunk(inserts,500)){ const{error}=await db.from('enrollments').insert(c); if(error) throw error; }
+
+    let movedGrades=0;
+    if(transfers.length){
+      prog(85,'مزامنة مجموعات التدريس ونقل الدرجات…');
+      const oldSecIds=[...new Set(transfers.map(t=>t.old_section_id))];
+      const newSecIds=[...new Set(transfers.map(t=>t.new_section_id))];
+      const {data:allGroups}=await db.from('teaching_groups').select('id,section_id,subject_id,name').in('section_id',[...oldSecIds,...newSecIds]);
+      const groupsBySection={};
+      for(const g of allGroups||[]) (groupsBySection[g.section_id] ??= []).push(g);
+
+      const removeRows=[], addRows=[];
+      for(const t of transfers){
+        const oldGroupIds=(groupsBySection[t.old_section_id]||[]).map(g=>g.id);
+        for(const gid of oldGroupIds) removeRows.push({group_id:gid, student_id:t.student_id});
+        const newUndivided=(groupsBySection[t.new_section_id]||[]).filter(g=>g.name==='المجموعة الوحيدة');
+        for(const g of newUndivided) addRows.push({group_id:g.id, student_id:t.student_id});
+      }
+      for(const r of removeRows){ await db.from('teaching_group_members').delete().eq('group_id',r.group_id).eq('student_id',r.student_id); }
+      if(addRows.length){ const {error}=await db.from('teaching_group_members').upsert(addRows,{onConflict:'group_id,student_id',ignoreDuplicates:true}); if(error) throw error; }
+
+      // نقل الدرجات: لكل انتقال، المواد المشتركة بين الشعبتين، ولاختبار بنفس
+      // الاسم بالاثنين، ننسخ الدرجة القديمة للجديدة (لو ما عندها درجة فيه أصلاً).
+      const {data:allExams}=await db.from('exams').select('id,name,subject_id,section_id').in('section_id',[...oldSecIds,...newSecIds]);
+      const examsBySection={};
+      for(const e of allExams||[]) (examsBySection[e.section_id] ??= []).push(e);
+      for(const t of transfers){
+        const oldSubjIds=new Set((groupsBySection[t.old_section_id]||[]).map(g=>g.subject_id));
+        const newSubjIds=new Set((groupsBySection[t.new_section_id]||[]).map(g=>g.subject_id));
+        const shared=[...oldSubjIds].filter(id=>newSubjIds.has(id));
+        if(!shared.length) continue;
+        const oldExams=(examsBySection[t.old_section_id]||[]).filter(e=>shared.includes(e.subject_id));
+        const newExams=(examsBySection[t.new_section_id]||[]).filter(e=>shared.includes(e.subject_id));
+        for(const oe of oldExams){
+          const ne=newExams.find(e=>e.subject_id===oe.subject_id && e.name===oe.name);
+          if(!ne) continue;
+          const {data:oldScore}=await db.from('grade_records').select('score').eq('exam_id',oe.id).eq('student_id',t.student_id).maybeSingle();
+          if(oldScore?.score==null) continue;
+          const {data:already}=await db.from('grade_records').select('id').eq('exam_id',ne.id).eq('student_id',t.student_id).maybeSingle();
+          if(already) continue;
+          const {error}=await db.from('grade_records').insert({exam_id:ne.id, student_id:t.student_id, score:oldScore.score});
+          if(!error) movedGrades++;
+        }
+      }
+    }
+
     prog(95,'توثيق…');
     await db.from('audit_log').insert({actor_id:S.ME.id,action:'import',entity:'students',
-      details:{students:stuRows.length,sections:secRows.length,new_enrollments:inserts.length,moved:closes.length}});
+      details:{students:stuRows.length,sections:secRows.length,new_enrollments:inserts.length,moved:closes.length,moved_grades:movedGrades}});
     prog(100,'اكتمل');
     R.className='result ok';
-    R.innerHTML=`✅ اكتمل الاستيراد:<br>• ${stuRows.length} طالبة<br>• ${secRows.length} شعبة<br>• ${inserts.length} قيد جديد${closes.length?`<br>• ${closes.length} نقل بين شعب`:''}`;
+    R.innerHTML=`✅ اكتمل الاستيراد:<br>• ${stuRows.length} طالبة<br>• ${secRows.length} شعبة<br>• ${inserts.length} قيد جديد${closes.length?`<br>• ${closes.length} نقل بين شعب${movedGrades?` (${movedGrades} درجة انتقلت معهن)`:''}`:''}`;
     refreshStats();
     await checkMissingStudents(STU.students.map(s=>s.academic_number));
   }catch(err){ R.className='result err'; R.textContent='❌ توقف الاستيراد: '+(err.message||err); }
