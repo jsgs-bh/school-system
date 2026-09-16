@@ -14,6 +14,8 @@ import { initAdminStudents } from './admin-students.js';
 import { initCategories } from './grades-settings.js';
 import { initSC } from './special-cases.js';
 import { initGraduates } from './graduates.js';
+import { initSettingsPerms } from './settings.js';
+import { initStaffAdmin } from './staff-admin.js';
 
 /* يبني تبويباً مُجمِّعاً واحداً: تبنيّة فرعية خفيفة أعلى الشاشة، وتحتها
    الشاشات الفرعية (أُعيد تركيبها هنا من عناصرها الأصلية) تظهر وحدة
@@ -91,3 +93,20 @@ async function initStudentsHub(){
 }
 registerTab({id:'settingsStudentsHub', label:'الطالبات', group:'settings', groupLabel:'الإعدادات',
   show:f=>f.isAdmin||f.isReg, init:initStudentsHub});
+
+/* ============ تبويب "منتسبات المدرسة" ============ */
+const STAFF_CHILDREN=[
+  {id:'settingsPerms', label:'منح الصلاحيات', init:initSettingsPerms},
+  {id:'staffAdmin', label:'إدارة المنتسبات', init:initStaffAdmin},
+];
+function buildStaffHub(){
+  if($('settingsStaffHub')) return;
+  buildHub('settingsStaffHub', true, STAFF_CHILDREN);
+}
+async function initStaffHub(){
+  buildStaffHub();
+  const first=firstVisible(STAFF_CHILDREN);
+  if(first) await openHubChild('settingsStaffHub', STAFF_CHILDREN, first.id);
+}
+registerTab({id:'settingsStaffHub', label:'منتسبات المدرسة', group:'settings', groupLabel:'الإعدادات',
+  show:f=>f.isAdmin, init:initStaffHub});

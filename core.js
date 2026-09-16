@@ -129,7 +129,12 @@ export async function getSemesterSubjectIds(semester, yearId){
   const sectionIds = (secs||[]).map(s=>s.id);
   if(!sectionIds.length) return [];
   const {data:ents} = await db.from('timetable_entries').select('subject_id').in('section_id', sectionIds).eq('is_current',true);
-  return [...new Set((ents||[]).map(e=>e.subject_id).filter(Boolean))];
+  const allIds=[...new Set((ents||[]).map(e=>e.subject_id).filter(Boolean))];
+  if(!allIds.length) return [];
+  /* المقررات الإثرائية والإضافية ما عندها درجات إطلاقاً — تُستبعد من أي
+     شاشة درجات (رصد الدرجات، تحليل الاختبارات)، تبقى فقط برصد الغياب. */
+  const {data:normalSubs} = await db.from('subjects').select('id').in('id',allIds).eq('category','normal');
+  return (normalSubs||[]).map(s=>s.id);
 }
 /* رابط شعار المدرسة (لو مرفوع) — يُستخدم كهيدر في التقارير المصدَّرة. */
 export function getLogoUrl(){

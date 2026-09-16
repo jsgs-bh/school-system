@@ -2,15 +2,21 @@
    ١) درجة الاختبار الكلية لكل مقرر  ٢) فئات التصنيف وألوانها  ٣) عتبتا النجاح والإتقان
    هذه الأساس الذي تعتمد عليه شاشتا "رصد الدرجات" و"تحليل الاختبارات" القادمتان.
    الملف مكتفٍ بذاته: يضيف تبويبيه وتنسيقاته بنفسه. */
-import { db, $, S, toast, registerTab } from './core.js';
+import { db, $, S, toast, printHeaderHtml, printWithTitle, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="settingsSubjects" style="display:none">
   <div class="panel">
-    <h3>درجة الاختبار الكلية لكل مقرر</h3>
-    <div class="sub">المقررات مستخلصة تلقائياً من الجدول الدراسي عند استيراده. الافتراضي ٢٥ لأي مقرر جديد — عدّلي ما يختلف فقط.</div>
+    <h3>تصنيف المقررات ودرجة الاختبار الكلية</h3>
+    <div class="sub">المقررات مستخلصة تلقائياً من الجدول الدراسي عند استيراده. الافتراضي ٢٥ لأي مقرر جديد — عدّلي ما يختلف فقط.<br>
+      <b>عادي:</b> مقرر درجات كامل، يظهر برصد الدرجات وتحليل الاختبارات.<br>
+      <b>إثرائي:</b> بدون درجات إطلاقاً، ما يظهر برصد الدرجات — بس فيه كشف موحَّد للطباعة.<br>
+      <b>إضافي:</b> بدون درجات ولا كشف — يظهر برصد الغياب بس.</div>
     <div id="subjList"></div>
-    <button class="btn gold" id="subjSave" style="width:auto;padding:11px 26px;margin-top:10px">حفظ الدرجات</button>
+    <div class="viol-actions" style="margin-top:10px">
+      <button class="btn gold" id="subjSave" style="width:auto;padding:11px 26px">حفظ</button>
+      <button class="btn ghost" id="subjPrintEnrich" style="width:auto;padding:11px 26px">🖨️ كشف موحَّد للمقررات الإثرائية</button>
+    </div>
   </div>
   <div class="panel">
     <h3>عتبتا النجاح والإتقان</h3>
@@ -34,35 +40,57 @@ $('appView').insertAdjacentHTML('beforeend', `
     </div>
   </div>
 </div>
+<div id="printAreaSubj" style="display:none"></div>
 <style>
   .subj-row{display:flex;align-items:center;gap:14px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:10px 14px;margin-bottom:8px}
   .subj-row b{flex:1}
   .subj-row input{width:90px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fbfaf7}
+  .subj-row select{padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fbfaf7}
   .cat-row{display:flex;align-items:center;gap:10px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:10px 14px;margin-bottom:8px}
   .cat-row input[type=text]{flex:1;min-width:100px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fbfaf7}
   .cat-row input[type=number]{width:80px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fbfaf7}
   .cat-row input[type=color]{width:44px;height:38px;border:1.5px solid var(--line);border-radius:8px;padding:2px;cursor:pointer}
   .cat-row .del{background:none;border:none;color:var(--err);font-size:16px;cursor:pointer;padding:4px 8px}
   .cat-row .pct-lbl{font-size:12px;color:#8a93a0}
+  .viol-print-tbl{width:100%;border-collapse:collapse;font-size:10.5pt;margin-top:8px}
+  .viol-print-tbl th{background:#eef1f5;border:1px solid #333;padding:6px}
+  .viol-print-tbl td{border:1px solid #333;padding:6px;text-align:center}
+  @media print{
+    body *{visibility:hidden}
+    #printAreaSubj, #printAreaSubj *{visibility:visible}
+    #printAreaSubj{display:block!important;position:absolute;inset-inline-start:0;top:0;width:100%}
+  }
 </style>`);
 
-/* ============ درجة الاختبار لكل مقرر ============ */
+/* ============ تصنيف المقررات ودرجة الاختبار ============ */
 async function initSubjects(){
   if($('subjList').dataset.ready) return;
   $('subjList').dataset.ready='1';
   await loadSubjects();
   await loadThresholds();
   $('subjSave').addEventListener('click',saveSubjects);
+  $('subjPrintEnrich').addEventListener('click',printEnrichmentSheet);
   $('threshSave').addEventListener('click',saveThresholds);
 }
+const CAT_LABEL={normal:'عادي',enrichment:'إثرائي',additional:'إضافي'};
 async function loadSubjects(){
-  const {data:subs}=await db.from('subjects').select('id,code,exam_total').order('code');
+  const {data:subs}=await db.from('subjects').select('id,code,exam_total,category').order('code');
   $('subjList').innerHTML=(subs||[]).map(s=>`
     <div class="subj-row" data-id="${s.id}">
       <b>${s.code}</b>
       <label style="font-size:12px;color:#8a93a0">درجة الاختبار</label>
-      <input type="number" min="1" step="0.5" value="${s.exam_total}">
+      <input type="number" min="1" step="0.5" value="${s.exam_total}" ${s.category!=='normal'?'disabled':''}>
+      <label style="font-size:12px;color:#8a93a0">التصنيف</label>
+      <select class="subj-cat">
+        <option value="normal" ${s.category==='normal'?'selected':''}>عادي</option>
+        <option value="enrichment" ${s.category==='enrichment'?'selected':''}>إثرائي</option>
+        <option value="additional" ${s.category==='additional'?'selected':''}>إضافي</option>
+      </select>
     </div>`).join('') || '<div class="empty-day">لا مقررات بعد — استوردي الجدول الدراسي أولاً.</div>';
+  $('subjList').querySelectorAll('.subj-cat').forEach(sel=>sel.addEventListener('change',()=>{
+    const input=sel.closest('.subj-row').querySelector('input[type=number]');
+    input.disabled = sel.value!=='normal';
+  }));
 }
 async function saveSubjects(){
   const rows=[...$('subjList').querySelectorAll('.subj-row')];
@@ -70,14 +98,46 @@ async function saveSubjects(){
   const btn=$('subjSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
   try{
     for(const r of rows){
-      const val=+r.querySelector('input').value;
-      if(!val||val<=0) continue;
-      const {error}=await db.from('subjects').update({exam_total:val}).eq('id',r.dataset.id);
+      const category=r.querySelector('.subj-cat').value;
+      const payload={category};
+      if(category==='normal'){
+        const val=+r.querySelector('input').value;
+        if(val>0) payload.exam_total=val;
+      }
+      const {error}=await db.from('subjects').update(payload).eq('id',r.dataset.id);
       if(error) throw error;
     }
-    toast('تم حفظ درجات الاختبار');
+    toast('تم الحفظ');
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
-  finally{ btn.disabled=false; btn.textContent='حفظ الدرجات'; }
+  finally{ btn.disabled=false; btn.textContent='حفظ'; }
+}
+
+/* كشف موحَّد لكل المقررات الإثرائية: شعبة × مقرر إثرائي × قائمة طالباتها */
+async function printEnrichmentSheet(){
+  const {data:enrichSubs}=await db.from('subjects').select('id,code').eq('category','enrichment');
+  if(!enrichSubs?.length){ toast('لا مقررات إثرائية معرَّفة بعد'); return; }
+  const {data:entries}=await db.from('timetable_entries')
+    .select('subject_id,section_id,is_current,sections(code)').in('subject_id',enrichSubs.map(s=>s.id)).eq('is_current',true);
+  const bySubject={};
+  for(const e of entries||[]){
+    (bySubject[e.subject_id] ??= new Set()).add(e.sections?.code);
+  }
+  let html=printHeaderHtml('كشف موحَّد — المقررات الإثرائية');
+  for(const s of enrichSubs){
+    const secCodes=[...(bySubject[s.id]||[])];
+    if(!secCodes.length) continue;
+    const {data:secRows}=await db.from('sections').select('id,code').in('code',secCodes).eq('academic_year_id',S.YEAR.id);
+    for(const sec of secRows||[]){
+      const {data:enr}=await db.from('enrollments').select('students(full_name,academic_number)').eq('section_id',sec.id).is('to_date',null);
+      const list=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'ar',{numeric:true}));
+      html+=`<h4>${s.code} — ${sec.code}</h4>
+        <table class="viol-print-tbl"><tr><th>الرقم الأكاديمي</th><th>اسم الطالبة</th></tr>
+        ${list.map(st=>`<tr><td>${st.academic_number}</td><td>${st.full_name}</td></tr>`).join('')}
+        </table>`;
+    }
+  }
+  $('printAreaSubj').innerHTML=html;
+  printWithTitle('كشف_المقررات_الإثرائية','printAreaSubj');
 }
 
 /* ============ عتبتا النجاح والإتقان ============ */

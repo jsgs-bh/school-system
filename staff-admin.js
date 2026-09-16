@@ -1,6 +1,6 @@
 /* staff-admin.js — تحكّم كامل بالمنتسبات (إضافة/تعديل/تعطيل) للأدمن،
    منفصل عن شاشة "المعلمات" (منح الصلاحيات) الموجودة أصلاً. */
-import { db, $, S, clean, toast, titleNames, registerTab } from './core.js';
+import { db, $, S, clean, toast, titleNames } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="staffAdmin" style="display:none">
@@ -163,5 +163,4 @@ async function saveStaff(){
   finally{ btn.disabled=false; btn.textContent='حفظ'; }
 }
 
-registerTab({id:'staffAdmin', label:'إدارة المنتسبات', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:initStaffAdmin});
+export { initStaffAdmin };

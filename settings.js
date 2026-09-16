@@ -73,6 +73,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <h3>عرض الصلاحيات</h3>
     <div class="sub">كل المنتسبات وصلاحياتهن. فلتري باسم مشروع لعرض مسؤولته، أو باسم لجنة لعرض أعضائها.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="permFilterDept" style="min-width:200px"><option value="">فرز حسب القسم…</option></select>
       <select id="permFilterProject" style="min-width:200px"><option value="">فرز حسب مشروع…</option></select>
       <select id="permFilterCommittee" style="min-width:200px"><option value="">فرز حسب لجنة…</option></select>
       <button class="btn ghost" id="permFilterClear" style="width:auto;padding:9px 16px">الكل (بلا فلتر)</button>
@@ -344,25 +345,41 @@ async function initPermsRoster(){
   }
   ROSTER_ALL=(staff||[]).map(s=>({
     id:s.id, full_name:s.full_name, dept:s.departments?.name||'', title:titleNames[s.title]||s.title,
+    _isLead:s.title==='leadership',
     rolesText:(rolesByStaff[s.id]||[]).map(r=>(roleNames[r.role]||r.role)+(r.scope?' — '+r.scope:'')).join('، ')||'—',
     committeesText:[...(committeeNamesByStaff[s.id]||[])].join('، ')||'',
     _projectNames:new Set((rolesByStaff[s.id]||[]).filter(r=>r.role==='project_lead').map(r=>r.scope)),
     _committeeIds:committeeIdsByStaff[s.id]||new Set(),
   }));
+  /* ترتيب موحَّد: قسم "الادارة" دايماً أول شي، وداخله القيادة العليا
+     أول أسماء — بعدها باقي الأقسام أبجدياً، وداخل كل قسم بالاسم. */
+  ROSTER_ALL.sort((a,b)=>
+    (a.dept==='الادارة'?0:1)-(b.dept==='الادارة'?0:1) ||
+    a.dept.localeCompare(b.dept,'ar') ||
+    (b._isLead-a._isLead) ||
+    a.full_name.localeCompare(b.full_name,'ar')
+  );
+
+  const depts=[...new Set(ROSTER_ALL.map(s=>s.dept).filter(Boolean))].sort((a,b)=>(a==='الادارة'?0:1)-(b==='الادارة'?0:1)||a.localeCompare(b,'ar'));
+  $('permFilterDept').innerHTML='<option value="">فرز حسب القسم…</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');
+  $('permFilterDept').addEventListener('change',()=>{ if($('permFilterDept').value){ $('permFilterProject').value=''; $('permFilterCommittee').value=''; } renderRoster(); });
 
   $('permFilterProject').innerHTML='<option value="">فرز حسب مشروع…</option>'+PERM_PROJECTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   $('permFilterCommittee').innerHTML='<option value="">فرز حسب لجنة…</option>'+ROSTER_COMMITTEES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
 
-  $('permFilterProject').addEventListener('change',()=>{ if($('permFilterProject').value) $('permFilterCommittee').value=''; renderRoster(); });
-  $('permFilterCommittee').addEventListener('change',()=>{ if($('permFilterCommittee').value) $('permFilterProject').value=''; renderRoster(); });
-  $('permFilterClear').addEventListener('click',()=>{ $('permFilterProject').value=''; $('permFilterCommittee').value=''; renderRoster(); });
+  $('permFilterProject').addEventListener('change',()=>{ if($('permFilterProject').value){ $('permFilterCommittee').value=''; $('permFilterDept').value=''; } renderRoster(); });
+  $('permFilterCommittee').addEventListener('change',()=>{ if($('permFilterCommittee').value){ $('permFilterProject').value=''; $('permFilterDept').value=''; } renderRoster(); });
+  $('permFilterClear').addEventListener('click',()=>{ $('permFilterProject').value=''; $('permFilterCommittee').value=''; $('permFilterDept').value=''; renderRoster(); });
   $('permPrintBtn').addEventListener('click',printRoster);
   $('permExportBtn').addEventListener('click',exportRosterXls);
 
   renderRoster();
 }
 function currentRosterView(){
-  const projId=$('permFilterProject').value, commId=$('permFilterCommittee').value;
+  const projId=$('permFilterProject').value, commId=$('permFilterCommittee').value, deptName=$('permFilterDept').value;
+  if(deptName){
+    return {title:`منتسبات قسم: ${deptName}`, rows:ROSTER_ALL.filter(s=>s.dept===deptName)};
+  }
   if(projId){
     const projName=PERM_PROJECTS.find(p=>p.id===projId)?.name||'';
     return {title:`المسؤولات عن مشروع: ${projName}`, rows:ROSTER_ALL.filter(s=>s._projectNames.has(projName))};
@@ -412,5 +429,4 @@ async function exportRosterXls(){
 
 registerTab({id:'settingsData', label:'البيانات الأساسية', group:'settings', groupLabel:'الإعدادات',
   show:f=>f.isAdmin, init:initData});
-registerTab({id:'settingsPerms', label:'المعلمات', group:'settings', groupLabel:'الإعدادات',
-  show:f=>f.isAdmin, init:async()=>{ await initPerms(); await initPermsRoster(); }});
+export async function initSettingsPerms(){ await initPerms(); await initPermsRoster(); }
