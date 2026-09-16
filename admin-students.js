@@ -128,6 +128,8 @@ async function loadStudents(){
         <button class="btn gold as-save" style="width:auto;padding:8px 16px;font-size:12px">حفظ البيانات</button>
         <select class="as-transfer" style="min-width:160px"><option value="">نقل إلى شعبة…</option>${sameLevelSections.map(sec=>`<option value="${sec.id}">${sec.code}</option>`).join('')}</select>
         <button class="btn ghost as-transfer-btn" style="width:auto;padding:8px 16px;font-size:12px;color:var(--err);border-color:var(--err)">نقل</button>
+        <select class="as-leave" style="min-width:180px"><option value="">تركت المدرسة…</option><option value="transferred">انتقلت لمدرسة ثانية</option><option value="home_school">منازل</option></select>
+        <button class="btn ghost as-leave-btn" style="width:auto;padding:8px 16px;font-size:12px;color:var(--err);border-color:var(--err)">تأكيد</button>
       </div>
     </div>`).join('');
 
@@ -143,6 +145,18 @@ async function loadStudents(){
       const {error}=await db.from('students').update(payload).eq('id',studentId);
       if(error){ toast('تعذر الحفظ: '+error.message); return; }
       toast('تم حفظ بيانات التواصل');
+    });
+    row.querySelector('.as-leave-btn').addEventListener('click', async ()=>{
+      const reason=row.querySelector('.as-leave').value;
+      if(!reason){ toast('اختاري السبب أولاً'); return; }
+      const label = reason==='home_school' ? 'منازل' : 'مدرسة ثانية';
+      if(!confirm(`تأكيد: هذي الطالبة تركت المدرسة (${label})؟ يُقفل تسجيلها الحالي، وسجلها التاريخي (حضور، درجات، مخالفات...) يبقى محفوظاً كامل.`)) return;
+      try{
+        await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).eq('id',enrollmentId);
+        await db.from('students').update({status:reason}).eq('id',studentId);
+        toast('تم تحديث حالة الطالبة');
+        loadStudents();
+      }catch(err){ toast('تعذر التحديث: '+(err.message||err)); }
     });
     row.querySelector('.as-transfer-btn').addEventListener('click', async ()=>{
       const targetId=row.querySelector('.as-transfer').value;
