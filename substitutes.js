@@ -149,9 +149,10 @@ function getDow(dateStr){ return new Date(dateStr+'T12:00:00').getDay()+1; }
 /* ============ حوض المرشَّحات: معلمات فقط (مو إدارة ولا مكاتب)، بنصابها الأسبوعي واليومي وانشغالها بكل حصة ============ */
 async function loadCandidatePool(dow){
   const {data:staff}=await db.from('staff').select('id,full_name,title,departments(kind)')
-    .in('title',['teacher','senior_teacher']).eq('is_active',true);
-  /* استبعاد المكاتب غير التدريسية (الإرشاد الأكاديمي/الاجتماعي، التسجيل، التمكين الرقمي، الإدارية...)
-     عبر kind='office' بدل مطابقة الاسم — أسلم من فروق كتابة أسماء الأقسام (لاحظنا بعض التكرار). */
+    .eq('title','teacher').eq('is_active',true);
+  /* الاحتياط حق المعلمات فقط (لا المعلمة الأولى، ولا الإدارة أو المكاتب). واستبعاد
+     المكاتب غير التدريسية هنا فقط احتياط إضافي — عبر kind='office' بدل مطابقة
+     الاسم، أسلم من فروق كتابة أسماء الأقسام (لاحظنا بعض التكرار). */
   CANDIDATES=(staff||[]).filter(s=>s.departments?.kind!=='office');
 
   const ids=CANDIDATES.map(c=>c.id);
@@ -196,8 +197,8 @@ function rankedOptions(periodNo, absentIdsSet, currentSubId){
     return true;
   });
   list.sort((a,b)=>
-    (TODAY_COUNT[a.id]||0)-(TODAY_COUNT[b.id]||0) ||
     (WEEKLY_COUNT[a.id]||0)-(WEEKLY_COUNT[b.id]||0) ||
+    (TODAY_COUNT[a.id]||0)-(TODAY_COUNT[b.id]||0) ||
     a.full_name.localeCompare(b.full_name,'ar')
   );
   return list;
@@ -253,7 +254,7 @@ function fillSelect(sel, period, absentIdsSet, entryId){
   const currentSubId=assigned?.substitute_staff_id||null;
   const opts=rankedOptions(period, absentIdsSet, currentSubId);
   sel.innerHTML='<option value="">— اختاري معلمة الاحتياط —</option>'+
-    opts.map(c=>`<option value="${c.id}" ${c.id===currentSubId?'selected':''}>${c.full_name} (اليوم: ${TODAY_COUNT[c.id]||0} — الأسبوع: ${WEEKLY_COUNT[c.id]||0})</option>`).join('');
+    opts.map(c=>`<option value="${c.id}" ${c.id===currentSubId?'selected':''}>${c.full_name} (الأسبوع: ${WEEKLY_COUNT[c.id]||0} — اليوم: ${TODAY_COUNT[c.id]||0})</option>`).join('');
   if(currentSubId && !opts.some(c=>c.id===currentSubId)){
     /* المُختارة سابقاً لم تعد ضمن المرشَّحات (وصلت حداً مثلاً) — تبقى ظاهرة كخيار محفوظ فقط */
     const cur=CANDIDATES.find(c=>c.id===currentSubId);
@@ -310,7 +311,7 @@ async function onPick(sel, period, absentIdsSet, entryId, absentId){
 async function loadLog(){
   if(!$('subLogSub').dataset.ready){
     $('subLogSub').dataset.ready='1';
-    const {data}=await db.from('staff').select('id,full_name').in('title',['teacher','senior_teacher']).eq('is_active',true).order('full_name');
+    const {data}=await db.from('staff').select('id,full_name').eq('title','teacher').eq('is_active',true).order('full_name');
     $('subLogSub').innerHTML='<option value="">الكل</option>'+(data||[]).map(s=>`<option value="${s.id}">${s.full_name}</option>`).join('');
     $('subLogGo').addEventListener('click',runLog);
     $('subLogXls').addEventListener('click',exportLogXls);
