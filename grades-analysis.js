@@ -12,7 +12,12 @@ const numKey = v => parseInt(String(v).replace(/[^\d]/g,''),10) || 0;
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="gaMain" style="display:none">
-  <div id="gaListView">
+  <div class="lm-subnav" id="gaSubnav">
+    <button class="lm-subnav-btn" data-gatab="track">متابعة الرصد</button>
+    <button class="lm-subnav-btn" data-gatab="analyze">تحليل اختبارات القسم</button>
+  </div>
+
+  <div data-gatab="track" id="gaListView">
     <div class="datebar">
       <div class="today-lbl">تحليل الاختبارات — متابعة الرصد</div>
       <select id="gaSubject" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:200px"></select>
@@ -24,7 +29,11 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn ghost" id="gaPdfAll">⬇ PDF — كل المقررات</button>
     </div>
     <div class="result" id="gaBulkStatus" style="display:none"></div>
+    <div class="board-wrap"><table class="board" id="gaTable"></table></div>
+  </div>
 
+  <div data-gatab="analyze" id="gaAnalyzeWrap" style="display:none">
+   <div id="gaAnalyzeList">
     <div class="panel">
       <h3>تقرير القسم الشامل</h3>
       <div class="sub">اختاري المقررات المشمولة (مقرر واحد أو أكثر أو كل المقررات)، والأجزاء التي تريدينها — تُجمع كلها في ملف واحد.</div>
@@ -47,10 +56,13 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
       <div class="result" id="brStatus" style="display:none"></div>
     </div>
-    <div class="board-wrap"><table class="board" id="gaTable"></table></div>
-  </div>
+    <div class="panel">
+      <h3>تحليل اختبار محدَّد</h3>
+      <div class="sub">اختاري مقرراً وشعبة من "متابعة الرصد" واضغطي على أي اختبار مكتمل لعرض تحليله هنا.</div>
+    </div>
+   </div>
 
-  <div id="gaDetailView" style="display:none">
+   <div id="gaDetailView" style="display:none">
     <button class="back" id="gaBack">→ رجوع</button>
     <div class="g-head" style="margin:10px 0 14px">
       <div class="ttl"><b id="gaDetailTitle">—</b><span id="gaDetailSub">—</span></div>
@@ -76,9 +88,9 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
       <div class="board-wrap"><table class="board" id="gaStudentTable"></table></div>
     </div>
-  </div>
+   </div>
 
-  <div id="gaCompareView" style="display:none">
+   <div id="gaCompareView" style="display:none">
     <button class="back" id="gaCompareBack">→ رجوع</button>
     <div class="g-head" style="margin:10px 0 14px"><div class="ttl"><b id="gaCompareTitle">—</b><span id="gaCompareSub">—</span></div></div>
     <div id="gaCompareExamPick" style="margin-bottom:16px"></div>
@@ -99,6 +111,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
     </div>
   </div>
+</div>
 </div>
 <div id="printAreaGA"></div>
 <style>
@@ -133,10 +146,18 @@ $('appView').insertAdjacentHTML('beforeend', `
 let SUBJECTS=[], CUR_SUBJECT=null, CATS=[], THRESH={pass_pct:50,mastery_pct:80};
 let CUR_DETAIL=null, SUPERVISED=null; // SUPERVISED: null=بلا قيد (أدمن/قيادة/تحليل)، أو Set لمعلمة أولى
 
+function switchGaTab(tab){
+  $('gaListView').style.display = tab==='track' ? 'block' : 'none';
+  $('gaAnalyzeWrap').style.display = tab==='analyze' ? 'block' : 'none';
+  $('gaSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active', b.dataset.gatab===tab));
+}
+
 async function initAnalysis(){
   if($('gaSubject').dataset.ready) return;
   $('gaSubject').dataset.ready='1';
-  $('gaBack').addEventListener('click',()=>{ $('gaDetailView').style.display='none'; $('gaListView').style.display='block'; });
+  $('gaSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.addEventListener('click',()=>switchGaTab(b.dataset.gatab)));
+  switchGaTab('track');
+  $('gaBack').addEventListener('click',()=>{ $('gaDetailView').style.display='none'; $('gaAnalyzeList').style.display='block'; });
   $('gaXls').addEventListener('click',exportXls);
   $('gaPdf').addEventListener('click',exportPdf);
   $('gaSaveNotes').addEventListener('click',saveNotes);
@@ -348,7 +369,8 @@ async function buildDetail(groupId,secId,secCode,examId,examName,examTotal){
 }
 
 async function openDetail(d){
-  $('gaListView').style.display='none'; $('gaDetailView').style.display='block';
+  switchGaTab('analyze');
+  $('gaAnalyzeList').style.display='none'; $('gaDetailView').style.display='block';
   $('gaDetailTitle').textContent=`${d.sec} — ${CUR_SUBJECT.code} — ${d.name}`;
   const examTotal=+d.total || CUR_SUBJECT.exam_total;
   $('gaDetailSub').textContent=`الدرجة الكلية: ${examTotal}`;
