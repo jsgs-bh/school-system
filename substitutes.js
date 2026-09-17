@@ -18,7 +18,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div data-substab="daily" style="display:none">
     <div class="panel">
       <h3>تأمين حصص اليوم</h3>
-      <div class="sub">اختاري التاريخ ثم أضيفي المعلمات الغائبات — يظهر جدول كل واحدة منهن بحصص ذلك اليوم، مع ترشيح تلقائي مرتَّب لمعلمة الاحتياط لكل حصة (معلمات أولاً ثم معلمة أولى). كل اختيار يُحفظ فوراً. <span style="color:#c0392b">⚠</span> بجانب اسم أي مرشَّحة يعني اختيارها يجعل حصصها اليوم متتالية بلا فاصل — لا يمنعها، تنبيه فقط.</div>
+      <div class="sub">اختاري التاريخ ثم أضيفي المعلمات الغائبات — يظهر جدول كل واحدة منهن بحصص ذلك اليوم، مع ترشيح تلقائي مرتَّب لمعلمة الاحتياط لكل حصة (معلمات أولاً ثم معلمة أولى). كل اختيار يُحفظ فوراً. <span style="color:#c0392b">⚠</span> بجانب اسم أي مرشَّحة يعني اختيارها يجعل عندها ٣ حصص متتالية فأكثر بلا فاصل اليوم — لا يمنعها، تنبيه فقط.</div>
       <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         <div class="field" style="min-width:170px"><label>التاريخ</label><input type="date" id="subDate"></div>
         <div class="field" style="flex:1;min-width:240px;position:relative">
@@ -213,13 +213,21 @@ function rankedOptions(periodNo, absentIdsSet, currentSubId){
   return list;
 }
 
-/* هل اختيار هذه المرشَّحة لهذه الحصة يجعل حصصها اليوم متتالية (ورى بعض) بلا فاصل؟
-   نفحص الحصة السابقة واللاحقة مباشرة — تغطي حالة سدّ فجوة بين حصتين (مثال:
-   عندها ٣ و٥ ومطلوب ٤) وحالة تمديد تتالٍ قائم (عندها ٣و٤ ومطلوب ٥). */
-function isBackToBack(staffId, periodNo){
+/* طول سلسلة الحصص المتتالية (بلا فاصل) لو أُسندت هذه الحصة لهذه المرشَّحة —
+   نعدّ للخلف وللأمام من الحصة المطلوبة عبر حصصها المشغولة اليوم. */
+function backToBackRunLength(staffId, periodNo){
   const busy=STAFF_BUSY_PERIODS[staffId];
-  if(!busy) return false;
-  return busy.has(periodNo-1) || busy.has(periodNo+1);
+  let run=1;
+  if(busy){
+    let p=periodNo-1; while(busy.has(p)){ run++; p--; }
+    p=periodNo+1; while(busy.has(p)){ run++; p++; }
+  }
+  return run;
+}
+/* تحذير فقط لو الناتج ٣ حصص متتالية فأكثر — حصتان متتاليتان (بدون ثالثة)
+   أمر عادي ولا تحتاج تظليلاً. */
+function isBackToBack(staffId, periodNo){
+  return backToBackRunLength(staffId, periodNo)>=3;
 }
 
 async function renderDay(){
