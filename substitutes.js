@@ -149,10 +149,10 @@ function getDow(dateStr){ return new Date(dateStr+'T12:00:00').getDay()+1; }
 /* ============ حوض المرشَّحات: معلمات فقط (مو إدارة ولا مكاتب)، بنصابها الأسبوعي واليومي وانشغالها بكل حصة ============ */
 async function loadCandidatePool(dow){
   const {data:staff}=await db.from('staff').select('id,full_name,title,departments(kind)')
-    .eq('title','teacher').eq('is_active',true);
-  /* الاحتياط حق المعلمات فقط (لا المعلمة الأولى، ولا الإدارة أو المكاتب). واستبعاد
-     المكاتب غير التدريسية هنا فقط احتياط إضافي — عبر kind='office' بدل مطابقة
-     الاسم، أسلم من فروق كتابة أسماء الأقسام (لاحظنا بعض التكرار). */
+    .in('title',['teacher','senior_teacher']).eq('is_active',true);
+  /* الاحتياط حق المعلمات والمعلمة الأولى (لا الإدارة أو المكاتب). استبعاد
+     المكاتب غير التدريسية هنا عبر kind='office' بدل مطابقة الاسم — أسلم من
+     فروق كتابة أسماء الأقسام (لاحظنا بعض التكرار). */
   CANDIDATES=(staff||[]).filter(s=>s.departments?.kind!=='office');
 
   const ids=CANDIDATES.map(c=>c.id);
@@ -311,7 +311,7 @@ async function onPick(sel, period, absentIdsSet, entryId, absentId){
 async function loadLog(){
   if(!$('subLogSub').dataset.ready){
     $('subLogSub').dataset.ready='1';
-    const {data}=await db.from('staff').select('id,full_name').eq('title','teacher').eq('is_active',true).order('full_name');
+    const {data}=await db.from('staff').select('id,full_name').in('title',['teacher','senior_teacher']).eq('is_active',true).order('full_name');
     $('subLogSub').innerHTML='<option value="">الكل</option>'+(data||[]).map(s=>`<option value="${s.id}">${s.full_name}</option>`).join('');
     $('subLogGo').addEventListener('click',runLog);
     $('subLogXls').addEventListener('click',exportLogXls);
