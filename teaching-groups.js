@@ -12,7 +12,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="teachingGroups" style="display:none">
   <div class="panel">
     <h3>مجموعات التدريس</h3>
-    <div class="sub">المقرر غير المنقسم لا يحتاج أي إعداد هنا (مجموعة واحدة تلقائية). استخدمي هذي الشاشة فقط عندما يُدرّس مقرر لشعبة بأكثر من معلمة.</div>
+    <div class="sub">المقرر غير المنقسم لا يحتاج أي إعداد هنا (مجموعة واحدة تلقائية). استخدمي هذه الشاشة فقط عندما يُدرّس مقرر لشعبة بأكثر من معلمة.</div>
     <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <select id="tgSubject" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"></select>
       <select id="tgSection" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:160px"><option value="">اختاري المقرر أولاً…</option></select>
@@ -114,7 +114,7 @@ async function handleDistributionUpload(file){
     }
   }
   renderGroups(); renderMembers();
-  toast(`تم توزيع ${matched} طالبة من الملف${skipped?` — تجاهلت ${skipped} رقماً غير موجود بهذي الشعبة`:''}`);
+  toast(`تم توزيع ${matched} طالبة من الملف${skipped?` — تجاهلت ${skipped} رقماً غير موجود بهذه الشعبة`:''}`);
 }
 
 async function loadGroups(){
@@ -233,7 +233,7 @@ function renderGroups(){
   });
   $('tgGroupsList').querySelectorAll('button.del').forEach(b=>b.addEventListener('click',()=>{
     const gi=+b.dataset.gi;
-    if(!confirm('حذف هذي المجموعة؟ طالباتها ستنتقل تلقائياً لأول مجموعة متبقية.')) return;
+    if(!confirm('حذف هذه المجموعة؟ طالباتها ستنتقل تلقائياً لأول مجموعة متبقية.')) return;
     const removed=GROUPS.splice(gi,1)[0];
     if(GROUPS.length) for(const sid of removed.memberIds) GROUPS[0].memberIds.add(sid);
     renderGroups(); renderMembers();
@@ -268,7 +268,7 @@ function renderMembers(){
         ${curGroupIdx===-1?'<option value="">— اختاري —</option>':''}
         ${GROUPS.map((g,gi)=>`<option value="${gi}" ${gi===curGroupIdx?'selected':''}>${g.name}</option>`).join('')}
       </select>
-    </div>`).join('') || '<div class="empty-day">لا طالبات في هذي الشعبة.</div>';
+    </div>`).join('') || '<div class="empty-day">لا طالبات في هذه الشعبة.</div>';
 
   $('tgMembersList').querySelectorAll('.tg-assign').forEach(sel=>sel.addEventListener('change',()=>{
     const sid=sel.dataset.sid;
@@ -315,7 +315,7 @@ async function saveAll(){
 
 function printGroupList(gi){
   const g=GROUPS[gi];
-  if(!g || !g.memberIds.size){ toast('لا طالبات في هذي المجموعة بعد'); return; }
+  if(!g || !g.memberIds.size){ toast('لا طالبات في هذه المجموعة بعد'); return; }
   const members=ALL_STUDENTS.filter(s=>g.memberIds.has(s.id))
     .sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'ar',{numeric:true}));
   const secCode=CUR_SEC?.code||'';

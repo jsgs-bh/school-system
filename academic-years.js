@@ -50,7 +50,7 @@ async function loadYears(){
       ${y.is_active ? '<span class="ay-badge">نشطة الآن</span>' : `<button class="btn gold" data-id="${y.id}" style="width:auto;padding:8px 18px">تفعيل</button>`}
     </div>`).join('');
   $('ayList').querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('تفعيل هذي السنة؟ الشاشات كلها ستعمل عليها بدلاً من السنة الحالية (لا حذف لأي بيانات).')) return;
+    if(!confirm('تفعيل هذه السنة؟ الشاشات كلها ستعمل عليها بدلاً من السنة الحالية (لا حذف لأي بيانات).')) return;
     await db.from('academic_years').update({is_active:false}).neq('id','00000000-0000-0000-0000-000000000000');
     const {error}=await db.from('academic_years').update({is_active:true}).eq('id',b.dataset.id);
     if(error){ toast('تعذر التفعيل: '+error.message); return; }
@@ -66,13 +66,13 @@ async function addYear(){
   try{
     const {error}=await db.from('academic_years').insert({name, start_date:start, sem1_end:sem1||null, sem2_start:sem2||null, end_date:end, is_active:false});
     if(error) throw error;
-    toast('تمت الإضافة — فعّليها من القائمة أعلاه وقت ما تصير جاهزة');
+    toast('تمت الإضافة — فعّليها من القائمة أعلاه عند اكتمال جاهزيتها');
     $('ayName').value=''; $('ayStart').value=''; $('aySem1End').value=''; $('aySem2Start').value=''; $('ayEnd').value='';
     loadYears();
   }catch(err){ toast('تعذرت الإضافة: '+(err.message||err)); }
   finally{ btn.disabled=false; }
 }
 
-/* لا registerTab هنا — هذي الشاشة صارت طفلاً ضمن تبويب "السنوات الدراسية"
+/* لا registerTab هنا — هذه الشاشة صارت طفلاً ضمن تبويب "السنوات الدراسية"
    المُجمَّع (انظر settings-nav.js) بدل تبويب مستقل تحت "الإعدادات". */
 export { initAY };

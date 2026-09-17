@@ -144,7 +144,7 @@ export function getLogoUrl(){
 }
 /* سجل العمليات: من، ماذا، متى — نفس جدول audit_log المستخدَم فعلياً في
    admin.js/teacher.js/social.js/ministry.js/grades-entry.js (actor_id،
-   action، entity، details). أي ملف جديد يقدر يستدعي هذي بدل التكرار. */
+   action، entity، details). أي ملف جديد يقدر يستدعي هذه بدل التكرار. */
 export async function logAction(action, entity, details){
   try{ await db.from('audit_log').insert({actor_id: S.ME?.id||null, action, entity, details: details||null}); }
   catch(e){ /* لا نعطّل العملية الأصلية لو فشل تسجيل السجل نفسه */ }

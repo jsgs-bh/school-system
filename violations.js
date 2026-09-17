@@ -260,7 +260,7 @@ function violCard(v){
 }
 function bindMineDelete(){
   $('vMineList').querySelectorAll('[data-del-viol]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('حذف هذي المخالفة نهائياً؟ (متاح بس قبل ما تُعتمد)')) return;
+    if(!confirm('حذف هذه المخالفة نهائياً؟ (متاح فقط قبل اعتمادها)')) return;
     const {error}=await db.from('violations').delete().eq('id',b.dataset.delViol).eq('status','new').eq('reported_by',S.ME.id);
     if(error){ toast('تعذر الحذف: '+error.message); return; }
     toast('تم الحذف'); loadMineViolations();
@@ -314,7 +314,7 @@ async function loadNewViolations(){
     toast('تم اعتماد المخالفة'); loadNewViolations();
   }));
   $('vaNewList').querySelectorAll('[data-archive]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('أرشفة هذي المخالفة؟')) return;
+    if(!confirm('أرشفة هذه المخالفة؟')) return;
     const {error}=await db.from('violations').update({status:'archived'}).eq('id',b.dataset.archive);
     if(error){ toast('تعذر: '+error.message); return; }
     toast('تم الأرشفة'); loadNewViolations();
@@ -390,7 +390,7 @@ async function loadAlerts(){
 async function openStudentModal(studentId){
   /* بس المخالفات اللي لسا ما تحوَّلت (حالتها مو escalated/guidance_action/
      closed) — أي مخالفة فئة ٣/٤ تحوَّلت تلقائياً من قبل تُستبعد تماماً
-     وما تنخلط مع دفعة التحويل الجديدة هذي. */
+     وما تنخلط مع دفعة التحويل الجديدة هذه. */
   const ESCALATED_STATES=['escalated','guidance_action','closed'];
   const {data:allV,error}=await db.from('violations').select('*, violation_categories(name,tier), violation_types(name), staff:reported_by(full_name)').eq('academic_year_id',S.YEAR.id)
     .eq('student_id',studentId).neq('status','archived').order('date',{ascending:false});
@@ -532,8 +532,8 @@ async function loadGuidancePending(){
       ${b.rows.map(v=>`<div class="viol-meta">#${v.code} — ${tierBadge(v.violation_categories)} ${v.violation_types?.name||''} · ${v.date}${v.notes?' — '+v.notes:''}</div>`).join('')}
       ${b.rows[0].admin_action_text?`<div class="viol-notes"><b>إجراء الإشراف الإداري:</b> ${b.rows[0].admin_action_text}</div>`:''}
       <div class="viol-actions">
-        <textarea placeholder="الإجراءات المتبعة وما تم اتخاذه لهذي الدفعة…" data-gnote="${b.student_id}|${b.escalated_at}"></textarea>
-        <button class="btn gold" data-close="${b.student_id}|${b.escalated_at}" style="width:auto;padding:8px 18px;font-size:12.5px">إغلاق المتابعة (كل مخالفات هذي الدفعة)</button>
+        <textarea placeholder="الإجراءات المتبعة وما تم اتخاذه لهذه الدفعة…" data-gnote="${b.student_id}|${b.escalated_at}"></textarea>
+        <button class="btn gold" data-close="${b.student_id}|${b.escalated_at}" style="width:auto;padding:8px 18px;font-size:12.5px">إغلاق المتابعة (كل مخالفات هذه الدفعة)</button>
       </div>
     </div>`;
   }).join('');

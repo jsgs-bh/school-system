@@ -385,7 +385,7 @@ async function runStats(){
       <td class="c">${s.total}</td><td class="c">${s.done} (${s.donePct}٪)</td><td class="c">${s.open} (${s.openPct}٪)</td></tr>`).join('');
   $('csStatTable').innerHTML='<tr><th rowspan="2">الشهر</th><th colspan="3">الشكاوى</th><th colspan="3">المقترحات</th></tr>'+
     '<tr><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th><th>مرفوعة</th><th>محلولة</th><th>غير محلولة</th></tr>'+
-    (rowsHtml || '<tr><td colspan="7" style="text-align:center;color:#8a93a0;padding:20px">لا بيانات ضمن هذي الفترة</td></tr>');
+    (rowsHtml || '<tr><td colspan="7" style="text-align:center;color:#8a93a0;padding:20px">لا بيانات ضمن هذه الفترة</td></tr>');
 }
 
 const NAVY_S='FF1D3D5C', WHITE_S='FFFFFFFF', LINE_S='FFDCD5C8';

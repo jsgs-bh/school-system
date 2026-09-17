@@ -204,7 +204,7 @@ async function loadProjects(){
       });
     }
     row.querySelectorAll('button[data-lead-id]').forEach(b=>b.addEventListener('click', async ()=>{
-      if(!confirm('إزالة هذي الرئيسة عن المشروع؟')) return;
+      if(!confirm('إزالة هذه الرئيسة عن المشروع؟')) return;
       await db.from('staff_project_leads').delete().eq('id',b.dataset.leadId);
       toast('تمت الإزالة'); loadProjects();
     }));
@@ -234,7 +234,7 @@ async function assignLead(projectId,staffMember,inp,box){
       await db.from('staff_roles').insert({staff_id:staffMember.id, role:'project_lead', scope:projectName});
     }
     const {error}=await db.from('staff_project_leads').insert({staff_id:staffMember.id, project_id:projectId});
-    if(error){ toast(/duplicate|unique/i.test(error.message)?'هذي المنتسبة مُعيَّنة على هذا المشروع مسبقاً':'تعذر التعيين: '+error.message); return; }
+    if(error){ toast(/duplicate|unique/i.test(error.message)?'هذه المنتسبة مُعيَّنة على هذا المشروع مسبقاً':'تعذر التعيين: '+error.message); return; }
     toast('تم التعيين'); loadProjects();
   }catch(err){ toast('تعذر التعيين: '+(err.message||err)); }
 }
@@ -244,7 +244,7 @@ async function toggleChainPanel(row){
   if(panel.style.display==='block'){ panel.style.display='none'; return; }
   panel.style.display='block';
   const chainId=row.dataset.chain;
-  if(!chainId){ panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">هذا المشروع غير مربوط بسلسلة (أنشئ قبل تفعيل هذي الميزة).</div>'; return; }
+  if(!chainId){ panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">هذا المشروع غير مربوط بسلسلة (أنشئ قبل تفعيل هذه الميزة).</div>'; return; }
   panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">جارٍ التحميل…</div>';
   const {data:chainProjects}=await db.from('plan_projects').select('id,name,academic_years(name)').eq('chain_id',chainId).order('created_at');
   if(!chainProjects || chainProjects.length<2){ panel.innerHTML='<div style="font-size:12.5px;color:#8a93a0">لا توجد سنوات سابقة مرتبطة بهذا المشروع بعد.</div>'; return; }

@@ -26,7 +26,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
       <div class="field" id="annDeptField" style="display:none"><label>القسم</label><select id="annDept"></select></div>
       <div class="field" id="annStaffField" style="display:none">
-        <label>ابحثي واختاري (تقدرين تضيفين أكثر من وحدة)</label>
+        <label>ابحثي واختاري (يمكنك إضافة أكثر من واحدة)</label>
         <input type="text" id="annStaffSearch" placeholder="اكتبي اسماً…" autocomplete="off">
         <div id="annStaffSugg"></div>
         <div id="annStaffChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>

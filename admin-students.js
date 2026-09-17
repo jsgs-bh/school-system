@@ -166,7 +166,7 @@ async function exportRoster(kind){
   const {data,error}=await db.from('enrollments').select('students(full_name,academic_number,personal_number,contact1,contact2,email)').eq('section_id',sectionId).is('to_date',null);
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const students=(data||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
-  if(!students.length){ toast('لا طالبات في هذي الشعبة'); return; }
+  if(!students.length){ toast('لا طالبات في هذه الشعبة'); return; }
 
   if(kind==='print'){
     const headers=fields.map(f=>ROSTER_FIELD_LABEL[f]).join('</th><th>');
@@ -210,7 +210,7 @@ async function loadStudents(){
   const {data,error}=await db.from('enrollments').select('id,students(id,full_name,academic_number,email,contact1,contact2)').eq('section_id',sectionId).is('to_date',null);
   if(error){ $('asList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   CUR_STUDENTS=(data||[]).map(e=>({enrollmentId:e.id, ...e.students})).filter(s=>s.id);
-  if(!CUR_STUDENTS.length){ $('asList').innerHTML='<div class="empty-day">لا طالبات في هذي الشعبة.</div>'; return; }
+  if(!CUR_STUDENTS.length){ $('asList').innerHTML='<div class="empty-day">لا طالبات في هذه الشعبة.</div>'; return; }
 
   const curSection=SECTIONS.find(s=>s.id===sectionId);
   const curLevel=parseCode(curSection?.code)?.level;
@@ -251,7 +251,7 @@ async function loadStudents(){
       const reason=row.querySelector('.as-leave').value;
       if(!reason){ toast('اختاري السبب أولاً'); return; }
       const label = reason==='home_school' ? 'منازل' : 'مدرسة ثانية';
-      if(!confirm(`تأكيد: هذي الطالبة تركت المدرسة (${label})؟ يُقفل تسجيلها الحالي، وسجلها التاريخي (حضور، درجات، مخالفات...) يبقى محفوظاً كامل.`)) return;
+      if(!confirm(`تأكيد: هذه الطالبة تركت المدرسة (${label})؟ يُقفل تسجيلها الحالي، وسجلها التاريخي (حضور، درجات، مخالفات...) يبقى محفوظاً كامل.`)) return;
       try{
         await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).eq('id',enrollmentId);
         await db.from('students').update({status:reason}).eq('id',studentId);
@@ -263,7 +263,7 @@ async function loadStudents(){
       const targetId=row.querySelector('.as-transfer').value;
       if(!targetId){ toast('اختاري الشعبة الهدف أولاً'); return; }
       const targetCode=SECTIONS.find(s=>s.id===targetId)?.code||'';
-      if(!confirm(`نقل هذي الطالبة إلى شعبة "${targetCode}"؟ درجاتها بالمقررات المشتركة (نفس اسم الاختبار) تنتقل معها تلقائياً — غيابها محفوظ أصلاً باسمها بغض النظر عن شعبتها.`)) return;
+      if(!confirm(`نقل هذه الطالبة إلى شعبة "${targetCode}"؟ درجاتها بالمقررات المشتركة (نفس اسم الاختبار) تنتقل معها تلقائياً — غيابها محفوظ أصلاً باسمها بغض النظر عن شعبتها.`)) return;
       try{
         await db.from('enrollments').update({to_date:new Date().toISOString().slice(0,10)}).eq('id',enrollmentId);
         await db.from('enrollments').insert({section_id:targetId, student_id:studentId, from_date:new Date().toISOString().slice(0,10)});
@@ -316,6 +316,6 @@ async function loadStudents(){
   });
 }
 
-/* لا registerTab هنا — هذي الشاشة صارت طفلاً ضمن تبويب "الطالبات"
+/* لا registerTab هنا — هذه الشاشة صارت طفلاً ضمن تبويب "الطالبات"
    المُجمَّع (انظر settings-nav.js) بدل تبويب مستقل تحت "الإعدادات". */
 export { initAdminStudents };

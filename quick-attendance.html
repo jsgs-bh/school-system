@@ -35,7 +35,7 @@
     <div><h1 id="schoolName">رصد سريع للغياب</h1><p>بدون تسجيل دخول — لأي معلمة يتعطل عندها الدخول العادي، أو للتغطية والاحتياط</p></div>
   </div>
 
-  <div class="qa-banner">كل رصد من هذي الصفحة يُوثَّق داخلياً باسمك وبتاريخه، ويُحسب زي رصد حسابك العادي تماماً.</div>
+  <div class="qa-banner">كل رصد من هذه الصفحة يُوثَّق داخلياً باسمك وبتاريخه، ويُحسب زي رصد حسابك العادي تماماً.</div>
 
   <div class="qa-card">
     <div id="pickView">
@@ -173,7 +173,7 @@ async function loadDay(){
     section_id:r.timetable_entries.section_id, section_code:r.timetable_entries.sections?.code||'—',
     subj:r.timetable_entries.subjects?.code||'', room:r.timetable_entries.room||''
   })).sort((a,b)=>a.period_no-b.period_no);
-  if(!MY_LESSONS.length){ list.innerHTML='<div class="empty-day">لا حصص لك في هذا اليوم بحسب الجدول. تقدرين تستخدمين "رصد حصة أخرى" تحت.</div>'; return; }
+  if(!MY_LESSONS.length){ list.innerHTML='<div class="empty-day">لا حصص لكِ في هذا اليوم بحسب الجدول. يمكنك استخدام "رصد حصة أخرى" أدناه.</div>'; return; }
   const ids=MY_LESSONS.map(l=>l.entry_id);
   const {data:sess}=await db.from('attendance_sessions')
     .select('entry_id,recorded_by,recorded_name,staff(full_name)').in('entry_id',ids).eq('date',dstr(d));
@@ -226,7 +226,7 @@ $('otherGo').addEventListener('click', async ()=>{
     .eq('timetable_entries.day_of_week',dow).eq('timetable_entries.period_no',per)
     .eq('timetable_entries.academic_year_id',YEAR.id).maybeSingle();
   if(conflict?.timetable_entries){
-    const ok=confirm(`تنبيه: ${ME.full_name} عندها اجتماع "${conflict.timetable_entries.meeting_label}" بنفس هذي الحصة. تكملين الرصد كتغطية رغم ذلك؟`);
+    const ok=confirm(`تنبيه: ${ME.full_name} عندها اجتماع "${conflict.timetable_entries.meeting_label}" بنفس هذه الحصة. تكملين الرصد كتغطية رغم ذلك؟`);
     if(!ok) return;
   }
   openRoster({entry_id:eid, section_code:$('otherSec').selectedOptions[0].textContent,

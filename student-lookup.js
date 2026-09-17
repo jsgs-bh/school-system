@@ -16,7 +16,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="socStudents" style="display:none">
   <div class="panel">
     <h3>بيانات طالبة</h3>
-    <div class="sub" id="ssDebugSub">اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: لسا الشاشة ما جهزت]</b></div>
+    <div class="sub" id="ssDebugSub">اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي.</div>
     <div class="row" style="display:flex;gap:10px;margin-top:10px">
       <input type="text" id="ssSearchInput" placeholder="اسم الطالبة أو رقمها…" autocomplete="off" style="flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
     </div>
@@ -74,13 +74,11 @@ let SS_RESULTS=[];
 function initSocStudents(){
   if($('ssSearchInput').dataset.ready) return;
   $('ssSearchInput').dataset.ready='1';
-  $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#080">[تشخيص: الشاشة جاهزة ✅]</b>';
   let searchTimer=null;
   $('ssSearchInput').addEventListener('input',()=>{
     clearTimeout(searchTimer);
     const q=clean($('ssSearchInput').value);
       if(q.length<2){ $('ssSugg').innerHTML=''; return; }
-    $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#08c">[تشخيص: جارٍ البحث عن "${q}"...]</b>`;
     searchTimer=setTimeout(async ()=>{
       const timeoutMs=8000;
       /* استعلام مبسَّط قصداً — بدون أي ربط متداخل، عشان نستبعد أي تعقيد ممكن يسبب تعليق. */
@@ -95,17 +93,14 @@ function initSocStudents(){
         ]);
         data=res.data; error=res.error;
       }catch(timeoutErr){
-        $('ssDebugSub').innerHTML='اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: انتهت المهلة (٨ ثواني) بدون رد من الخادم]</b>';
-        $('ssSugg').innerHTML=`<tr><td style="padding:14px;color:var(--err)">انتهت مهلة الاتصال — يمكن برنامج حماية بجهازك (زي Kaspersky) يعطّل الاتصال. جربي جهاز/شبكة ثانية.</td></tr>`;
+        $('ssSugg').innerHTML=`<tr><td style="padding:14px;color:var(--err)">انتهت مهلة الاتصال — قد يكون أحد برامج الحماية بجهازك (مثل Kaspersky) يعطّل الاتصال. يُرجى المحاولة من جهاز أو شبكة أخرى.</td></tr>`;
         return;
       }
       if(error){
-        $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#c00">[تشخيص: رجع خطأ من قاعدة البيانات]</b>`;
         $('ssSugg').innerHTML=`<tr><td style="padding:14px;color:var(--err)">تعذر البحث: ${error.message}</td></tr>`;
         return;
       }
       SS_RESULTS=data||[];
-      $('ssDebugSub').innerHTML=`اكتبي اسم الطالبة أو رقمها الأكاديمي أو الشخصي. <b style="color:#080">[تشخيص: رجع الرد — لقيت ${SS_RESULTS.length} نتيجة]</b>`;
       $('ssSugg').innerHTML = SS_RESULTS.length
         ? '<tr><th>الاسم</th><th>الرقم الأكاديمي</th></tr>' + SS_RESULTS.map(s=>
             `<tr data-id="${s.id}"><td>${s.full_name}</td><td class="c">${s.academic_number}</td></tr>`

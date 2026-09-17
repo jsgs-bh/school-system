@@ -271,7 +271,7 @@ async function loadFinalStats(){
   if(!CUR_COMMITTEE.initiative_id){ $('cmFinalStats').textContent=''; return; }
   const {data:actions}=await db.from('plan_actions').select('id,status').eq('initiative_id',CUR_COMMITTEE.initiative_id);
   const total=(actions||[]).length, done=(actions||[]).filter(a=>a.status==='done').length;
-  $('cmFinalStats').textContent=`عدد الفعاليات/المسابقات المسجَّلة لهذي اللجنة: ${total} — منجَز: ${done}`;
+  $('cmFinalStats').textContent=`عدد الفعاليات/المسابقات المسجَّلة لهذه اللجنة: ${total} — منجَز: ${done}`;
 }
 
 async function checkMinuteAccess(){
@@ -336,7 +336,7 @@ function bindActionRespSearch(){
 }
 
 async function loadCommitteeActions(){
-  if(!CUR_COMMITTEE.initiative_id){ $('cmActionsList').innerHTML='<div class="empty-day">هذي اللجنة غير مربوطة بمبادرة (حالة استثنائية) — راجعي الدعم الفني.</div>'; return; }
+  if(!CUR_COMMITTEE.initiative_id){ $('cmActionsList').innerHTML='<div class="empty-day">هذه اللجنة غير مربوطة بمبادرة (حالة استثنائية) — راجعي الدعم الفني.</div>'; return; }
   const {data,error}=await db.from('plan_actions').select('*').eq('initiative_id',CUR_COMMITTEE.initiative_id).order('created_at');
   if(error){ $('cmActionsList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   const actions=data||[];
@@ -385,7 +385,7 @@ async function loadCommitteeActions(){
 }
 
 async function addCommitteeAction(){
-  if(!CUR_COMMITTEE.initiative_id){ toast('هذي اللجنة غير مربوطة بمبادرة'); return; }
+  if(!CUR_COMMITTEE.initiative_id){ toast('هذه اللجنة غير مربوطة بمبادرة'); return; }
   const raw=$('cmActionText').value;
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   if(!lines.length){ toast('اكتبي نص الإجراء'); return; }
@@ -418,7 +418,7 @@ async function addTask(){
   const text=clean($('cmTaskText').value);
   if(!text){ toast('اكتبي نص المهمة'); return; }
   const departmentId=$('cmTaskDept').value;
-  if(!departmentId){ toast('حددي القسم المعنيّ بهذي المهمة'); return; }
+  if(!departmentId){ toast('حددي القسم المعنيّ بهذه المهمة'); return; }
   const due=$('cmTaskDue').value||null;
   await db.from('committee_tasks').insert({committee_id:CUR_COMMITTEE.id, text, department_id:departmentId, due_date:due, assigned_to:null});
   $('cmTaskText').value=''; $('cmTaskDue').value=''; $('cmTaskDept').value='';
@@ -459,7 +459,7 @@ async function getTeacherMembers(){
 }
 async function printAssignment(){
   const names=await getTeacherMembers();
-  if(!names.length){ toast('لا معلمات في هذي اللجنة'); return; }
+  if(!names.length){ toast('لا معلمات في هذه اللجنة'); return; }
   $('printAreaCM').innerHTML=`
     ${printHeaderHtml('قرار تكليف')}
     <p style="line-height:2;margin-top:14px">بناءً على مصلحة العمل، يُعتمد تكليف المعلمات الآتية أسماؤهن للعمل ضمن لجنة "<b>${CUR_COMMITTEE.name}</b>" التابعة لمشروع "<b>${CUR_COMMITTEE.plan_projects?.name||''}</b>" للعام الدراسي ${S.YEAR?.name||''}.</p>

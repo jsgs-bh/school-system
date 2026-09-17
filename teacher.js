@@ -41,7 +41,7 @@ function initTeacher(){
       .eq('timetable_entries.day_of_week',dow).eq('timetable_entries.period_no',per)
       .eq('timetable_entries.academic_year_id',S.YEAR.id).maybeSingle();
     if(conflict?.timetable_entries){
-      const ok=confirm(`تنبيه: عندك اجتماع "${conflict.timetable_entries.meeting_label}" بنفس هذي الحصة. تكملين الرصد كتغطية رغم ذلك؟`);
+      const ok=confirm(`تنبيه: عندك اجتماع "${conflict.timetable_entries.meeting_label}" بنفس هذه الحصة. تكملين الرصد كتغطية رغم ذلك؟`);
       if(!ok) return;
     }
     openRoster({entry_id:eid, section_code:$('otherSec').selectedOptions[0].textContent,
@@ -187,6 +187,6 @@ export async function jumpToEntryToday(entryId){
   $('dayPick').value = dstr(CUR_DATE);
   await loadDay();
   const lesson = MY_LESSONS.find(l=>l.entry_id===entryId);
-  if(!lesson){ toast('لم يُعثر على هذي الحصة ضمن جدول اليوم'); return; }
+  if(!lesson){ toast('لم يُعثر على هذه الحصة ضمن جدول اليوم'); return; }
   openRoster({...lesson, label:'الحصة '+PERIOD_NAMES[lesson.period_no], isMine:true});
 }

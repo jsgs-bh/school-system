@@ -1,7 +1,7 @@
 /* file-templates.js — القوالب المعتمدة ومكتبة الملفات (تحت "الإعدادات")
    الأدمن يرفع قالب كشف الدرجات وقالب كشف الغياب مرة واحدة، ويحدد أين
    تُكتب بيانات الطالبات داخل القالب نفسه (عمود ورقم صف البداية) —
-   فيصير كل معلمة تقدر تحمّل نسخة معبَّأة بأسماء طالباتها من تبويب
+   فيصير كل معلمة يمكنها تحميل نسخة معبَّأة بأسماء طالباتها من تبويب
    "ملفات". يشمل أيضاً مكتبة ملفات عامة يرفعها الأدمن أي وقت. */
 import { db, $, S, toast, bindDrop, registerTab } from './core.js';
 
@@ -23,11 +23,11 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div class="panel">
     <h3>قوالب خاصة بمقررات محددة</h3>
-    <div class="sub">اختياري — لو مقرر أو أكثر (مثل الحاسوب أو الرياضة) له قالب مختلف عن القالب العام أعلاه، ارفعيه هنا واختاري كل المقررات اللي تستخدم نفس هذا القالب. غير هذي المقررات يستخدمن القالب العام تلقائياً.</div>
+    <div class="sub">اختياري — لو مقرر أو أكثر (مثل الحاسوب أو الرياضة) له قالب مختلف عن القالب العام أعلاه، ارفعيه هنا واختاري كل المقررات اللي تستخدم نفس هذا القالب. غير هذه المقررات يستخدمن القالب العام تلقائياً.</div>
     <div class="field"><label>المقررات اللي تستخدم هذا القالب</label>
       <div id="gtSubjectChecks" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
     </div>
-    <div class="dropzone" id="gtSubDrop"><b id="gtSubFileLabel">ارفعي قالب هذي المقررات (إكسل)</b><p>اضغطي لاختيار الملف أو اسحبيه هنا — يُحفظ فقط بعد ما تضغطين الزر تحت</p>
+    <div class="dropzone" id="gtSubDrop"><b id="gtSubFileLabel">ارفعي قالب هذه المقررات (إكسل)</b><p>اضغطي لاختيار الملف أو اسحبيه هنا — يُحفظ فقط بعد الضغط على الزر أدناه</p>
       <input type="file" id="gtSubFile" accept=".xlsx,.xls" hidden></div>
     <div class="row" style="display:flex;gap:14px;flex-wrap:wrap;margin:14px 0">
       <div class="field" style="max-width:140px"><label>عمود الرقم الأكاديمي</label><input type="text" id="gtSubAcadCol" placeholder="B" maxlength="2" value="B"></div>
@@ -35,7 +35,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <div class="field" style="max-width:160px"><label>صف بداية البيانات</label><input type="number" id="gtSubStartRow" min="1" placeholder="6" value="6"></div>
       <div class="field" style="max-width:200px"><label>اسم الورقة (اختياري)</label><input type="text" id="gtSubSheetName" placeholder="افتراضياً أول ورقة"></div>
     </div>
-    <button class="btn gold" id="gtSubSave" style="width:auto;padding:10px 24px">حفظ إعدادات قالب هذي المقررات</button>
+    <button class="btn gold" id="gtSubSave" style="width:auto;padding:10px 24px">حفظ إعدادات قالب هذه المقررات</button>
     <button class="btn ghost" id="gtSubClear" style="width:auto;padding:10px 20px;display:none">➕ قالب جديد (إلغاء التعديل الحالي)</button>
     <div id="gtSubList" style="margin-top:18px"></div>
   </div>
@@ -104,14 +104,14 @@ let EDITING_TEMPLATE_ID=null; // لو نعدّل قالب مقررات محفو�
 function resetSubjectForm(){
   EDITING_TEMPLATE_ID=null; PENDING_SUB_FILE=null;
   $('gtSubjectChecks').querySelectorAll('.gt-subj-chk').forEach(c=>c.checked=false);
-  $('gtSubFileLabel').textContent='ارفعي قالب هذي المقررات (إكسل)';
+  $('gtSubFileLabel').textContent='ارفعي قالب هذه المقررات (إكسل)';
   $('gtSubAcadCol').value='B'; $('gtSubNameCol').value='C'; $('gtSubStartRow').value=6; $('gtSubSheetName').value='';
   $('gtSubClear').style.display='none';
 }
 
 function stageSubjectTemplate(file){
   PENDING_SUB_FILE=file;
-  $('gtSubFileLabel').textContent=`الملف المختار: ${file.name} (يُحفظ بعد ما تضغطين الزر تحت)`;
+  $('gtSubFileLabel').textContent=`الملف المختار: ${file.name} (يُحفظ بعد الضغط على الزر أدناه)`;
 }
 
 async function saveSubjectTemplateConfig(){
@@ -154,7 +154,7 @@ async function saveSubjectTemplateConfig(){
     resetSubjectForm();
     loadSubjectTemplatesList();
   }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
-  finally{ btn.disabled=false; btn.textContent='حفظ إعدادات قالب هذي المقررات'; }
+  finally{ btn.disabled=false; btn.textContent='حفظ إعدادات قالب هذه المقررات'; }
 }
 
 async function loadSubjectTemplatesList(){
@@ -176,7 +176,7 @@ async function loadSubjectTemplatesList(){
       <small style="color:#8a93a0">عمود الرقم الأكاديمي: ${g.academic_col} · عمود الاسم: ${g.name_col} · صف البداية: ${g.start_row}${g.sheet_name?' · الورقة: '+g.sheet_name:''}</small>
     </div>`).join('');
   $('gtSubList').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
-    if(!confirm('حذف قالب هذي المقررات؟ ترجع كلها تستخدم القالب العام تلقائياً.')) return;
+    if(!confirm('حذف قالب هذه المقررات؟ ترجع كلها تستخدم القالب العام تلقائياً.')) return;
     await db.from('file_templates').delete().eq('kind','grades').eq('file_path',b.dataset.del);
     resetSubjectForm();
     loadSubjectTemplatesList();
@@ -187,7 +187,7 @@ async function loadSubjectTemplatesList(){
     EDITING_TEMPLATE_ID=row.id; PENDING_SUB_FILE=null;
     const selectedIds=new Set((sameFile||[]).map(r=>r.subject_id));
     $('gtSubjectChecks').querySelectorAll('.gt-subj-chk').forEach(c=>c.checked=selectedIds.has(c.value));
-    $('gtSubFileLabel').textContent=`الملف الحالي: ${row.file_name} (ارفعي ملف جديد لتغييره، أو خليه واحفظي التعديلات بس)`;
+    $('gtSubFileLabel').textContent=`الملف الحالي: ${row.file_name} (ارفعي ملفاً جديداً لتغييره، أو اتركيه واحفظي التعديلات فقط)`;
     $('gtSubAcadCol').value=row.academic_col; $('gtSubNameCol').value=row.name_col;
     $('gtSubStartRow').value=row.start_row; $('gtSubSheetName').value=row.sheet_name||'';
     $('gtSubClear').style.display='inline-block';
@@ -214,7 +214,7 @@ function safeExt(filename){
 
 async function stageTemplate(kind,file){
   PENDING_FILE[kind]=file;
-  $(`${PFX(kind)}Current`).textContent=`الملف المختار: ${file.name} (يُحفظ بعد ما تضغطين "حفظ إعدادات القالب")`;
+  $(`${PFX(kind)}Current`).textContent=`الملف المختار: ${file.name} (يُحفظ بعد الضغط على "حفظ إعدادات القالب")`;
 }
 
 async function saveTemplateConfig(kind){

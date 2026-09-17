@@ -6,11 +6,11 @@ import { db, $, S, clean, toast, bindDrop, readSheet, registerTab } from './core
 
 $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main wide" id="strategicTree" style="display:none">
-  <div class="warnbox">هذي البيانات مستخرجة من قراءة صورة الخريطة الاستراتيجية — راجعيها وقارنيها بالأصل، وأخبرينا بأي تصحيح قبل ما نربط المشاريع بالأهداف الفرعية.</div>
+  <div class="warnbox">هذه البيانات مستخرجة من قراءة صورة الخريطة الاستراتيجية — راجعيها وقارنيها بالأصل، وأخبرينا بأي تصحيح قبل ربط المشاريع بالأهداف الفرعية.</div>
 
   <div class="panel" id="stiPanel" style="display:none">
     <h3>استيراد المبادرات الأساسية (الخطة الاستراتيجية)</h3>
-    <div class="sub">ملف بعمودين: اسم المشروع (لازم يطابق اسم مشروع موجود بالضبط) + اسم المبادرة. كل مبادرة تُعلَّم تلقائياً "استراتيجية" — ما تظهر لرئيسة المشروع، تظهر بس لك وللقيادة العليا.</div>
+    <div class="sub">ملف بعمودين: اسم المشروع (يجب أن يطابق اسم مشروع موجود بالضبط) + اسم المبادرة. كل مبادرة تُعلَّم تلقائياً "استراتيجية" — لا تظهر لرئيسة المشروع، وتظهر فقط لكِ وللقيادة العليا.</div>
     <div class="dropzone" id="stiDrop"><b id="stiFileLabel">اختاري ملف الإكسل</b><p>اضغطي لاختيار الملف أو اسحبيه هنا</p><input type="file" id="stiFile" hidden accept=".xlsx,.xls"></div>
     <button class="btn ghost" id="stiTpl" style="width:auto;padding:8px 16px;margin-top:8px">⬇️ تنزيل قالب فاضي</button>
     <div id="stiPreview" style="display:none;margin-top:14px">
@@ -57,7 +57,7 @@ async function initStrategicImport(){
     const head=rows[0].map(clean);
     const colProj=head.findIndex(h=>/مشروع/.test(h));
     const colInit=head.findIndex(h=>/مبادرة/.test(h));
-    if(colProj<0||colInit<0){ toast('الملف لازم يحتوي عمودي "اسم المشروع" و"اسم المبادرة".'); return; }
+    if(colProj<0||colInit<0){ toast('يجب أن يحتوي الملف على عمودي "اسم المشروع" و"اسم المبادرة".'); return; }
     const {data:projects}=await db.from('plan_projects').select('id,name').eq('academic_year_id',S.YEAR.id);
     const projBy=Object.fromEntries((projects||[]).map(p=>[p.name.trim(),p]));
     const valid=[], missing=new Set();

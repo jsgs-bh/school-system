@@ -112,7 +112,7 @@ async function bindCensus(secSelId, listId){
     $(listId).innerHTML='<div class="empty-day">جارٍ التحميل…</div>';
     const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',secId).is('to_date',null);
     const stus=(enr||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>String(a.academic_number).localeCompare(String(b.academic_number),'ar',{numeric:true}));
-    if(!stus.length){ $(listId).innerHTML='<div class="empty-day">لا طالبات بهذي الشعبة.</div>'; return; }
+    if(!stus.length){ $(listId).innerHTML='<div class="empty-day">لا طالبات بهذه الشعبة.</div>'; return; }
     const {data:existing}=await db.from('student_talents').select('student_id,talent_category_id,note').in('student_id',stus.map(s=>s.id));
     const byStu={}; for(const e of existing||[]) (byStu[e.student_id] ??= []).push(e);
     $(listId).innerHTML=stus.map(s=>{

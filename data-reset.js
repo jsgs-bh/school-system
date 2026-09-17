@@ -8,7 +8,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 <div class="app-main" id="dataReset" style="display:none">
   <div class="panel">
     <h3>نسخة احتياطية</h3>
-    <div class="sub">تنزيل نسخة كاملة من كل بيانات النظام بملف إكسل واحد (جدول بيانات لكل قسم). احفظيه بمكان خارج الموقع (قوقل درايف مثلاً) بشكل دوري — لو صارت أي مشكلة بجت-هب أو بقاعدة البيانات تقدرين ترجعين لأي نقطة حفظتيها.</div>
+    <div class="sub">تنزيل نسخة كاملة من كل بيانات النظام في ملف إكسل واحد (جدول بيانات لكل قسم). احفظيها في مكان خارج الموقع (Google Drive مثلاً) بشكل دوري — في حال حدوث أي مشكلة بـ GitHub أو بقاعدة البيانات، يمكنك الرجوع إلى أي نسخة محفوظة.</div>
     <button class="btn gold" id="bkGo" style="width:auto;padding:11px 26px;margin-top:10px">⬇️ تنزيل نسخة احتياطية كاملة</button>
     <div id="bkProgress" style="display:none;margin-top:12px">
       <div style="background:var(--sand);border-radius:8px;height:8px;overflow:hidden"><div id="bkBar" style="background:var(--gold);height:100%;width:0%;transition:width .2s"></div></div>
@@ -18,7 +18,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div class="panel">
     <h3>إعادة تعيين البيانات</h3>
-    <div class="sub">مسح نهائي لبيانات وحدة معيّنة — يُستخدم لتصفير بيانات تجريبية قبل بدء التفعيل الفعلي. هذا الإجراء لا يترجع. (ننصح بتنزيل نسخة احتياطية فوق أولاً.)</div>
+    <div class="sub">مسح نهائي لبيانات وحدة معيّنة — يُستخدم لتصفير بيانات تجريبية قبل بدء التفعيل الفعلي. لا يمكن التراجع عن هذا الإجراء. (يُنصح بتنزيل نسخة احتياطية أعلاه أولاً.)</div>
     <div id="drList" style="margin-top:16px"></div>
   </div>
 </div>
@@ -103,7 +103,7 @@ const RESET_MODULES=[
   {
     key:'violations',
     title:'المخالفات السلوكية',
-    desc:'يمسح كل المخالفات المسجَّلة لكل الطالبات. ما يمسح فئات وأنواع المخالفات نفسها (تبقى بالإعدادات).',
+    desc:'يمسح كل المخالفات المسجَّلة لكل الطالبات. لا يمسح فئات وأنواع المخالفات نفسها (تبقى في الإعدادات).',
     run: async ()=>{ const {error}=await db.from('violations').delete().not('id','is',null); if(error) throw error; }
   },
 ];
@@ -119,9 +119,9 @@ async function initDataReset(){
     </div>`).join('');
   $('drList').querySelectorAll('[data-reset]').forEach(btn=>btn.addEventListener('click', async ()=>{
     const mod=RESET_MODULES.find(m=>m.key===btn.dataset.reset);
-    if(!confirm(`متأكدة تبين تمسحين "${mod.title}" نهائياً؟ هذا الإجراء ما يترجع.`)) return;
+    if(!confirm(`هل أنتِ متأكدة من رغبتك في حذف "${mod.title}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
     const typed=prompt('اكتبي كلمة "مسح" بالضبط للتأكيد:');
-    if(typed!=='مسح'){ toast('ما تطابقت الكلمة — أُلغي المسح.'); return; }
+    if(typed!=='مسح'){ toast('لم تتطابق الكلمة — أُلغي الحذف.'); return; }
     btn.disabled=true; btn.textContent='جارٍ المسح…';
     try{
       await mod.run();

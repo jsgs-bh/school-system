@@ -161,7 +161,7 @@ async function initAnalysis(){
   const {data:subs}=await db.from('subjects').select('id,code,exam_total').order('code');
   let visible=(subs||[]).filter(s=>semSubjIds.includes(s.id));
 
-  /* مقررات ما عليها درجات أصلاً (حصص دعم/إرشاد/بدء يوم...) ما تدخل هذي
+  /* مقررات ما عليها درجات أصلاً (حصص دعم/إرشاد/بدء يوم...) ما تدخل هذه
      الشاشة إطلاقاً — بدع/رشد/قرأ/مصد، أو أي مقرر رمزه الرقمي يبدأ بـ٩. */
   const isGradeable = code => !/^(بدع|رشد|قرأ|مصد)/.test(code) && !/^[\u0600-\u06FF]+9\d*$/.test(code);
   visible = visible.filter(s=>isGradeable(s.code));
@@ -210,7 +210,7 @@ async function getSupervisedTeacherIds(){
 }
 
 /* ============ شاشة المتابعة: مجموعة تدريس × اختبار ============ */
-/* نُبقي هذي بمستوى "الشعبة" (تُدمج كل مجموعاتها) للتقارير الإجمالية
+/* نُبقي هذه بمستوى "الشعبة" (تُدمج كل مجموعاتها) للتقارير الإجمالية
    (التغذية الراجعة، الكفايات، المقارنة الإجمالية للقسم الشامل). */
 async function fetchUniqueSectionsForSubject(subjectId){
   const {data:rows,error}=await db.from('entry_teachers')
@@ -232,7 +232,7 @@ async function fetchUniqueSectionsForSubject(subjectId){
 async function syncGroupMembers(sectionId, groupIds){
   /* نفس إصلاح "رصد الدرجات" — طالبة انتقلت للشعبة بعد إنشاء مجموعة
      التدريس تنضاف تلقائياً، وطالبة انتقلت لشعبة ثانية فعلياً (مؤكَّدة)
-     تُحذف من هذي المجموعة (درجاتها القديمة تبقى بسجل قاعدة البيانات). */
+     تُحذف من هذه المجموعة (درجاتها القديمة تبقى بسجل قاعدة البيانات). */
   if(!sectionId||!groupIds?.length) return;
   const {data:enr}=await db.from('enrollments').select('student_id').eq('section_id',sectionId).is('to_date',null);
   const curIds=new Set((enr||[]).map(e=>e.student_id));
@@ -259,7 +259,7 @@ async function fetchGroupsForSubject(subjectId){
   if(error) return {error};
   /* "مجموعات التدريس" جدول مستقل عن الجدول الدراسي — لو تغيّرت معلمة
      المادة بتحديث الجدول، الربط القديم هنا يضل عالق بدون تصحيح تلقائي.
-     نتحقق هنا: هل معلمة المجموعة لسا فعلاً مرتبطة بهذي المادة/الشعبة
+     نتحقق هنا: هل معلمة المجموعة لسا فعلاً مرتبطة بهذه المادة/الشعبة
      بالجدول الحالي؟ لو لأ، نستبعد المجموعة (بدل ما تطلع بمعلمة قديمة). */
   const {data:curLinks}=await db.from('entry_teachers').select('staff_id, timetable_entries!inner(section_id,subject_id,is_current)')
     .eq('timetable_entries.subject_id',subjectId).eq('timetable_entries.is_current',true);

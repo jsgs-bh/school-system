@@ -19,7 +19,7 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div class="panel">
     <h3>ترحيل الفصل (داخل نفس السنة)</h3>
-    <div class="sub">ينسخ توزيع الطالبات الحالي من شعب الفصل الأول إلى مثيلاتها بالفصل الثاني (تُنشأ تلقائياً لو غير موجودة). بعدها تقدرين تعدّلين الحالات القليلة يدوياً من "نقل طالبة بين الشعب".</div>
+    <div class="sub">ينسخ توزيع الطالبات الحالي من شعب الفصل الأول إلى مثيلاتها بالفصل الثاني (تُنشأ تلقائياً لو غير موجودة). بعدها يمكنك تعديل الحالات القليلة يدوياً من "نقل طالبة بين الشعب".</div>
     <div class="result" id="pmSemStatus" style="display:none"></div>
     <button class="btn gold" id="pmSemGo" style="width:auto;padding:11px 26px">ترحيل الفصل الأول → الثاني</button>
   </div>
@@ -91,7 +91,7 @@ async function runSemesterPromotion(){
           await db.from('enrollments').update({to_date:dstr(new Date())}).eq('id',e.id);
           movedStudents++;
         }
-        // إزالتها من مجموعات تدريس شعبتها القديمة — كانت هذي الثغرة تُبقي طالبات "مرحَّلات" ظاهرات في رصد درجات شعبة انتقلن منها فعلياً
+        // إزالتها من مجموعات تدريس شعبتها القديمة — كانت هذه الثغرة تُبقي طالبات "مرحَّلات" ظاهرات في رصد درجات شعبة انتقلن منها فعلياً
         if(oldGroupIds.length){
           await db.from('teaching_group_members').delete().eq('student_id',e.student_id).in('group_id',oldGroupIds);
         }

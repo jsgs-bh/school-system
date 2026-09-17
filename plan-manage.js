@@ -286,7 +286,7 @@ function renderGroups(){
   $('pmGroups').querySelectorAll('.pm-move-init').forEach(sel=>sel.addEventListener('change', async ()=>{
     const targetId=sel.value; if(!targetId) return;
     const targetName=MY_PROJECTS.find(p=>p.id===targetId)?.name||'';
-    if(!confirm(`نقل هذي المبادرة بكل إجراءاتها إلى مشروع "${targetName}"؟`)){ sel.value=''; return; }
+    if(!confirm(`نقل هذه المبادرة بكل إجراءاتها إلى مشروع "${targetName}"؟`)){ sel.value=''; return; }
     const {error}=await db.from('plan_initiatives').update({project_id:targetId}).eq('id',sel.dataset.init);
     if(error){ toast('تعذر النقل: '+error.message); return; }
     toast('تم نقل المبادرة بلا فقدان بيانات'); loadInitiatives();

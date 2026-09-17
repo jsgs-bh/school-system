@@ -94,7 +94,7 @@ async function renderSpecialList(){
     const s=sections[i];
     const {data:enr}=await db.from('enrollments').select('students(full_name,academic_number,special_case)').eq('section_id',s.id).is('to_date',null);
     const students=(enr||[]).map(e=>e.students).filter(st=>st?.special_case);
-    if(!students.length){ toast('لا حالات خاصة في هذي الشعبة'); return; }
+    if(!students.length){ toast('لا حالات خاصة في هذه الشعبة'); return; }
     exportSpecialList(s.code, students);
   }));
 }
@@ -116,7 +116,7 @@ async function downloadCumulativeAbsence(section, btn){
   try{
     const {data:enr}=await db.from('enrollments').select('students(id,full_name,academic_number)').eq('section_id',section.id).is('to_date',null);
     const students=(enr||[]).map(e=>e.students).filter(Boolean);
-    if(!students.length){ toast('لا طالبات في هذي الشعبة'); return; }
+    if(!students.length){ toast('لا طالبات في هذه الشعبة'); return; }
     const today=dstr(new Date());
     const range=await collectRange(S.YEAR.start_date, today);
     const wb=new ExcelJS.Workbook();
@@ -151,7 +151,7 @@ async function downloadCumulativeAbsence(section, btn){
 }
 
 async function downloadFilledTemplate(kind, students, filename, btn, subjectId){
-  if(!students.length){ toast('لا طالبات في هذي المجموعة/الشعبة'); return; }
+  if(!students.length){ toast('لا طالبات في هذه المجموعة/الشعبة'); return; }
   btn.disabled=true; const old=btn.textContent; btn.textContent='جارٍ التحضير…';
   try{
     let tmpl=null;

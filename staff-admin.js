@@ -9,7 +9,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       <h3 style="margin:0">إدارة المنتسبات</h3>
       <button class="btn gold" id="saAddBtn" style="width:auto;padding:9px 22px">➕ إضافة منتسبة</button>
     </div>
-    <div class="sub">إضافة/تعديل/تعطيل بيانات المنتسبات. ⚠️ الحذف هنا "تعطيل" وليس مسحاً نهائياً — يخفي المنتسبة من القوائم النشطة بدون ما يمسّ سجلاتها التاريخية (حضور، درجات، مخالفات...).</div>
+    <div class="sub">إضافة/تعديل/تعطيل بيانات المنتسبات. ⚠️ الحذف هنا "تعطيل" وليس مسحاً نهائياً — يُخفي المنتسبة من القوائم النشطة دون المساس بسجلاتها التاريخية (حضور، درجات، مخالفات...).</div>
 
     <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0">
       <input type="text" id="saSearch" placeholder="ابحثي بالاسم أو الرقم الشخصي…" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit">
@@ -114,7 +114,7 @@ function renderList(){
   $('saList').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openForm(ALL_STAFF.find(s=>s.id===b.dataset.edit))));
   $('saList').querySelectorAll('[data-toggle]').forEach(b=>b.addEventListener('click', async ()=>{
     const active=b.dataset.active==='true';
-    const msg = active ? 'تعطيل هذي المنتسبة؟ تختفي من القوائم النشطة، بدون ما يمسّ سجلاتها.' : 'إعادة تفعيل هذي المنتسبة؟';
+    const msg = active ? 'تعطيل هذه المنتسبة؟ ستختفي من القوائم النشطة دون المساس بسجلاتها.' : 'إعادة تفعيل هذه المنتسبة؟';
     if(!confirm(msg)) return;
     const {error}=await db.from('staff').update({is_active:!active}).eq('id',b.dataset.toggle);
     if(error){ toast('تعذر الحفظ: '+error.message); return; }
@@ -135,7 +135,7 @@ function openForm(staff){
   $('saDisplayTitle').value = staff?.display_title||'';
   $('saAccountNote').innerHTML = staff
     ? ''
-    : '⚠️ إضافة السطر هنا ما ينشئ حساب دخول تلقائياً (يحتاج صلاحية خاصة ما تتوفر من المتصفح مباشرة). بعد الحفظ، أرسليلي اسمها وأنشئ لها حساب دخول (نفس نمط: الإيميل وكلمة السر = الرقم الشخصي).';
+    : '⚠️ إضافة السطر هنا لا يُنشئ حساب دخول تلقائياً (يحتاج صلاحية خاصة لا تتوفر من المتصفح مباشرة). بعد الحفظ، يُرجى إرسال اسمها لإنشاء حساب دخول لها فوراً (بنفس النمط: البريد الإلكتروني وكلمة السر = الرقم الشخصي).';
   window.scrollTo({top:$('saForm').getBoundingClientRect().top+window.scrollY-80, behavior:'smooth'});
 }
 function closeForm(){ $('saForm').style.display='none'; }

@@ -51,7 +51,7 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
       <div class="dropzone" id="gDrop"><b>ارفعي الملف بعد تعبئته</b><p>xlsx / xls — نفس القالب المنزَّل</p>
         <input type="file" id="gFile" accept=".xlsx,.xls" hidden></div>
-      <div class="hint" style="margin-top:10px">أو أدخلي الدرجات مباشرة في الشبكة أدناه، وتقدرين لصق عمود كامل منسوخ من إكسل داخل أي خانة.</div>
+      <div class="hint" style="margin-top:10px">أو أدخلي الدرجات مباشرة في الشبكة أدناه، ويمكنك لصق عمود كامل منسوخ من إكسل داخل أي خانة.</div>
     </div>
     <div class="g-grid" id="gGrid"></div>
     <div class="warnbox" id="gMissingBox" style="display:none"></div>
@@ -380,7 +380,7 @@ async function syncGroupMembers(sectionId, groupIds){
      طالبة مسجَّلة حالياً بالشعبة وناقصة من كل المجموعات، تنضاف تلقائياً
      — بس لو مجموعة وحدة غير منقسمة (تفادياً لتخمين أي مجموعة تخص طالبة
      جديدة بمادة منقسمة). وبالعكس: أي طالبة كانت هنا وانتقلت فعلياً
-     لشعبة ثانية (تأكدنا من تسجيلها الحالي بشعبة مختلفة) تُحذف من هذي
+     لشعبة ثانية (تأكدنا من تسجيلها الحالي بشعبة مختلفة) تُحذف من هذه
      المجموعة — درجاتها القديمة تبقى محفوظة بسجل قاعدة البيانات، بس ما
      تظهر بعدها بقائمة شعبتها القديمة. */
   if(!groupIds?.length) return;
@@ -399,7 +399,7 @@ async function syncGroupMembers(sectionId, groupIds){
 
   /* أي طالبة بالمجموعة ماعادت مسجَّلة نشطة بنفس شعبة المجموعة — سواء
      انتقلت لشعبة ثانية أو تخرَّجت أو انسحبت أو انتقلت لمدرسة ثانية —
-     تُحذف من قائمة المادة هذي. درجاتها القديمة تبقى محفوظة بسجل قاعدة
+     تُحذف من قائمة المادة هذه. درجاتها القديمة تبقى محفوظة بسجل قاعدة
      البيانات، بس ما تظهر بعدها بقائمة شعبتها القديمة. */
   const staleCandidates=existingRows.filter(e=>!curIds.has(e.student_id));
   if(staleCandidates.length){

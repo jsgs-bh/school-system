@@ -16,7 +16,7 @@ $('appView').insertAdjacentHTML('beforeend', `
     <div id="dfrAutoStats" class="board-wrap"><table class="board" id="dfrAutoTable"></table></div>
 
     <h3 style="margin-top:22px">الفعاليات المُحتسَبة (تفصيلياً)</h3>
-    <div class="sub">هذي هي الفعاليات نفسها اللي دخلت في الأعداد أعلاه — للمراجعة قبل الطباعة.</div>
+    <div class="sub">هذه هي الفعاليات نفسها اللي دخلت في الأعداد أعلاه — للمراجعة قبل الطباعة.</div>
     <div class="board-wrap"><table class="board" id="dfrEventsTable"></table></div>
 
     <div id="dfrManualInternal" style="margin-top:16px">

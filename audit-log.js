@@ -84,7 +84,7 @@ async function load(){
 }
 
 function render(){
-  if(!ROWS.length){ $('alTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا سجلات ضمن هذي الفترة</td></tr>'; return; }
+  if(!ROWS.length){ $('alTable').innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا سجلات ضمن هذه الفترة</td></tr>'; return; }
   $('alTable').innerHTML='<tr><th>التاريخ والوقت</th><th>من</th><th>ماذا (الإجراء)</th><th>الوحدة</th><th>تفاصيل</th></tr>'+
     ROWS.map(r=>`<tr><td class="c">${new Date(r.created_at).toLocaleString('ar')}</td><td class="c">${r._staffName||'—'}</td>
       <td class="c">${ACTION_LABEL[r.action]||r.action}</td><td class="c">${r.entity}</td><td>${detailsText(r.details)}</td></tr>`).join('');
