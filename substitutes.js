@@ -2,11 +2,13 @@
    الأدمن أو "مسؤولة الاحتياط" يختار تاريخاً ويحدد المعلمات الغائبات، فيظهر
    جدول كل معلمة غائبة بحصص ذلك اليوم (على غرار نموذج الورقة المعتمد)، مع
    ترشيح تلقائي مرتَّب لأنسب معلمة احتياط لكل حصة:
-   استبعاد: غير المعلمات (إدارة/مكاتب غير تدريسية)، الغائبات أنفسهن،
-   من نصابها الأسبوعي ≥٢٠ حصة، من نصابها اليوم ≥٤ حصص، ومن عندها حصة
-   أخرى (أصلية أو احتياط سابق) في نفس التوقيت — ثم الأولوية للأقل نصاباً
-   اليوم فالأقل نصاباً أسبوعياً. كل اختيار يُحفظ فوراً (upsert)، وسجل
-   الاحتياط يحتسب لكل معلمة عدد الحصص والأيام التي أخذتها. */
+   استبعاد: غير المعلمات (إدارة/مكاتب غير تدريسية)، من هي في إجازة، الغائبات
+   أنفسهن، من نصابها الأسبوعي ≥٢٠ حصة، من نصابها اليوم ≥٤ حصص، ومن عندها
+   حصة أخرى (أصلية أو احتياط سابق) في نفس التوقيت — ثم الأولوية للأقل نصاباً
+   أسبوعياً فالأقل نصاباً اليوم، مع فصل القائمة بخط بين المعلمات (أولاً)
+   والمعلمة الأولى (بعدها). أي مرشَّحة اختيارها يجعل حصصها اليوم متتالية بلا
+   فاصل تُعلَّم بتحذير أحمر (⚠) دون استبعادها. كل اختيار يُحفظ فوراً (upsert)،
+   وسجل الاحتياط يحتسب لكل معلمة عدد الحصص والأيام التي أخذتها. */
 import { db, $, S, dstr, clean, toast, logAction, getCurrentSemester, printWithTitle, printHeaderHtml, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
@@ -16,7 +18,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div data-substab="daily" style="display:none">
     <div class="panel">
       <h3>تأمين حصص اليوم</h3>
-      <div class="sub">اختاري التاريخ ثم أضيفي المعلمات الغائبات — يظهر جدول كل واحدة منهن بحصص ذلك اليوم، مع ترشيح تلقائي مرتَّب لمعلمة الاحتياط لكل حصة. كل اختيار يُحفظ فوراً.</div>
+      <div class="sub">اختاري التاريخ ثم أضيفي المعلمات الغائبات — يظهر جدول كل واحدة منهن بحصص ذلك اليوم، مع ترشيح تلقائي مرتَّب لمعلمة الاحتياط لكل حصة (معلمات أولاً ثم معلمة أولى). كل اختيار يُحفظ فوراً. <span style="color:#c0392b">⚠</span> بجانب اسم أي مرشَّحة يعني اختيارها يجعل حصصها اليوم متتالية بلا فاصل — لا يمنعها، تنبيه فقط.</div>
       <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         <div class="field" style="min-width:170px"><label>التاريخ</label><input type="date" id="subDate"></div>
         <div class="field" style="flex:1;min-width:240px;position:relative">
@@ -92,6 +94,7 @@ let SUB_DATE=dstr(new Date());
 let ABSENT=[];               // [{id,full_name}]
 let CANDIDATES=[];           // [{id,full_name}]
 let WEEKLY_COUNT={}, TODAY_COUNT={}, BUSY_BY_PERIOD={}; // period_no -> Set(staff_id)
+let STAFF_BUSY_PERIODS={};   // staff_id -> Set(period_no) — حصصها اليوم (أصلية + احتياط مُسنَد سابقاً بنفس التاريخ)
 let ASSIGN_BY_ENTRY={};      // entry_id -> {id, absent_staff_id, substitute_staff_id}
 
 function switchSubsTab(tab){
@@ -157,7 +160,7 @@ async function loadCandidatePool(dow){
   CANDIDATES=(staff||[]).filter(s=>s.departments?.kind!=='office' && !s.on_leave);
 
   const ids=CANDIDATES.map(c=>c.id);
-  WEEKLY_COUNT={}; TODAY_COUNT={}; BUSY_BY_PERIOD={};
+  WEEKLY_COUNT={}; TODAY_COUNT={}; BUSY_BY_PERIOD={}; STAFF_BUSY_PERIODS={};
   if(ids.length){
     const {data:rows}=await db.from('entry_teachers')
       .select('staff_id,timetable_entries!inner(day_of_week,period_no,academic_year_id,semester,is_current)')
@@ -169,6 +172,7 @@ async function loadCandidatePool(dow){
       if(e.day_of_week===dow){
         TODAY_COUNT[r.staff_id]=(TODAY_COUNT[r.staff_id]||0)+1;
         (BUSY_BY_PERIOD[e.period_no] ??= new Set()).add(r.staff_id);
+        (STAFF_BUSY_PERIODS[r.staff_id] ??= new Set()).add(e.period_no);
       }
     }
   }
@@ -182,11 +186,15 @@ async function loadCandidatePool(dow){
     ASSIGN_BY_ENTRY[a.entry_id]={id:a.id, absent_staff_id:a.absent_staff_id, substitute_staff_id:a.substitute_staff_id};
     TODAY_COUNT[a.substitute_staff_id]=(TODAY_COUNT[a.substitute_staff_id]||0)+1;
     const per=a.timetable_entries?.period_no;
-    if(per) (BUSY_BY_PERIOD[per] ??= new Set()).add(a.substitute_staff_id);
+    if(per){
+      (BUSY_BY_PERIOD[per] ??= new Set()).add(a.substitute_staff_id);
+      (STAFF_BUSY_PERIODS[a.substitute_staff_id] ??= new Set()).add(per);
+    }
   }
 }
 
-/* ترتيب المرشَّحات لحصة معيّنة: الأقل نصاباً اليوم، فالأقل نصاباً أسبوعياً، فالاسم أبجدياً.
+/* ترتيب المرشَّحات لحصة معيّنة: المعلمات أولاً ثم المعلمة الأولى (فصل بخط بالقائمة)،
+   وداخل كل فئة: الأقل نصاباً أسبوعياً فالأقل نصاباً اليوم فالاسم أبجدياً.
    currentSubId: المرشَّحة المختارة حالياً لهذه الحصة بالذات (لا تُستبعد بسبب انشغالها/حدّها — لأن هذه الحصة نفسها هي شغلها). */
 function rankedOptions(periodNo, absentIdsSet, currentSubId){
   const busy=BUSY_BY_PERIOD[periodNo]||new Set();
@@ -203,6 +211,15 @@ function rankedOptions(periodNo, absentIdsSet, currentSubId){
     a.full_name.localeCompare(b.full_name,'ar')
   );
   return list;
+}
+
+/* هل اختيار هذه المرشَّحة لهذه الحصة يجعل حصصها اليوم متتالية (ورى بعض) بلا فاصل؟
+   نفحص الحصة السابقة واللاحقة مباشرة — تغطي حالة سدّ فجوة بين حصتين (مثال:
+   عندها ٣ و٥ ومطلوب ٤) وحالة تمديد تتالٍ قائم (عندها ٣و٤ ومطلوب ٥). */
+function isBackToBack(staffId, periodNo){
+  const busy=STAFF_BUSY_PERIODS[staffId];
+  if(!busy) return false;
+  return busy.has(periodNo-1) || busy.has(periodNo+1);
 }
 
 async function renderDay(){
@@ -254,8 +271,15 @@ function fillSelect(sel, period, absentIdsSet, entryId){
   const assigned=ASSIGN_BY_ENTRY[entryId];
   const currentSubId=assigned?.substitute_staff_id||null;
   const opts=rankedOptions(period, absentIdsSet, currentSubId);
+  const optHtml=c=>{
+    const warn=isBackToBack(c.id, period);
+    const text=`${warn?'⚠ ':''}${c.full_name} (الأسبوع: ${WEEKLY_COUNT[c.id]||0} — اليوم: ${TODAY_COUNT[c.id]||0})`;
+    return `<option value="${c.id}" ${c.id===currentSubId?'selected':''} ${warn?'style="color:#c0392b"':''}>${text}</option>`;
+  };
+  const teachers=opts.filter(c=>c.title==='teacher'), seniors=opts.filter(c=>c.title==='senior_teacher');
   sel.innerHTML='<option value="">— اختاري معلمة الاحتياط —</option>'+
-    opts.map(c=>`<option value="${c.id}" ${c.id===currentSubId?'selected':''}>${c.full_name} (الأسبوع: ${WEEKLY_COUNT[c.id]||0} — اليوم: ${TODAY_COUNT[c.id]||0})</option>`).join('');
+    (teachers.length ? `<optgroup label="معلمات">${teachers.map(optHtml).join('')}</optgroup>` : '')+
+    (seniors.length ? `<optgroup label="معلمة أولى">${seniors.map(optHtml).join('')}</optgroup>` : '');
   if(currentSubId && !opts.some(c=>c.id===currentSubId)){
     /* المُختارة سابقاً لم تعد ضمن المرشَّحات (وصلت حداً مثلاً) — تبقى ظاهرة كخيار محفوظ فقط */
     const cur=CANDIDATES.find(c=>c.id===currentSubId);
@@ -275,6 +299,7 @@ async function onPick(sel, period, absentIdsSet, entryId, absentId){
         if(error) throw error;
         TODAY_COUNT[prev.substitute_staff_id]=Math.max(0,(TODAY_COUNT[prev.substitute_staff_id]||1)-1);
         BUSY_BY_PERIOD[period]?.delete(prev.substitute_staff_id);
+        STAFF_BUSY_PERIODS[prev.substitute_staff_id]?.delete(period);
         delete ASSIGN_BY_ENTRY[entryId];
         toast('تم إلغاء الترشيح');
       }
@@ -286,10 +311,12 @@ async function onPick(sel, period, absentIdsSet, entryId, absentId){
       if(prev && prev.substitute_staff_id!==newSubId){
         TODAY_COUNT[prev.substitute_staff_id]=Math.max(0,(TODAY_COUNT[prev.substitute_staff_id]||1)-1);
         BUSY_BY_PERIOD[period]?.delete(prev.substitute_staff_id);
+        STAFF_BUSY_PERIODS[prev.substitute_staff_id]?.delete(period);
       }
       if(!prev || prev.substitute_staff_id!==newSubId){
         TODAY_COUNT[newSubId]=(TODAY_COUNT[newSubId]||0)+1;
         (BUSY_BY_PERIOD[period] ??= new Set()).add(newSubId);
+        (STAFF_BUSY_PERIODS[newSubId] ??= new Set()).add(period);
       }
       ASSIGN_BY_ENTRY[entryId]={id:data.id, absent_staff_id:absentId, substitute_staff_id:newSubId};
       logAction('assign','substitute_assignments',{date:SUB_DATE, absent_staff_id:absentId, substitute_staff_id:newSubId, entry_id:entryId});
