@@ -82,7 +82,7 @@ const CH_TABS=[
 ];
 
 function switchChTab(tab){
-  document.querySelectorAll('#chMain [data-chtab]').forEach(el=>{ el.style.display = el.dataset.chtab===tab ? 'block':'none'; });
+  document.querySelectorAll('#chMain > [data-chtab]').forEach(el=>{ el.style.display = el.dataset.chtab===tab ? 'block':'none'; });
   $('chSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active', b.dataset.chtab===tab));
   if(tab==='track') loadTrack();
   if(tab==='approve') loadApprove();
