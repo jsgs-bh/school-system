@@ -11,7 +11,7 @@ export const roleNames = {admin:'الدعم الفني',leadership:'القياد
   committee_head:'رئيسة لجنة',plans_supervisor:'مسؤولة متابعة الخطط',analysis_supervisor:'مسؤولة تحليل الاختبارات',
   attendance_lead:'مسؤولة متابعة الغياب', complaints_lead:'مسؤولة متابعة الشكاوى',
   strategic_plan_lead:'رئيسة متابعة الخطة الاستراتيجية', violations_lead:'مسؤولة المخالفات',
-  talents_lead:'مسؤولة متابعة الموهوبات'};
+  talents_lead:'مسؤولة متابعة الموهوبات', comp_hours_lead:'مسؤولة الساعات التعويضية'};
 export const titleNames = {teacher:'معلمة',senior_teacher:'معلمة أولى',leadership:'قيادة عليا',staff:'منتسبة'};
 export const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'];
 export const PERIOD_NAMES = ['','الأولى','الثانية','الثالثة','الرابعة','الخامسة','السادسة','السابعة'];
@@ -188,6 +188,7 @@ async function boot(session){
     isComplaintsLead: (roles||[]).some(r=>r.role==='complaints_lead'),
     isViolationsLead: (roles||[]).some(r=>r.role==='violations_lead'),
     isTalentsLead: (roles||[]).some(r=>r.role==='talents_lead'),
+    isCompHoursLead: (roles||[]).some(r=>r.role==='comp_hours_lead'),
     isProjectLead: (roles||[]).some(r=>r.role==='project_lead'),
     isStrategicPlanLead: (roles||[]).some(r=>r.role==='strategic_plan_lead'),
     isAnalysis: (roles||[]).some(r=>r.role==='analysis_supervisor'),
