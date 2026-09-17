@@ -148,12 +148,13 @@ function getDow(dateStr){ return new Date(dateStr+'T12:00:00').getDay()+1; }
 
 /* ============ حوض المرشَّحات: معلمات فقط (مو إدارة ولا مكاتب)، بنصابها الأسبوعي واليومي وانشغالها بكل حصة ============ */
 async function loadCandidatePool(dow){
-  const {data:staff}=await db.from('staff').select('id,full_name,title,departments(kind)')
+  const {data:staff}=await db.from('staff').select('id,full_name,title,on_leave,departments(kind)')
     .in('title',['teacher','senior_teacher']).eq('is_active',true);
-  /* الاحتياط حق المعلمات والمعلمة الأولى (لا الإدارة أو المكاتب). استبعاد
-     المكاتب غير التدريسية هنا عبر kind='office' بدل مطابقة الاسم — أسلم من
-     فروق كتابة أسماء الأقسام (لاحظنا بعض التكرار). */
-  CANDIDATES=(staff||[]).filter(s=>s.departments?.kind!=='office');
+  /* الاحتياط حق المعلمات والمعلمة الأولى (لا الإدارة أو المكاتب)، وباستبعاد
+     من هي في إجازة حالياً (تُدار من "إدارة المنتسبات"). استبعاد المكاتب غير
+     التدريسية هنا عبر kind='office' بدل مطابقة الاسم — أسلم من فروق كتابة
+     أسماء الأقسام (لاحظنا بعض التكرار). */
+  CANDIDATES=(staff||[]).filter(s=>s.departments?.kind!=='office' && !s.on_leave);
 
   const ids=CANDIDATES.map(c=>c.id);
   WEEKLY_COUNT={}; TODAY_COUNT={}; BUSY_BY_PERIOD={};

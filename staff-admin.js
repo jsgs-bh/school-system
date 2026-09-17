@@ -85,7 +85,7 @@ async function initStaffAdmin(){
 }
 
 async function loadStaff(){
-  const {data,error}=await db.from('staff').select('id,full_name,personal_number,email,department_id,title,display_title,is_active,departments(name)').order('full_name');
+  const {data,error}=await db.from('staff').select('id,full_name,personal_number,email,department_id,title,display_title,is_active,on_leave,departments(name)').order('full_name');
   if(error){ $('saList').innerHTML=`<div class="empty-day">تعذر التحميل: ${error.message}</div>`; return; }
   ALL_STAFF=data||[];
   renderList();
@@ -100,16 +100,28 @@ function renderList(){
   $('saList').innerHTML = rows.length ? rows.map(s=>`
     <div class="st-row ${s.is_active?'':'inactive'}">
       <div>
-        <b>${s.full_name}</b>${s.is_active?'':' <small style="color:var(--err);display:inline">— معطَّلة</small>'}
+        <b>${s.full_name}</b>${s.is_active?'':' <small style="color:var(--err);display:inline">— معطَّلة</small>'}${s.on_leave?' <small style="color:var(--warn);display:inline">— في إجازة</small>':''}
         <small>${s.personal_number} — ${s.departments?.name||'بدون قسم'} — ${s.display_title||titleNames[s.title]||''}</small>
       </div>
       <div class="viol-actions" style="margin:0">
         <button class="btn ghost" data-edit="${s.id}" style="width:auto;padding:7px 16px;font-size:12.5px">✎ تعديل</button>
+        <button class="btn ghost" data-leave="${s.id}" data-onleave="${s.on_leave}" style="width:auto;padding:7px 16px;font-size:12.5px;border-color:var(--warn);color:var(--warn)">
+          ${s.on_leave?'✔️ إنهاء الإجازة':'🏖️ وضع إجازة'}
+        </button>
         <button class="btn ghost" data-toggle="${s.id}" data-active="${s.is_active}" style="width:auto;padding:7px 16px;font-size:12.5px;border-color:${s.is_active?'var(--err)':'var(--gold)'};color:${s.is_active?'var(--err)':'var(--gold)'}">
           ${s.is_active?'🚫 تعطيل':'✔️ إعادة تفعيل'}
         </button>
       </div>
     </div>`).join('') : '<div class="empty-day">لا نتائج.</div>';
+
+  $('saList').querySelectorAll('[data-leave]').forEach(b=>b.addEventListener('click', async ()=>{
+    const onLeave=b.dataset.onleave==='true';
+    const msg = onLeave ? 'إنهاء إجازة هذه المنتسبة؟ ستعود ضمن مرشَّحات الاحتياط ونحوها.' : 'وضع هذه المنتسبة في إجازة؟ لن تظهر ضمن مرشَّحات الاحتياط طوال فترة الإجازة (لا تؤثر على أي شيء آخر — سجلاتها وجدولها يبقيان كما هما).';
+    if(!confirm(msg)) return;
+    const {error}=await db.from('staff').update({on_leave:!onLeave}).eq('id',b.dataset.leave);
+    if(error){ toast('تعذر الحفظ: '+error.message); return; }
+    toast(onLeave?'تم إنهاء الإجازة':'تم وضعها في إجازة'); loadStaff();
+  }));
 
   $('saList').querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openForm(ALL_STAFF.find(s=>s.id===b.dataset.edit))));
   $('saList').querySelectorAll('[data-toggle]').forEach(b=>b.addEventListener('click', async ()=>{
