@@ -26,6 +26,16 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn gold" id="upBackfill">🔄 مزامنة كل الدرجات الموجودة</button>
     </div>
     <div class="result" id="upBackfillStatus" style="display:none"></div>
+    <div id="upExamTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;background:var(--sand);border-radius:10px;padding:10px 14px">
+      <b style="font-size:13px">تغيير حالة الكل (القائمة الظاهرة حالياً):</b>
+      <select id="upBulkStatus">
+        <option value="pending">جديد</option>
+        <option value="in_progress">قيد المتابعة</option>
+        <option value="done" selected>تمت المتابعة</option>
+      </select>
+      <button class="btn gold" id="upBulkApply" style="width:auto;padding:8px 20px">تطبيق على الكل</button>
+    </div>
     <div class="board-wrap"><table class="board" id="upTable"></table></div>
   </div>
 </div>
@@ -56,7 +66,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   }
 </style>`);
 
-let ROWS=[], CAN_EDIT_OFFICE=false, STATUS_FILTER=null;
+let ROWS=[], CAN_EDIT_OFFICE=false, STATUS_FILTER=null, EXAM_FILTER=null;
 
 async function initUP(){
   if($('upRefresh').dataset.ready) return;
@@ -70,6 +80,7 @@ async function initUP(){
   $('upFilterPending').addEventListener('click',()=>{ STATUS_FILTER='pending'; render(); });
   $('upFilterProgress').addEventListener('click',()=>{ STATUS_FILTER='in_progress'; render(); });
   $('upFilterDone').addEventListener('click',()=>{ STATUS_FILTER='done'; render(); });
+  $('upBulkApply').addEventListener('click',bulkApplyStatus);
   await load();
 }
 
@@ -159,8 +170,20 @@ function render(){
   $('upPending').textContent=ROWS.filter(r=>r.status==='pending').length;
   $('upProgress').textContent=ROWS.filter(r=>r.status==='in_progress').length;
   $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
+
+  /* تبويبات الاختبارات — كل اختبار (بالاسم) بروحه، بعدد تنبيهاته */
+  const examNames=[...new Set(ROWS.map(r=>r.exams?.name).filter(Boolean))];
+  $('upExamTabs').innerHTML = examNames.length<=1 ? '' :
+    `<button class="btn ${EXAM_FILTER===null?'gold':'ghost'}" data-exam="" style="width:auto;padding:8px 16px;font-size:12.5px">الكل (${ROWS.length})</button>` +
+    examNames.map(name=>{
+      const n=ROWS.filter(r=>r.exams?.name===name).length;
+      return `<button class="btn ${EXAM_FILTER===name?'gold':'ghost'}" data-exam="${name}" style="width:auto;padding:8px 16px;font-size:12.5px">${name} (${n})</button>`;
+    }).join('');
+  $('upExamTabs').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ EXAM_FILTER=b.dataset.exam||null; render(); }));
+
   const tbl=$('upTable');
-  const rows = STATUS_FILTER ? ROWS.filter(r=>r.status===STATUS_FILTER) : ROWS;
+  let rows = STATUS_FILTER ? ROWS.filter(r=>r.status===STATUS_FILTER) : ROWS;
+  if(EXAM_FILTER) rows = rows.filter(r=>r.exams?.name===EXAM_FILTER);
   if(!rows.length){ tbl.innerHTML='<tr><td style="padding:30px;text-align:center;color:#8a93a0">لا تنبيهات في هذا التصنيف 🎉</td></tr>'; return; }
   tbl.innerHTML='<tr><th>الطالبة</th><th>الرقم الأكاديمي</th><th>الشعبة</th><th>المقرر</th><th>الاختبار</th><th>السبب</th><th>الدرجة</th><th>النسبة</th><th>إجراء المعلمة</th><th>إجراء المكتب</th><th>الحالة</th><th></th></tr>'+
     rows.map((r,i)=>`<tr>
@@ -194,6 +217,27 @@ function render(){
     $('upProgress').textContent=ROWS.filter(r=>r.status==='in_progress').length;
     $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
   }));
+}
+
+async function bulkApplyStatus(){
+  let rows = STATUS_FILTER ? ROWS.filter(r=>r.status===STATUS_FILTER) : ROWS;
+  if(EXAM_FILTER) rows = rows.filter(r=>r.exams?.name===EXAM_FILTER);
+  if(!rows.length){ toast('لا تنبيهات بالقائمة الظاهرة حالياً'); return; }
+  const newStatus=$('upBulkStatus').value;
+  if(!confirm(`تغيير حالة ${rows.length} تنبيه إلى "${STATUS_LABEL[newStatus]}"؟`)) return;
+  const btn=$('upBulkApply'); btn.disabled=true; btn.textContent='جارٍ التطبيق…';
+  try{
+    for(const c of chunk(rows.map(r=>r.id),300)){
+      const {error}=await db.from('underperformer_alerts').update({
+        status:newStatus, handled_by:S.ME.id, handled_at:new Date().toISOString()
+      }).in('id',c);
+      if(error) throw error;
+    }
+    for(const r of rows) r.status=newStatus;
+    toast('تم تحديث الحالة للكل');
+    render();
+  }catch(err){ toast('تعذر التطبيق: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent='تطبيق على الكل'; }
 }
 
 function printStudentReport(r){
