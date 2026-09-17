@@ -32,7 +32,6 @@ $('appView').insertAdjacentHTML('beforeend', `
 const BACKUP_TABLES=['academic_years','absence_followup','announcement_dismissals','app_settings',
   'attendance_alerts','attendance_records','attendance_sessions','audit_log',
   'committee_beneficiary_projects','committee_members','committee_minutes','committee_tasks','committees',
-  'compensatory_hours_requests','compensatory_hours_usage',
   'competency_items','competency_template_items','competency_templates','competition_announcements','complaints',
   'departments','enrollments','entry_teachers','event_participants','event_records','evidence_files',
   'exam_competencies','exams','excuse_log','file_templates','grade_categories','grade_notes','grade_records',
