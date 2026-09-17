@@ -26,7 +26,15 @@ $('appView').insertAdjacentHTML('beforeend', `
       <button class="btn gold" id="upBackfill">🔄 مزامنة كل الدرجات الموجودة</button>
     </div>
     <div class="result" id="upBackfillStatus" style="display:none"></div>
-    <div id="upExamTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:13px;font-weight:600;margin-inline-end:8px">تصنيف حسب الاختبار:</label>
+      <select id="upExamFilter" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:200px">
+        <option value="">جميع التنبيهات</option>
+        <option value="اختبار تشخيصي">الاختبار التشخيصي</option>
+        <option value="الاختبار الأول">الاختبار الأول</option>
+        <option value="الاختبار الثاني">الاختبار الثاني</option>
+      </select>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;background:var(--sand);border-radius:10px;padding:10px 14px">
       <b style="font-size:13px">تغيير حالة الكل (القائمة الظاهرة حالياً):</b>
       <select id="upBulkStatus">
@@ -171,15 +179,11 @@ function render(){
   $('upProgress').textContent=ROWS.filter(r=>r.status==='in_progress').length;
   $('upDone').textContent=ROWS.filter(r=>r.status==='done').length;
 
-  /* تبويبات الاختبارات — كل اختبار (بالاسم) بروحه، بعدد تنبيهاته */
-  const examNames=[...new Set(ROWS.map(r=>r.exams?.name).filter(Boolean))];
-  $('upExamTabs').innerHTML = examNames.length<=1 ? '' :
-    `<button class="btn ${EXAM_FILTER===null?'gold':'ghost'}" data-exam="" style="width:auto;padding:8px 16px;font-size:12.5px">الكل (${ROWS.length})</button>` +
-    examNames.map(name=>{
-      const n=ROWS.filter(r=>r.exams?.name===name).length;
-      return `<button class="btn ${EXAM_FILTER===name?'gold':'ghost'}" data-exam="${name}" style="width:auto;padding:8px 16px;font-size:12.5px">${name} (${n})</button>`;
-    }).join('');
-  $('upExamTabs').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ EXAM_FILTER=b.dataset.exam||null; render(); }));
+  /* تصنيف حسب الاختبار — القائمة ثابتة (اختيار المستخدمة)، والفلترة تُطبَّق فوراً */
+  if(!$('upExamFilter').dataset.wired){
+    $('upExamFilter').dataset.wired='1';
+    $('upExamFilter').addEventListener('change',()=>{ EXAM_FILTER=$('upExamFilter').value||null; render(); });
+  }
 
   const tbl=$('upTable');
   let rows = STATUS_FILTER ? ROWS.filter(r=>r.status===STATUS_FILTER) : ROWS;
