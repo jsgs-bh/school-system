@@ -29,9 +29,11 @@ $('appView').insertAdjacentHTML('beforeend', `
 </style>`);
 
 /* كل جداول قاعدة البيانات — جدول إكسل واحد لكل واحد منها. */
-const BACKUP_TABLES=['academic_years','absence_followup','announcement_dismissals','app_settings',
+const BACKUP_TABLES=['academic_years','absence_followup','announcement_dismissals','announcement_recipients',
+  'announcements','app_settings',
   'attendance_alerts','attendance_records','attendance_sessions','audit_log',
   'committee_beneficiary_projects','committee_members','committee_minutes','committee_tasks','committees',
+  'comp_hours','comp_hours_usage',
   'competency_items','competency_template_items','competency_templates','competition_announcements','complaints',
   'departments','enrollments','entry_teachers','event_participants','event_records','evidence_files',
   'exam_competencies','exams','excuse_log','file_templates','grade_categories','grade_notes','grade_records',
@@ -39,7 +41,8 @@ const BACKUP_TABLES=['academic_years','absence_followup','announcement_dismissal
   'plan_actions','plan_initiatives','plan_project_indicators','plan_project_subgoals','plan_projects',
   'remedial_plan_actions','remedial_plans','sections','settings','shared_files','staff','staff_project_leads',
   'staff_roles','strategic_domains','strategic_goals','strategic_indicators','strategic_programs',
-  'strategic_standards','strategic_subgoals','student_talents','students','subjects','supervision_links',
+  'strategic_standards','strategic_subgoals','student_talents','students','subjects','substitute_assignments',
+  'supervision_links',
   'talent_categories','talent_event_participants','talent_events','teaching_group_members',
   'teaching_group_teachers','teaching_groups','timetable_entries','timetable_patterns','underperformer_alerts',
   'violation_categories','violation_types','violations'];
