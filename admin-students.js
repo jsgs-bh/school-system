@@ -13,8 +13,31 @@ $('appView').insertAdjacentHTML('beforeend', `
 
   <div data-astab="list">
     <div class="panel">
-      <h3>طالبات المدرسة</h3>
-      <select id="asSectionPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:200px"><option value="">اختاري الصف/الشعبة…</option></select>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <h3 style="margin:0">طالبات المدرسة</h3>
+        <button class="btn gold" id="asAddBtn" style="width:auto;padding:9px 22px">➕ إضافة طالبة</button>
+      </div>
+      <select id="asSectionPick" style="margin-top:10px;padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:200px"><option value="">اختاري الصف/الشعبة…</option></select>
+      <div id="asAddForm" style="display:none;background:var(--sand);border-radius:12px;padding:18px;margin-top:14px">
+        <h4 style="margin-top:0">إضافة طالبة جديدة</h4>
+        <div class="row" style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:200px"><label>اسم الطالبة</label><input type="text" id="asNewName"></div>
+          <div class="field" style="flex:1;min-width:160px"><label>الرقم الشخصي</label><input type="text" id="asNewPersonal"></div>
+        </div>
+        <div class="row" style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:160px"><label>الرقم الأكاديمي</label><input type="text" id="asNewAcademic"></div>
+          <div class="field" style="flex:1;min-width:160px"><label>الشعبة</label><select id="asNewSection"></select></div>
+        </div>
+        <div class="row" style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:200px"><label>البريد الإلكتروني (اختياري)</label><input type="text" id="asNewEmail"></div>
+          <div class="field" style="flex:1;min-width:140px"><label>رقم تواصل ١ (اختياري)</label><input type="text" id="asNewC1"></div>
+          <div class="field" style="flex:1;min-width:140px"><label>رقم تواصل ٢ (اختياري)</label><input type="text" id="asNewC2"></div>
+        </div>
+        <div class="viol-actions" style="margin-top:8px">
+          <button class="btn gold" id="asNewSave" style="width:auto;padding:10px 24px">حفظ</button>
+          <button class="btn ghost" id="asNewCancel" style="width:auto;padding:10px 20px">إلغاء</button>
+        </div>
+      </div>
     </div>
     <div class="panel" id="asListPanel" style="display:none">
       <div id="asList"></div>
@@ -24,10 +47,24 @@ $('appView').insertAdjacentHTML('beforeend', `
   <div data-astab="roster" style="display:none">
     <div class="panel">
       <h3>قوائم الصفوف</h3>
-      <div class="sub">كشف بأسماء طالبات أي شعبة، جاهز للطباعة — بالتسلسل والرقم الأكاديمي وخلية ملاحظات فاضية.</div>
+      <div class="sub">كشف بأسماء طالبات أي شعبة، بالحقول اللي تختارينها — جاهز للطباعة أو تنزيل إكسل.</div>
       <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
         <select id="rosterSectionPick" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:var(--white);min-width:200px"><option value="">اختاري الصف/الشعبة…</option></select>
-        <button class="btn gold" id="rosterPrintBtn" style="width:auto;padding:10px 22px">🖨️ طباعة كشف الأسماء</button>
+      </div>
+      <div class="sub" style="margin-top:14px;margin-bottom:6px"><b>الحقول المطلوبة بالملف:</b></div>
+      <div id="rosterFields" style="display:flex;gap:16px;flex-wrap:wrap">
+        <label><input type="checkbox" class="rf" value="seq" checked> التسلسل</label>
+        <label><input type="checkbox" class="rf" value="full_name" checked> اسم الطالبة</label>
+        <label><input type="checkbox" class="rf" value="academic_number" checked> الرقم الأكاديمي</label>
+        <label><input type="checkbox" class="rf" value="personal_number"> الرقم الشخصي</label>
+        <label><input type="checkbox" class="rf" value="contact1"> رقم التواصل ١</label>
+        <label><input type="checkbox" class="rf" value="contact2"> رقم التواصل ٢</label>
+        <label><input type="checkbox" class="rf" value="email"> البريد الإلكتروني</label>
+        <label><input type="checkbox" class="rf" value="notes"> خانة ملاحظات فاضية</label>
+      </div>
+      <div class="viol-actions" style="margin-top:14px">
+        <button class="btn gold" id="rosterPrintBtn" style="width:auto;padding:10px 22px">🖨️ طباعة PDF</button>
+        <button class="btn ghost" id="rosterXlsBtn" style="width:auto;padding:10px 22px">⬇ تنزيل إكسل</button>
       </div>
     </div>
   </div>
@@ -81,24 +118,88 @@ async function initAdminStudents(){
   $('asSectionPick').innerHTML='<option value="">اختاري الصف/الشعبة…</option>'+SECTIONS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
   $('asSectionPick').addEventListener('change',loadStudents);
   $('rosterSectionPick').innerHTML='<option value="">اختاري الصف/الشعبة…</option>'+SECTIONS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
-  $('rosterPrintBtn').addEventListener('click',printRoster);
+  $('asNewSection').innerHTML='<option value="">اختاري الشعبة…</option>'+SECTIONS.map(s=>`<option value="${s.id}">${s.code}</option>`).join('');
+  $('rosterPrintBtn').addEventListener('click',()=>exportRoster('print'));
+  $('rosterXlsBtn').addEventListener('click',()=>exportRoster('xlsx'));
+  $('asAddBtn').addEventListener('click',()=>{ $('asAddForm').style.display='block'; });
+  $('asNewCancel').addEventListener('click',resetAddForm);
+  $('asNewSave').addEventListener('click',saveNewStudent);
 }
 
-async function printRoster(){
+function resetAddForm(){
+  $('asAddForm').style.display='none';
+  $('asNewName').value=''; $('asNewPersonal').value=''; $('asNewAcademic').value='';
+  $('asNewSection').value=''; $('asNewEmail').value=''; $('asNewC1').value=''; $('asNewC2').value='';
+}
+
+async function saveNewStudent(){
+  const full_name=clean($('asNewName').value), personal_number=clean($('asNewPersonal').value);
+  const academic_number=clean($('asNewAcademic').value), sectionId=$('asNewSection').value;
+  if(!full_name||!personal_number||!academic_number||!sectionId){ toast('اكتبي الاسم والرقمين واختاري الشعبة على الأقل'); return; }
+  const btn=$('asNewSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
+  try{
+    const {data:stu,error}=await db.from('students').insert({
+      full_name, personal_number, academic_number, status:'active',
+      email: clean($('asNewEmail').value)||null,
+      contact1: clean($('asNewC1').value)||null,
+      contact2: clean($('asNewC2').value)||null,
+    }).select('id').single();
+    if(error) throw error;
+    const {error:e2}=await db.from('enrollments').insert({student_id:stu.id, section_id:sectionId, from_date:new Date().toISOString().slice(0,10)});
+    if(e2) throw e2;
+    toast('تمت إضافة الطالبة');
+    resetAddForm();
+    if($('asSectionPick').value===sectionId) loadStudents();
+  }catch(err){ toast('تعذر الحفظ: '+(err.message||err)); }
+  finally{ btn.disabled=false; btn.textContent='حفظ'; }
+}
+
+const ROSTER_FIELD_LABEL={seq:'التسلسل', full_name:'اسم الطالبة', academic_number:'الرقم الأكاديمي',
+  personal_number:'الرقم الشخصي', contact1:'رقم التواصل ١', contact2:'رقم التواصل ٢', email:'البريد الإلكتروني', notes:'ملاحظات'};
+
+async function exportRoster(kind){
   const sectionId=$('rosterSectionPick').value;
   if(!sectionId){ toast('اختاري الصف/الشعبة أولاً'); return; }
   const code=$('rosterSectionPick').selectedOptions[0].textContent;
-  const {data,error}=await db.from('enrollments').select('students(full_name,academic_number)').eq('section_id',sectionId).is('to_date',null);
+  const fields=[...document.querySelectorAll('#rosterFields .rf:checked')].map(c=>c.value);
+  if(!fields.length){ toast('اختاري حقلاً واحداً على الأقل'); return; }
+  const {data,error}=await db.from('enrollments').select('students(full_name,academic_number,personal_number,contact1,contact2,email)').eq('section_id',sectionId).is('to_date',null);
   if(error){ toast('تعذر التحميل: '+error.message); return; }
   const students=(data||[]).map(e=>e.students).filter(Boolean).sort((a,b)=>a.full_name.localeCompare(b.full_name,'ar'));
   if(!students.length){ toast('لا طالبات في هذي الشعبة'); return; }
-  $('printAreaRoster').innerHTML=`
-    ${printHeaderHtml(`كشف أسماء طالبات الصف ${code}`)}
-    <table class="roster-print-tbl">
-      <tr><th style="width:8%">التسلسل</th><th style="width:22%">الرقم الأكاديمي</th><th>اسم الطالبة</th><th style="width:26%">ملاحظات</th></tr>
-      ${students.map((s,i)=>`<tr><td>${i+1}</td><td>${s.academic_number}</td><td style="text-align:right;padding-right:14px">${s.full_name}</td><td></td></tr>`).join('')}
-    </table>`;
-  printWithTitle(`كشف_أسماء_${code}`,'printAreaRoster');
+
+  if(kind==='print'){
+    const headers=fields.map(f=>ROSTER_FIELD_LABEL[f]).join('</th><th>');
+    const rows=students.map((s,i)=>fields.map(f=>{
+      if(f==='seq') return i+1;
+      if(f==='notes') return '';
+      return s[f]||'';
+    }).join('</td><td>')).join('</tr><tr><td>');
+    $('printAreaRoster').innerHTML=`
+      ${printHeaderHtml(`كشف أسماء طالبات الصف ${code}`)}
+      <table class="roster-print-tbl"><tr><th>${headers}</th></tr><tr><td>${rows}</td></tr></table>`;
+    printWithTitle(`كشف_أسماء_${code}`,'printAreaRoster');
+    return;
+  }
+
+  // إكسل
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet(code,{views:[{rightToLeft:true}]});
+  const hdr=ws.addRow(fields.map(f=>ROSTER_FIELD_LABEL[f]));
+  hdr.eachCell(c=>{ c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1D3D5C'}}; c.alignment={horizontal:'center'}; });
+  students.forEach((s,i)=>{
+    ws.addRow(fields.map(f=>{
+      if(f==='seq') return i+1;
+      if(f==='notes') return '';
+      return s[f]||'';
+    }));
+  });
+  ws.columns=fields.map(f=>({width: f==='full_name'?26:16}));
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`كشف_أسماء_${code}.xlsx`; a.click();
+  URL.revokeObjectURL(url);
 }
 
 async function loadStudents(){
