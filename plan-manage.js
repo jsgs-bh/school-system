@@ -314,15 +314,18 @@ function renderGroups(){
       monthSel.innerHTML=MONTHS.map(m=>`<option value="${m.id}" ${a_month_selected(m.id,action.month)}>${m.label}</option>`).join('');
       const respInput=document.createElement('input'); respInput.type='text'; respInput.className='pm-action-edit-input';
       respInput.placeholder='المسؤول'; respInput.value=action.responsible||''; respInput.style.minWidth='140px';
+      const dueInput=document.createElement('input'); dueInput.type='date'; dueInput.className='pm-action-edit-input';
+      dueInput.value=action.due_date||''; dueInput.title='تاريخ الإجراء (اختياري — لتذكيرات تلقائية)'; dueInput.style.minWidth='150px';
       const saveBtn=document.createElement('button'); saveBtn.className='btn gold pm-small-btn'; saveBtn.textContent='✓ حفظ';
       textSpan.replaceWith(textInput); metaSpan.replaceWith(monthSel);
       row.querySelector('[data-role="edit"]').replaceWith(saveBtn);
       textInput.after(respInput);
+      respInput.after(dueInput);
       textInput.focus();
       saveBtn.addEventListener('click', async ()=>{
         const newText=textInput.value.trim();
         if(!newText){ toast('نص الإجراء لا يمكن أن يكون فاضياً'); return; }
-        const payload={text:newText, month:monthSel.value, responsible:respInput.value.trim()||null, updated_at:new Date().toISOString()};
+        const payload={text:newText, month:monthSel.value, responsible:respInput.value.trim()||null, due_date:dueInput.value||null, updated_at:new Date().toISOString()};
         const {error}=await db.from('plan_actions').update(payload).eq('id',id);
         if(error){ toast('تعذر الحفظ: '+error.message); return; }
         Object.assign(action,payload); toast('تم الحفظ');

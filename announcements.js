@@ -214,3 +214,4 @@ function renderList(){
 }
 
 registerTab({id:'annMain', label:'الإعلانات', show:()=>true, init:initAnnouncements});
+export { checkPopup as refreshPopupQueue };

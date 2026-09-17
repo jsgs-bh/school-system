@@ -69,6 +69,11 @@ export function registerTab(t){
   }
 }
 const allTabs = () => [...TOP, ...Object.values(GROUPS).flatMap(g=>g.tabs)];
+
+/* مهام خلفية تشتغل مرة عند كل دخول (بعد ما يتحدد S.ME وS.FLAGS)، بدون
+   ما تحتاج تبويب ظاهر بالواجهة — تُستخدم مثلاً لفحص التنبيهات التلقائية. */
+const BACKGROUND_TASKS=[];
+export function registerBackgroundTask(fn){ BACKGROUND_TASKS.push(fn); }
 function groupOf(tid){
   /* بعض الشاشات (مثل "اترك بصمة" / "فعاليات") تُسجَّل بنفس المعرّف مرتين
      تحت مجموعتين مختلفتين (واحدة لرئيسة المشروع تحت "الخطة الاستراتيجية"،
@@ -250,6 +255,7 @@ async function boot(session){
   /* لو تبويب معيّن فيه خطأ برمجي وقت التحميل، ما نخلّيه يوقف تشغيل بقية
      التبويبات كلها (كل init() بمحاولة مستقلة). */
   const safeInit = t => { try{ t.init?.(); }catch(err){ console.error(`init failed: ${t.id}`, err); } };
+  for(const fn of BACKGROUND_TASKS){ try{ await fn(); }catch(err){ console.error('background task failed', err); } }
   for(const t of topVisible) safeInit(t);
   for(const g of groupItems) for(const t of g.tabs) safeInit(t);
   const firstNav = navItems[0];
