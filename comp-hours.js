@@ -23,14 +23,14 @@ $('appView').insertAdjacentHTML('beforeend', `
       </div>
       <div class="field"><label>السبب</label><textarea id="chReason" rows="2" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></textarea></div>
       <button class="btn gold" id="chAddSave" style="width:auto;padding:10px 26px;margin-top:6px">حفظ</button>
-      <div class="sub" style="margin-top:10px">⚠️ الساعة المضافة تضل "قيد الاعتماد" ولا تُحتسب برصيدك إلا بعد ما تعتمدها مسؤولة الساعات التعويضية.</div>
+      <div class="sub" style="margin-top:10px">⚠️ تبقى الساعة المضافة قيد الاعتماد ولا تُحتسب ضمن رصيدك إلا بعد اعتمادها من مسؤولة الساعات التعويضية.</div>
     </div>
   </div>
 
   <div data-chtab="track" style="display:none">
     <div class="panel">
       <h3>طلباتي</h3>
-      <div class="sub">كل طلباتك بحالتها — معتمدة / قيد الاعتماد / غير معتمدة. تقدرين تحذفين أي طلب لسا "قيد الاعتماد".</div>
+      <div class="sub">كل طلباتك بحالتها — معتمدة / قيد الاعتماد / غير معتمدة. يمكنك حذف أي طلب قبل اعتماده.</div>
       <div class="board-wrap"><table class="board" id="chTrackTbl"></table></div>
       <div style="margin-top:10px;font-size:15px"><b>إجمالي المعتمد: <span id="chTotalApproved">0:00</span></b></div>
     </div>
@@ -146,7 +146,7 @@ async function initCompHours(){
 async function saveCompHour(){
   const date=$('chDate').value, from=$('chFrom').value, to=$('chTo').value, approver=$('chApprover').value;
   if(!date||!from||!to){ toast('اكتبي التاريخ والوقتين على الأقل'); return; }
-  if(to<=from){ toast('وقت "إلى" لازم يكون بعد وقت "من"'); return; }
+  if(to<=from){ toast('يجب أن يكون وقت "إلى" بعد وقت "من"'); return; }
   const btn=$('chAddSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
   try{
     const {error}=await db.from('comp_hours').insert({
@@ -170,7 +170,7 @@ async function loadTrack(){
         <tr><td class="c">${r.date}</td><td>${r.reason||'—'}</td><td class="c">${fmtMin(r.minutes)}</td>
         <td class="c"><span class="ch-status-${r.status}">${CH_STATUS_LABEL[r.status]}</span></td>
         <td class="c">${r.status==='pending'?`<button class="btn ghost ch-del" data-id="${r.id}" style="width:auto;padding:5px 12px;font-size:11.5px;color:var(--err);border-color:var(--err)">حذف</button>`:''}</td></tr>`).join('')
-    : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">ما ضفتِ أي طلب بعد.</td></tr>';
+    : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">لم تُضيفي أي طلب بعد.</td></tr>';
   $('chTrackTbl').querySelectorAll('.ch-del').forEach(b=>b.addEventListener('click', async ()=>{
     if(!confirm('حذف هذا الطلب؟')) return;
     const {error}=await db.from('comp_hours').delete().eq('id',b.dataset.id);
@@ -184,7 +184,7 @@ async function loadTrack(){
   const usedTotal=uRows.reduce((s,r)=>s+(+r.minutes_used||0),0);
   $('chUsageTbl').innerHTML = uRows.length
     ? '<tr><th>تاريخ الاستخدام</th><th>المدة</th></tr>'+uRows.map(r=>`<tr><td class="c">${r.date_used}</td><td class="c">${fmtMin(r.minutes_used)}</td></tr>`).join('')
-    : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">ما استخدمتِ أي ساعة تعويضية بعد.</td></tr>';
+    : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">لم تستخدمي أي ساعة تعويضية بعد.</td></tr>';
   $('chRemaining').textContent=fmtMin(total-usedTotal);
 }
 
@@ -237,7 +237,7 @@ async function saveUsage(){
   const minutes=(+$('chUseH').value||0)*60 + (+$('chUseM').value||0);
   if(!date||minutes<=0){ toast('اكتبي اليوم والمدة (ساعات أو دقائق)'); return; }
   const b=await calcBalance(CH_STAFF_PICK.id);
-  if(minutes>b.remaining){ if(!confirm(`رصيدها المتبقي ${fmtMin(b.remaining)} بس — تأكيد التسجيل رغم كذا؟`)) return; }
+  if(minutes>b.remaining){ if(!confirm(`رصيدها المتبقي ${fmtMin(b.remaining)} فقط — هل تأكدين تسجيل الاستخدام رغم ذلك؟`)) return; }
   const btn=$('chUseSave'); btn.disabled=true; btn.textContent='جارٍ الحفظ…';
   try{
     const {error}=await db.from('comp_hours_usage').insert({staff_id:CH_STAFF_PICK.id, date_used:date, minutes_used:minutes, recorded_by:S.ME.id});
