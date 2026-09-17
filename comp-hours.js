@@ -6,7 +6,7 @@
 import { db, $, S, clean, toast, registerTab } from './core.js';
 
 $('appView').insertAdjacentHTML('beforeend', `
-<div class="app-main wide" id="chMain" style="display:none">
+<div class="app-main wide" id="compHours" style="display:none">
   <div class="lm-subnav" id="chSubnav"></div>
 
   <div data-chtab="add" style="display:none">
@@ -67,7 +67,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   </div>
 </div>
 <style>
-  #chMain .field textarea{resize:vertical}
+  #compHours .field textarea{resize:vertical}
   #chUseStaffSugg{background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto}
   #chUseStaffSugg:empty{display:none}
   #chUseStaffSugg .opt{padding:8px 12px;cursor:pointer;font-size:13px}
@@ -82,7 +82,7 @@ const CH_TABS=[
 ];
 
 function switchChTab(tab){
-  document.querySelectorAll('#chMain > [data-chtab]').forEach(el=>{ el.style.display = el.dataset.chtab===tab ? 'block':'none'; });
+  document.querySelectorAll('#compHours > [data-chtab]').forEach(el=>{ el.style.display = el.dataset.chtab===tab ? 'block':'none'; });
   $('chSubnav').querySelectorAll('.lm-subnav-btn').forEach(b=>b.classList.toggle('active', b.dataset.chtab===tab));
   if(tab==='track') loadTrack();
   if(tab==='approve') loadApprove();
