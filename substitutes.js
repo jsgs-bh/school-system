@@ -26,6 +26,7 @@ $('appView').insertAdjacentHTML('beforeend', `
           <input type="text" id="subAbsentSearch" placeholder="اكتبي اسماً…" autocomplete="off">
           <div id="subAbsentSugg"></div>
         </div>
+        <button class="btn ghost" id="subPrintDay" style="width:auto;padding:10px 22px">🖨 طباعة جدول اليوم</button>
       </div>
       <div id="subAbsentChips" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
@@ -53,8 +54,9 @@ $('appView').insertAdjacentHTML('beforeend', `
       <h3>التفصيل</h3>
       <div class="board-wrap"><table class="board" id="subLogTbl"></table></div>
     </div>
-    <div id="printAreaSubs"></div>
   </div>
+
+  <div id="printAreaSubs"></div>
 </div>
 <style>
   #subsMain.wide{max-width:1300px}
@@ -71,6 +73,7 @@ $('appView').insertAdjacentHTML('beforeend', `
   #subDayBody .sub-cell small{display:block;color:#6b7683;margin-bottom:6px}
   #subDayBody select.sub-pick{width:100%;padding:5px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:11.5px}
   #subDayBody select.sub-pick.filled{border-color:#3a7a3a;background:#eef8ef}
+  #mcToday .lesson{margin-bottom:8px}
   #printAreaSubs{display:none}
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
@@ -83,6 +86,18 @@ $('appView').insertAdjacentHTML('beforeend', `
     .subs-print-tbl td{padding:4px;border:1px solid #ccc;text-align:center}
   }
 </style>`);
+
+$('appView').insertAdjacentHTML('beforeend', `
+<div class="app-main" id="myCoverage" style="display:none">
+  <div class="panel">
+    <h3>حصص الاحتياط عليّ اليوم</h3>
+    <div id="mcToday"></div>
+  </div>
+  <div class="panel">
+    <h3>حصص احتياط سابقة</h3>
+    <div class="board-wrap"><table class="board" id="mcHistTbl"></table></div>
+  </div>
+</div>`);
 
 const SUBS_TABS=[
   {id:'daily', label:'تأمين حصص اليوم'},
@@ -115,6 +130,7 @@ async function initSubs(){
     if(!$('subDate').value) return;
     SUB_DATE=$('subDate').value; ABSENT=[]; renderChips(); renderDay();
   });
+  $('subPrintDay').addEventListener('click', printDaily);
 
   let deb=null;
   $('subAbsentSearch').addEventListener('input',()=>{
@@ -411,4 +427,72 @@ function printLog(){
   printWithTitle('سجل_الاحتياط','printAreaSubs');
 }
 
+/* طباعة جدول احتياط يوم واحد (التاريخ المختار بتبويب "تأمين حصص اليوم")،
+   مبوَّب بحسب كل معلمة غائبة — على غرار نموذج الورقة الأصلي. */
+async function printDaily(){
+  const {data,error}=await db.from('substitute_assignments')
+    .select('absent:absent_staff_id(full_name),substitute:substitute_staff_id(full_name),timetable_entries(period_no,is_meeting,meeting_label,sections(code),subjects(code))')
+    .eq('assignment_date',SUB_DATE);
+  if(error){ toast('تعذر التحميل: '+error.message); return; }
+  if(!data || !data.length){ toast('لا ترشيحات محفوظة لهذا التاريخ'); return; }
+
+  const byAbsent={};
+  for(const r of data){
+    const name=r.absent?.full_name||'—';
+    (byAbsent[name] ??= []).push(r);
+  }
+  const names=Object.keys(byAbsent).sort((a,b)=>a.localeCompare(b,'ar'));
+  const body=names.map(name=>{
+    const rows=byAbsent[name].sort((a,b)=>(a.timetable_entries?.period_no||0)-(b.timetable_entries?.period_no||0));
+    return `<h4 style="margin:16px 0 6px;color:#1d3d5c">تأمين جدول: ${name}</h4>
+      <table class="subs-print-tbl"><tr><th>الحصة</th><th>الشعبة/المقرر</th><th>معلمة الاحتياط</th></tr>
+      ${rows.map(r=>{
+        const e=r.timetable_entries;
+        const label=e?.is_meeting ? (e.meeting_label||'اجتماع/دعم') : `${e?.sections?.code||'—'} / ${e?.subjects?.code||'—'}`;
+        return `<tr><td>${e?.period_no||'—'}</td><td>${label}</td><td>${r.substitute?.full_name||'—'}</td></tr>`;
+      }).join('')}
+      </table>`;
+  }).join('');
+  $('printAreaSubs').innerHTML=printHeaderHtml(`جدول الاحتياط — ${SUB_DATE}`)+body;
+  printWithTitle(`جدول_الاحتياط_${SUB_DATE}`,'printAreaSubs');
+}
+
+/* ============ للمعلمة نفسها: "حصص الاحتياط" تحت مجموعة "حصصي" ============ */
+async function initMyCoverage(){
+  if($('mcToday').dataset.ready) return;
+  $('mcToday').dataset.ready='1';
+  await loadMyCoverage();
+}
+
+async function loadMyCoverage(){
+  $('mcToday').innerHTML='جارٍ التحميل…';
+  $('mcHistTbl').innerHTML='';
+  const {data,error}=await db.from('substitute_assignments')
+    .select('assignment_date,absent:absent_staff_id(full_name),timetable_entries(period_no,is_meeting,meeting_label,sections(code),subjects(code))')
+    .eq('substitute_staff_id',S.ME.id).order('assignment_date',{ascending:false});
+  if(error){ $('mcToday').innerHTML=`تعذر التحميل: ${error.message}`; return; }
+
+  const today=dstr(new Date());
+  const rowOf=r=>{
+    const e=r.timetable_entries;
+    return {date:r.assignment_date, period:e?.period_no||'—',
+      label: e?.is_meeting ? (e.meeting_label||'اجتماع/دعم') : `${e?.sections?.code||'—'} / ${e?.subjects?.code||'—'}`,
+      absent:r.absent?.full_name||'—'};
+  };
+  const all=(data||[]).map(rowOf);
+  const todays=all.filter(r=>r.date===today).sort((a,b)=>(+a.period||0)-(+b.period||0));
+  const hist=all.filter(r=>r.date!==today);
+
+  $('mcToday').innerHTML = todays.length
+    ? todays.map(r=>`<div class="lesson"><b>حصة ${r.period}</b><span>${r.label}</span><small>عِوَضاً عن: ${r.absent}</small></div>`).join('')
+    : '<div class="empty-day">ما عليكِ أي حصة احتياط اليوم.</div>';
+
+  $('mcHistTbl').innerHTML = hist.length
+    ? '<tr><th>التاريخ</th><th>الحصة</th><th>الشعبة/المقرر</th><th>عِوَضاً عن</th></tr>'+
+      hist.map(r=>`<tr><td class="c">${r.date}</td><td class="c">${r.period}</td><td class="c">${r.label}</td><td>${r.absent}</td></tr>`).join('')
+    : '<tr><td style="padding:16px;text-align:center;color:#8a93a0">لا حصص احتياط سابقة.</td></tr>';
+}
+
 registerTab({id:'subsMain', label:'الاحتياط', show:f=>f.isAdmin||f.isSubCoordinator, init:initSubs});
+registerTab({id:'myCoverage', label:'حصص الاحتياط', group:'teacherArea', groupLabel:'حصصي',
+  show:f=>f.isTeacher||f.isSeniorTeacher, init:initMyCoverage});
